@@ -1,0 +1,8 @@
+{
+  "name": "etlayer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test packages/cloudflare-ingest/test/*.test.js"
+  }
+}

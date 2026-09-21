@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "etlayer-ingest",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-21",
+  "vars": {
+    "ETLAYER_MAX_REQUEST_BYTES": "1048576"
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "EVENTS",
+        "queue": "etlayer-events"
+      }
+    ]
+  }
+}
