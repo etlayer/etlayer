@@ -41,6 +41,13 @@ export default {
       return handleAccountCreated(request, env);
     }
 
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/acceptance/invalid-account"
+    ) {
+      return handleInvalidAccountAcceptance(request, env);
+    }
+
     return new Response("Not found", { status: 404 });
   },
 };
@@ -232,6 +239,48 @@ export async function handleAccountCreated(request, env, options = {}) {
   }
 
   return jsonResponse(responseBody, result.status);
+}
+
+export async function handleInvalidAccountAcceptance(
+  request,
+  env,
+  options = {},
+) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse(
+      { ok: false, error: "missing_funnel_context" },
+      409,
+    );
+  }
+
+  const payload = (await readJson(request)) || {};
+  const causationId =
+    safeIdentifier(payload.causationId) ||
+    "vs3_acceptance_root";
+
+  const result = await emitOtlpEvent(
+    env,
+    "account.created",
+    {
+      "actor.anonymous.id": context.actorId,
+      "correlation.id": context.correlationId,
+      "causation.id": causationId,
+      "etlayer.producer.kind": "backend",
+      "etlayer.authority.kind": "business_state",
+    },
+    options,
+  );
+
+  return jsonResponse(
+    {
+      ...result.body,
+      correlationId: context.correlationId,
+      intentionallyInvalid: true,
+      missingAttribute: "account.id",
+    },
+    result.status,
+  );
 }
 
 export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
