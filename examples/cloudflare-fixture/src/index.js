@@ -419,7 +419,7 @@ function indexHtml(context) {
     };
 
     function render(message) {
-      output.textContent = message + "\n\n" + JSON.stringify(state, null, 2);
+      output.textContent = message + "\\n\\n" + JSON.stringify(state, null, 2);
     }
 
     async function post(path, body) {
