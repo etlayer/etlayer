@@ -1,36 +1,63 @@
-# Once
+# Once / acceptance helpers
 
-Temporary one-time bootstrap helpers live here.
+These scripts exist to reproduce and diagnose the first ETLayer Cloudflare vertical slice.
 
-These scripts are intentionally **not** part of the long-term ETLayer CLI. Once the deployment path is stable, delete this directory or replace it with durable provisioning.
+They are intentionally **not** the long-term ETLayer CLI. Keep them while VS1 remains useful as a reproducible acceptance environment; replace them with durable provisioning or CLI commands when those interfaces stabilize.
+
+All deployment commands use local Wrangler OAuth. No `CLOUDFLARE_API_TOKEN` is required.
 
 ## bootstrap-cloudflare.sh
 
-Bootstraps and verifies the first ETLayer Cloudflare vertical slice using the same model as RunDiff: **local Wrangler OAuth**, not a GitHub CI API token.
+Bootstraps the ETLayer Cloudflare ingest runtime:
+
+1. verifies Node/npm and Wrangler;
+2. verifies local Cloudflare authentication;
+3. ensures Queue, DLQ, and R2 resources exist;
+4. generates and rotates `ETLAYER_INGEST_KEY`;
+5. preserves or securely prompts for `POSTHOG_PROJECT_TOKEN`;
+6. deploys `etlayer-ingest`;
+7. checks `/health`;
+8. sends an OTLP smoke event.
 
 Run from the repository root:
 
 ```bash
-git switch chore/local-cloudflare-bootstrap
-git pull --ff-only
-rm -f package-lock.json
 ./scripts/once/bootstrap-cloudflare.sh
 ```
 
-The script:
+## deploy-fixture.sh
 
-1. checks Node/npm;
-2. uses the repository-pinned Wrangler;
-3. runs `wrangler whoami`, and opens `wrangler login` if needed;
-4. ensures the Queue, DLQ, and R2 bucket exist;
-5. generates a fresh random 256-bit `ETLAYER_INGEST_KEY`;
-6. updates that Worker secret;
-7. reuses the existing `POSTHOG_PROJECT_TOKEN` Worker secret when present;
-8. otherwise securely prompts once for the PostHog Project API token;
-9. deploys `etlayer-ingest`;
-10. checks `/health`;
-11. sends an `etlayer.acceptance.smoke` OTLP event.
+Deploys the VS1 browser + backend fixture, configures the shared ingest credential, verifies the ETLayer Service Binding, and runs direct plus fixture-mediated OTLP preflights before printing a funnel URL.
 
-No `CLOUDFLARE_API_TOKEN` is required because deployment runs from your authenticated local Wrangler session.
+```bash
+./scripts/once/deploy-fixture.sh
+```
 
-The script never writes secret values to the repository or to an `.env` file. Re-running it intentionally rotates only the ETLayer ingest key.
+## posthog-export-mode.sh
+
+Acceptance-only switch for deliberately disabling or restoring the PostHog projection while canonical R2 persistence continues:
+
+```bash
+./scripts/once/posthog-export-mode.sh disable
+./scripts/once/posthog-export-mode.sh enable
+```
+
+Do not leave projection disabled after an acceptance run.
+
+## replay-posthog.sh
+
+Replays canonical R2 events into PostHog for a half-open UTC interval:
+
+```bash
+./scripts/once/replay-posthog.sh \
+  --from 2026-09-21T20:34:03Z \
+  --to   2026-09-21T20:35:05Z
+```
+
+## diagnose-smoke.sh
+
+Low-level diagnostic helper for Queue, R2, Worker logs, and destination projection when the normal smoke path fails.
+
+## Secret handling
+
+These helpers never write secret values into the repository or an `.env` file. Generated ingest/replay keys are passed directly to Wrangler secrets and kept only in process memory.
