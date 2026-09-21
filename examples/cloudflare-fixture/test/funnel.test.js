@@ -6,10 +6,18 @@ import worker, {
   handleBrowserEvent,
   handleInvalidAccountAcceptance,
   handlePrivacyAccountAcceptance,
+  handleIdentityFlowAcceptance,
 } from "../src/index.js";
 
 function cookieHeader() {
-  return "etel_actor_id=anon_test; etel_funnel_id=funnel_test";
+  return [
+    "etel_actor_id=anon_test",
+    "etel_funnel_id=funnel_test",
+    "etel_session_id=session_test",
+    "etel_attr_source=docs",
+    "etel_attr_medium=acceptance",
+    "etel_attr_campaign=vs5",
+  ].join("; ");
 }
 
 function decodeAttributes(list) {
@@ -98,6 +106,10 @@ test("browser exposure preserves stable actor, correlation, source, and experime
   assert.equal(record.eventName, "landing.hero.exposed");
   assert.equal(attributes["actor.anonymous.id"], "anon_test");
   assert.equal(attributes["correlation.id"], "funnel_test");
+  assert.equal(attributes["session.id"], "session_test");
+  assert.equal(attributes["attribution.source"], "docs");
+  assert.equal(attributes["attribution.medium"], "acceptance");
+  assert.equal(attributes["attribution.campaign"], "vs5");
   assert.equal(attributes["etlayer.producer.kind"], "browser");
   assert.equal(attributes["etlayer.authority.kind"], "interaction");
   assert.equal(attributes["experiment.id"], "hero.v1");
@@ -235,6 +247,10 @@ test("account.created follows a real backend state write and preserves the same 
   assert.equal(record.eventName, "account.created");
   assert.equal(attributes["actor.anonymous.id"], "anon_test");
   assert.equal(attributes["correlation.id"], "funnel_test");
+  assert.equal(attributes["session.id"], "session_test");
+  assert.equal(attributes["attribution.source"], "docs");
+  assert.equal(attributes["attribution.medium"], "acceptance");
+  assert.equal(attributes["attribution.campaign"], "vs5");
   assert.equal(attributes["etlayer.producer.kind"], "backend");
   assert.equal(attributes["etlayer.authority.kind"], "business_state");
   assert.equal(
@@ -442,4 +458,114 @@ test("VS4 privacy acceptance emits a valid authoritative account event with sens
   assert.equal(body.expectedCanonicalField, "user.email");
   assert.equal(body.expectedIngestDrop, "auth.token");
   assert.equal(body.expectedDeliveryDrop, "user.email");
+});
+
+
+test("VS5 identity acceptance preserves anonymous, session, user, account, and attribution continuity", async () => {
+  const captures = [];
+  const stateWrites = [];
+
+  const request = new Request(
+    "https://fixture.test/api/acceptance/identity-flow",
+    {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        causationId: "hero_event_1",
+      }),
+    },
+  );
+
+  const response = await handleIdentityFlowAcceptance(
+    request,
+    {
+      ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
+      ETLAYER_INGEST_KEY: "test-key",
+      STATE: {
+        async put(key, body) {
+          stateWrites.push({ key, body });
+        },
+      },
+    },
+    {
+      fetch: captureFetch(captures),
+      userId: "user_test",
+      accountId: "account_test",
+      linkEventId: "66666666-6666-4666-8666-666666666666",
+      accountEventId: "77777777-7777-4777-8777-777777777777",
+      nowMs: 1_790_000_000_000,
+    },
+  );
+
+  assert.equal(response.status, 202);
+  assert.equal(stateWrites.length, 2);
+  assert.equal(captures.length, 2);
+
+  const linked = recordFrom(captures[0]);
+  const linkedAttrs = decodeAttributes(linked.attributes);
+  assert.equal(linked.eventName, "identity.linked");
+  assert.equal(linkedAttrs["actor.anonymous.id"], "anon_test");
+  assert.equal(linkedAttrs["user.id"], "user_test");
+  assert.equal(linkedAttrs["account.id"], "account_test");
+  assert.equal(linkedAttrs["session.id"], "session_test");
+  assert.equal(linkedAttrs["correlation.id"], "funnel_test");
+  assert.equal(linkedAttrs["causation.id"], "hero_event_1");
+  assert.equal(linkedAttrs["attribution.source"], "docs");
+  assert.equal(linkedAttrs["attribution.medium"], "acceptance");
+  assert.equal(linkedAttrs["attribution.campaign"], "vs5");
+
+  const account = recordFrom(captures[1]);
+  const accountAttrs = decodeAttributes(account.attributes);
+  assert.equal(account.eventName, "account.created");
+  assert.equal(accountAttrs["user.id"], "user_test");
+  assert.equal(accountAttrs["actor.anonymous.id"], "anon_test");
+  assert.equal(accountAttrs["account.id"], "account_test");
+  assert.equal(accountAttrs["session.id"], "session_test");
+  assert.equal(
+    accountAttrs["causation.id"],
+    "66666666-6666-4666-8666-666666666666",
+  );
+  assert.equal(accountAttrs["attribution.campaign"], "vs5");
+
+  const body = await response.json();
+  assert.equal(body.anonymousId, "anon_test");
+  assert.equal(body.sessionId, "session_test");
+  assert.equal(body.userId, "user_test");
+  assert.equal(body.accountId, "account_test");
+  assert.equal(
+    body.identityEventId,
+    "66666666-6666-4666-8666-666666666666",
+  );
+  assert.equal(
+    body.accountEventId,
+    "77777777-7777-4777-8777-777777777777",
+  );
+  assert.deepEqual(body.attribution, {
+    source: "docs",
+    medium: "acceptance",
+    campaign: "vs5",
+  });
+});
+
+test("landing creates a stable session and persists attribution cookies", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://fixture.test/?run=run_test&utm_source=docs&utm_medium=acceptance&utm_campaign=vs5",
+    ),
+    {},
+  );
+
+  assert.equal(response.status, 200);
+  const cookies = response.headers.getSetCookie
+    ? response.headers.getSetCookie()
+    : [response.headers.get("set-cookie")].filter(Boolean);
+
+  const joined = cookies.join("; ");
+  assert.match(joined, /etel_session_id=session_/);
+  assert.match(joined, /etel_attr_source=docs/);
+  assert.match(joined, /etel_attr_medium=acceptance/);
+  assert.match(joined, /etel_attr_campaign=vs5/);
 });
