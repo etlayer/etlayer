@@ -1,4 +1,4 @@
-import { recordDeliveryState } from "./delivery-state.js";
+import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
 
@@ -42,8 +42,11 @@ export async function replayDestinationRange(
         options.deliver(event, exportOptions.delivery)
     : destinationExporter(destination);
 
+  const readState = options.readState || readDeliveryState;
   const recordState = options.recordState || recordDeliveryState;
   const deliveries = [];
+  let exported = 0;
+  let skipped = 0;
 
   for (const item of selected) {
     const delivery = {
@@ -52,6 +55,25 @@ export async function replayDestinationRange(
       sourceKey: item.key,
       destination,
     };
+
+    const previous = await readState(
+      env.ARCHIVE,
+      item.event.id,
+      destination,
+    );
+
+    if (previous?.status === "exported") {
+      deliveries.push({
+        eventId: item.event.id,
+        eventName: item.event.eventName,
+        destination,
+        sourceKey: item.key,
+        status: "skipped",
+        reason: "already_exported",
+      });
+      skipped += 1;
+      continue;
+    }
 
     const result = await exporter(item.event, env, {
       fetch: options.fetch,
@@ -86,6 +108,7 @@ export async function replayDestinationRange(
       status: result.status,
       ...(result.uuid ? { uuid: result.uuid } : {}),
     });
+    exported += 1;
   }
 
   return {
@@ -94,7 +117,8 @@ export async function replayDestinationRange(
     from: range.from.toISOString(),
     to: range.to.toISOString(),
     selected: selected.length,
-    exported: deliveries.length,
+    exported,
+    skipped,
     deliveries,
   };
 }
