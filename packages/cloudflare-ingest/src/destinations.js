@@ -1,4 +1,4 @@
-import { recordDeliveryState } from "./delivery-state.js";
+import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
 
@@ -15,6 +15,7 @@ const DEFAULT_DESTINATIONS = [
 
 export async function routeEventDestinations(event, env, options = {}) {
   const destinations = options.destinations || DEFAULT_DESTINATIONS;
+  const readState = options.readState || readDeliveryState;
   const recordState = options.recordState || recordDeliveryState;
   const results = [];
 
@@ -22,6 +23,21 @@ export async function routeEventDestinations(event, env, options = {}) {
     validateDestination(destination);
 
     const destinationOptions = options[destination.name] || {};
+    const previous = await readState(
+      env.ARCHIVE,
+      event.id,
+      destination.name,
+    );
+
+    if (previous?.status === "exported") {
+      results.push({
+        destination: destination.name,
+        status: "skipped",
+        reason: "already_exported",
+      });
+      continue;
+    }
+
     let result;
 
     try {
