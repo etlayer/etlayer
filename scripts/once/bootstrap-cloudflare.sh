@@ -57,20 +57,36 @@ ensure_cloudflare_auth() {
   cat /tmp/etlayer-wrangler-whoami.txt
 }
 
+ensure_queue() {
+  local name="$1"
+
+  if npx wrangler queues list 2>/dev/null | grep -Fq "$name"; then
+    say "Queue already exists: $name"
+    return
+  fi
+
+  say "Creating Cloudflare Queue: $name"
+  npx wrangler queues create "$name"
+}
+
+ensure_r2_bucket() {
+  local name="$1"
+
+  if npx wrangler r2 bucket list 2>/dev/null | grep -Fq "$name"; then
+    say "R2 bucket already exists: $name"
+    return
+  fi
+
+  say "Creating R2 bucket: $name"
+  npx wrangler r2 bucket create "$name"
+}
+
 ensure_cloudflare_resources() {
   cd "$APP_DIR"
 
-  say "Ensuring Cloudflare Queue exists: $QUEUE_NAME"
-  npx wrangler queues create "$QUEUE_NAME" >/tmp/etlayer-queue-create.txt 2>&1 || true
-  cat /tmp/etlayer-queue-create.txt
-
-  say "Ensuring Cloudflare DLQ exists: $DLQ_NAME"
-  npx wrangler queues create "$DLQ_NAME" >/tmp/etlayer-dlq-create.txt 2>&1 || true
-  cat /tmp/etlayer-dlq-create.txt
-
-  say "Ensuring R2 bucket exists: $R2_BUCKET"
-  npx wrangler r2 bucket create "$R2_BUCKET" >/tmp/etlayer-r2-create.txt 2>&1 || true
-  cat /tmp/etlayer-r2-create.txt
+  ensure_queue "$QUEUE_NAME"
+  ensure_queue "$DLQ_NAME"
+  ensure_r2_bucket "$R2_BUCKET"
 }
 
 generate_ingest_key() {
