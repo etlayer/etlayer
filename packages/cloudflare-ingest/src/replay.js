@@ -37,8 +37,10 @@ export async function replayDestinationRange(
 
   const range = normalizeReplayRange(input);
   const selected = await selectArchivedEvents(env.ARCHIVE, range, options);
-  const exporter =
-    options.deliver || destinationExporter(destination);
+  const exporter = options.deliver
+    ? (event, _env, exportOptions) =>
+        options.deliver(event, exportOptions.delivery)
+    : destinationExporter(destination);
 
   const recordState = options.recordState || recordDeliveryState;
   const deliveries = [];
