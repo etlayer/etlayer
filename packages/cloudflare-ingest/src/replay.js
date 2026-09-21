@@ -1,26 +1,46 @@
+import { recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
+import { exportToStatsig } from "./statsig.js";
+
+const DESTINATION_EXPORTERS = {
+  posthog: exportToPostHog,
+  statsig: exportToStatsig,
+};
 
 const DEFAULT_MAX_EVENTS = 500;
 const HARD_MAX_EVENTS = 5000;
 const LIST_PAGE_SIZE = 1000;
 
 export async function replayPostHogRange(env, input, options = {}) {
-  if (!env.ARCHIVE || typeof env.ARCHIVE.list !== "function" || typeof env.ARCHIVE.get !== "function") {
-    throw new ReplayConfigurationError("archive bucket is not configured for replay");
+  return replayDestinationRange(env, input, "posthog", options);
+}
+
+export async function replayStatsigRange(env, input, options = {}) {
+  return replayDestinationRange(env, input, "statsig", options);
+}
+
+export async function replayDestinationRange(
+  env,
+  input,
+  destination,
+  options = {},
+) {
+  if (
+    !env.ARCHIVE ||
+    typeof env.ARCHIVE.list !== "function" ||
+    typeof env.ARCHIVE.get !== "function"
+  ) {
+    throw new ReplayConfigurationError(
+      "archive bucket is not configured for replay",
+    );
   }
 
   const range = normalizeReplayRange(input);
   const selected = await selectArchivedEvents(env.ARCHIVE, range, options);
+  const exporter =
+    options.deliver || destinationExporter(destination);
 
-  const deliver =
-    options.deliver ||
-    ((event, delivery) =>
-      exportToPostHog(event, env, {
-        fetch: options.fetch,
-        crypto: options.crypto,
-        delivery,
-      }));
-
+  const recordState = options.recordState || recordDeliveryState;
   const deliveries = [];
 
   for (const item of selected) {
@@ -28,26 +48,46 @@ export async function replayPostHogRange(env, input, options = {}) {
       mode: "replay",
       replayId: range.replayId,
       sourceKey: item.key,
+      destination,
     };
 
-    const result = await deliver(item.event, delivery);
+    const result = await exporter(item.event, env, {
+      fetch: options.fetch,
+      crypto: options.crypto,
+      delivery,
+    });
 
     if (!result || result.status !== "exported") {
       throw new ReplayConfigurationError(
-        `destination did not export replayed event ${item.event.id}`,
+        `${destination} did not export replayed event ${item.event.id}`,
+      );
+    }
+
+    if (
+      options.recordState ||
+      typeof env.ARCHIVE.put === "function"
+    ) {
+      await recordState(
+        env.ARCHIVE,
+        item.event,
+        destination,
+        result,
+        { delivery },
       );
     }
 
     deliveries.push({
       eventId: item.event.id,
       eventName: item.event.eventName,
+      destination,
       sourceKey: item.key,
       status: result.status,
-      uuid: result.uuid,
+      ...(result.uuid ? { uuid: result.uuid } : {}),
     });
   }
 
   return {
+    destination,
     replayId: range.replayId,
     from: range.from.toISOString(),
     to: range.to.toISOString(),
@@ -55,6 +95,18 @@ export async function replayPostHogRange(env, input, options = {}) {
     exported: deliveries.length,
     deliveries,
   };
+}
+
+function destinationExporter(destination) {
+  const exporter = DESTINATION_EXPORTERS[destination];
+
+  if (!exporter) {
+    throw new ReplayValidationError(
+      `unsupported replay destination: ${String(destination)}`,
+    );
+  }
+
+  return exporter;
 }
 
 export async function selectArchivedEvents(archive, input, options = {}) {
