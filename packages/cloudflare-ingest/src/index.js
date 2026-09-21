@@ -76,9 +76,12 @@ export default {
           eventId: event.id,
           eventName: event.eventName,
           identityStatus: processed.identity.status,
-          primaryIdentityKind: processed.identity.primary.kind,
-          primaryIdentityId: processed.identity.primary.id,
+          subjectIdentityKind: processed.identity.subject.kind,
+          subjectIdentityId: processed.identity.subject.id,
           identityTransition: processed.identity.transition?.kind || null,
+          actorType: processed.identity.actor?.type || null,
+          actorId: processed.identity.actor?.id || null,
+          delegationDepth: processed.identity.delegation.length,
         });
 
         for (const delivery of processed.deliveries) {
