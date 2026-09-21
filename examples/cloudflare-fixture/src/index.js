@@ -45,6 +45,42 @@ export default {
   },
 };
 
+async function readFunnelResult(env, correlationId, eventName) {
+  if (!env.STATE || typeof env.STATE.get !== "function") return null;
+
+  const key = funnelResultKey(correlationId, eventName);
+  const object = await env.STATE.get(key);
+  if (!object) return null;
+
+  try {
+    return JSON.parse(await object.text());
+  } catch {
+    return null;
+  }
+}
+
+async function writeFunnelResult(env, correlationId, eventName, result) {
+  if (!env.STATE || typeof env.STATE.put !== "function") return;
+
+  await env.STATE.put(
+    funnelResultKey(correlationId, eventName),
+    JSON.stringify(result),
+    {
+      httpMetadata: {
+        contentType: "application/json; charset=utf-8",
+      },
+      customMetadata: {
+        correlation_id: correlationId,
+        event_name: eventName,
+      },
+    },
+  );
+}
+
+function funnelResultKey(correlationId, eventName) {
+  return `funnels/${encodeURIComponent(correlationId)}/${encodeURIComponent(eventName)}.json`;
+}
+
 export async function handleBrowserEvent(request, env, options = {}) {
   const payload = await readJson(request);
 
@@ -55,6 +91,20 @@ export async function handleBrowserEvent(request, env, options = {}) {
   const context = contextFromRequest(request);
   if (!context) {
     return jsonResponse({ ok: false, error: "missing_funnel_context" }, 409);
+  }
+
+  const previous = await readFunnelResult(
+    env,
+    context.correlationId,
+    payload.eventName,
+  );
+
+  if (previous) {
+    return jsonResponse({
+      ...previous,
+      duplicate: true,
+      correlationId: context.correlationId,
+    }, 200);
   }
 
   const attributes = {
@@ -77,13 +127,21 @@ export async function handleBrowserEvent(request, env, options = {}) {
     options,
   );
 
-  return jsonResponse(
-    {
-      ...result.body,
-      correlationId: context.correlationId,
-    },
-    result.status,
-  );
+  const responseBody = {
+    ...result.body,
+    correlationId: context.correlationId,
+  };
+
+  if (result.status >= 200 && result.status < 300 && result.body?.ok) {
+    await writeFunnelResult(
+      env,
+      context.correlationId,
+      payload.eventName,
+      responseBody,
+    );
+  }
+
+  return jsonResponse(responseBody, result.status);
 }
 
 export async function handleAccountCreated(request, env, options = {}) {
@@ -92,8 +150,26 @@ export async function handleAccountCreated(request, env, options = {}) {
     return jsonResponse({ ok: false, error: "missing_funnel_context" }, 409);
   }
 
-  if (!env.STATE || typeof env.STATE.put !== "function") {
+  if (
+    !env.STATE ||
+    typeof env.STATE.put !== "function" ||
+    typeof env.STATE.get !== "function"
+  ) {
     return jsonResponse({ ok: false, error: "missing_backend_state" }, 503);
+  }
+
+  const previous = await readFunnelResult(
+    env,
+    context.correlationId,
+    "account.created",
+  );
+
+  if (previous) {
+    return jsonResponse({
+      ...previous,
+      duplicate: true,
+      correlationId: context.correlationId,
+    }, 200);
   }
 
   const payload = (await readJson(request)) || {};
@@ -138,16 +214,24 @@ export async function handleAccountCreated(request, env, options = {}) {
     options,
   );
 
-  return jsonResponse(
-    {
-      ...result.body,
-      accountId,
-      stateKey,
-      createdAt,
-      correlationId: context.correlationId,
-    },
-    result.status,
-  );
+  const responseBody = {
+    ...result.body,
+    accountId,
+    stateKey,
+    createdAt,
+    correlationId: context.correlationId,
+  };
+
+  if (result.status >= 200 && result.status < 300 && result.body?.ok) {
+    await writeFunnelResult(
+      env,
+      context.correlationId,
+      "account.created",
+      responseBody,
+    );
+  }
+
+  return jsonResponse(responseBody, result.status);
 }
 
 export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
