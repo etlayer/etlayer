@@ -31,12 +31,16 @@ cd "$ROOT_DIR"
 npx wrangler whoami >/dev/null 2>&1 ||
   die "Wrangler is not authenticated. Run: npx wrangler login"
 
+if ! git diff --quiet -- examples/cloudflare-fixture/wrangler.jsonc; then
+  die "Fixture wrangler.jsonc has local changes. Restore it first: git restore examples/cloudflare-fixture/wrangler.jsonc"
+fi
+
 say "Ensuring fixture state bucket exists"
 cd "$FIXTURE_DIR"
 if npx wrangler r2 bucket list 2>/dev/null | grep -Fq "$STATE_BUCKET"; then
   printf 'R2 bucket already exists: %s\n' "$STATE_BUCKET"
 else
-  npx wrangler r2 bucket create "$STATE_BUCKET"
+  CI=1 npx wrangler r2 bucket create "$STATE_BUCKET"
 fi
 
 INGEST_KEY="$(generate_key)"
@@ -64,11 +68,30 @@ FIXTURE_URL="$(
 [ -n "$FIXTURE_URL" ] ||
   die "Could not parse fixture workers.dev URL."
 
+health_check() {
+  local url="$1"
+  local attempts=10
+
+  for attempt in $(seq 1 "$attempts"); do
+    if body="$(curl --fail --silent --show-error "$url/health" 2>/dev/null)"; then
+      printf '%s\n' "$body"
+      return 0
+    fi
+
+    if [ "$attempt" -lt "$attempts" ]; then
+      sleep 1
+    fi
+  done
+
+  printf '\nHealth check failed after %s attempts: %s/health\n' "$attempts" "$url" >&2
+  printf 'GET / response for diagnosis:\n' >&2
+  curl --silent --show-error --include "$url/" >&2 || true
+  return 1
+}
+
 say "Health checks"
-curl --fail --silent --show-error "$ETLAYER_URL/health"
-printf '\n'
-curl --fail --silent --show-error "$FIXTURE_URL/health"
-printf '\n'
+health_check "$ETLAYER_URL"
+health_check "$FIXTURE_URL"
 
 RUN_ID="vs1-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)"
 RUN_URL="$FIXTURE_URL/?run=$RUN_ID"
