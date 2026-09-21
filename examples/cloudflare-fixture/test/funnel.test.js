@@ -38,6 +38,27 @@ function recordFrom(capture) {
   return capture.resourceLogs[0].scopeLogs[0].logRecords[0];
 }
 
+
+function fakeState() {
+  const objects = new Map();
+
+  return {
+    objects,
+    async get(key) {
+      const value = objects.get(key);
+      if (value == null) return null;
+      return {
+        async text() {
+          return value;
+        },
+      };
+    },
+    async put(key, body) {
+      objects.set(key, body);
+    },
+  };
+}
+
 test("browser exposure preserves stable actor, correlation, source, and experiment context", async () => {
   const captures = [];
 
@@ -241,4 +262,47 @@ test("served fixture.js is valid JavaScript", async () => {
 
   const script = await response.text();
   assert.doesNotThrow(() => new Function(script));
+});
+
+
+test("reloading the same funnel does not emit a second hero exposure", async () => {
+  const captures = [];
+  const state = fakeState();
+
+  const makeRequest = () =>
+    new Request("https://fixture.test/api/browser-event", {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        eventName: "landing.hero.exposed",
+      }),
+    });
+
+  const env = {
+    ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
+    ETLAYER_INGEST_KEY: "test-key",
+    STATE: state,
+  };
+
+  const options = {
+    fetch: captureFetch(captures),
+    eventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  };
+
+  const first = await handleBrowserEvent(makeRequest(), env, options);
+  const second = await handleBrowserEvent(makeRequest(), env, options);
+
+  assert.equal(first.status, 202);
+  assert.equal(second.status, 200);
+  assert.equal(captures.length, 1);
+
+  const firstBody = await first.json();
+  const secondBody = await second.json();
+
+  assert.equal(firstBody.eventId, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  assert.equal(secondBody.eventId, firstBody.eventId);
+  assert.equal(secondBody.duplicate, true);
 });
