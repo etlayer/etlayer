@@ -1,6 +1,6 @@
 import { consumeEventBatch } from "./archive.js";
 import { handleExportLogs } from "./otlp.js";
-import { exportToPostHog } from "./posthog.js";
+import { routeEventDestinations } from "./destinations.js";
 import { handlePostHogReplay } from "./replay-http.js";
 
 export default {
@@ -35,14 +35,16 @@ export default {
           archiveKey: archiveResult.key,
         });
 
-        const exportResult = await exportToPostHog(event, env);
+        const deliveryResults = await routeEventDestinations(event, env);
 
-        console.info("projected ETLayer event", {
-          eventId: event.id,
-          eventName: event.eventName,
-          destination: "posthog",
-          exportStatus: exportResult.status,
-        });
+        for (const delivery of deliveryResults) {
+          console.info("projected ETLayer event", {
+            eventId: event.id,
+            eventName: event.eventName,
+            destination: delivery.destination,
+            exportStatus: delivery.status,
+          });
+        }
       },
     });
   },
