@@ -199,6 +199,9 @@ test("account.created follows a real backend state write and preserves the same 
       ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
       ETLAYER_INGEST_KEY: "test-key",
       STATE: {
+        async get() {
+          return null;
+        },
         async put(key, body, options) {
           stateWrites.push({ key, body, options });
         },
@@ -211,10 +214,16 @@ test("account.created follows a real backend state write and preserves the same 
   );
 
   assert.equal(response.status, 202);
-  assert.equal(stateWrites.length, 1);
-  assert.match(stateWrites[0].key, /^accounts\/fixture_/);
+  assert.equal(stateWrites.length, 2);
 
-  const storedAccount = JSON.parse(stateWrites[0].body);
+  const accountWrite = stateWrites.find(({ key }) =>
+    key.startsWith("accounts/fixture_"),
+  );
+
+  assert.ok(accountWrite);
+  assert.match(accountWrite.key, /^accounts\/fixture_/);
+
+  const storedAccount = JSON.parse(accountWrite.body);
   assert.equal(storedAccount.actorAnonymousId, "anon_test");
   assert.equal(storedAccount.correlationId, "funnel_test");
 
