@@ -197,3 +197,36 @@ and verifies:
 - Statsig delivery state is exported for all three.
 
 Independent PostHog verification should additionally confirm that `identity.linked` was projected as `$identify`, with `$anon_distinct_id`, and that pre/post-identification events resolve to the same PostHog person.
+
+
+## VS5 agent delegation acceptance
+
+After deploying the current ETLayer Worker and fixture, run:
+
+```bash
+./scripts/once/vs5-agent-delegation.sh
+```
+
+The helper creates one attributed product journey and emits:
+
+```text
+anonymous hero
+  -> identity.linked
+  -> account.created
+  -> agent.tool.call
+  -> agent.subagent.tool.call
+```
+
+It verifies:
+
+- the direct agent event has `subject=user` while `actor.type=agent`;
+- the direct delegation is `on_behalf_of -> user`;
+- the subagent event has `subject=user` while the immediate actor remains the child agent;
+- the subagent delegation chain is ordered as:
+  - `delegated_by -> parent agent`
+  - `on_behalf_of -> user`;
+- both agent events are contract-valid;
+- session/account/attribution continuity is preserved;
+- PostHog and Statsig delivery state is `exported` for both events.
+
+Independent PostHog verification should additionally confirm that both agent events use the same user `distinct_id` while preserving different `actor.id` properties.
