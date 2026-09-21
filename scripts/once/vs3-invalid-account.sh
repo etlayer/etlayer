@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+ETLAYER_URL="${ETLAYER_URL:-https://etlayer-ingest.sergii-ponomarov.workers.dev}"
 RUN_ID="${RUN_ID:-vs3-invalid-account-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs3-invalid-account-$$.txt"
 
@@ -165,6 +166,56 @@ for destination in posthog statsig; do
   printf '%s delivery state: absent ✓\n' "$destination"
 done
 
+say "Revalidating the preserved canonical event without producer re-emission"
+OPERATOR_KEY="$(openssl rand -hex 32)"
+printf '%s' "$OPERATOR_KEY" | npx wrangler secret put ETLAYER_REPLAY_KEY >/dev/null
+
+REVALIDATE_BODY="$(
+  node -e '
+    const sourceKey = process.argv[1];
+    process.stdout.write(JSON.stringify({ sourceKey }));
+  ' "$SOURCE_KEY"
+)"
+
+REVALIDATE_RESPONSE="$(
+  curl --fail-with-body --silent --show-error \
+    -X POST "$ETLAYER_URL/_ops/revalidate" \
+    -H "authorization: Bearer $OPERATOR_KEY" \
+    -H "content-type: application/json" \
+    --data "$REVALIDATE_BODY"
+)" || die "Canonical revalidation request failed."
+
+unset OPERATOR_KEY
+
+if command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "$REVALIDATE_RESPONSE" | jq
+else
+  printf '%s\n' "$REVALIDATE_RESPONSE"
+fi
+
+node -e '
+  const result = JSON.parse(process.argv[1]);
+  const errors = result.validation?.errors || [];
+  const valid =
+    result.sourceKey === process.argv[2] &&
+    result.eventId === process.argv[3] &&
+    result.validation?.status === "blocked" &&
+    errors.length === 1 &&
+    errors[0].code === "required_attribute_missing" &&
+    errors[0].attribute === "account.id" &&
+    Array.isArray(result.deliveries) &&
+    result.deliveries.length === 0;
+
+  if (!valid) {
+    console.error(
+      "Unexpected revalidation result:",
+      JSON.stringify(result, null, 2),
+    );
+    process.exit(1);
+  }
+' "$REVALIDATE_RESPONSE" "$SOURCE_KEY" "$EVENT_ID" ||
+  die "Preserved-event revalidation did not match expected blocked result."
+
 say "VS3 invalid-event acceptance passed"
 cat <<EOF
 {
@@ -174,6 +225,7 @@ cat <<EOF
   "validationError": "required_attribute_missing:account.id",
   "sourceKey": "$SOURCE_KEY",
   "posthogDelivery": "absent",
-  "statsigDelivery": "absent"
+  "statsigDelivery": "absent",
+  "revalidation": "blocked_without_producer_reemission"
 }
 EOF
