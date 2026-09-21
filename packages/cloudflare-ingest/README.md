@@ -2,7 +2,7 @@
 
 The first executable ETLayer gateway.
 
-It accepts named OpenTelemetry events over OTLP/HTTP JSON, places them on Cloudflare Queues, and consumes those messages into an immutable R2 event archive.
+It accepts named OpenTelemetry events over OTLP/HTTP JSON, places them on Cloudflare Queues, persists them into an immutable R2 event archive, and optionally projects them into PostHog.
 
 ## Endpoint
 
@@ -18,25 +18,11 @@ Successful OTLP/HTTP requests return `200 OK` with an empty JSON `ExportLogsServ
 {}
 ```
 
-VS1 accepts JSON only. Protobuf support can be added without changing the product event contract.
-
-## Accepted records
-
-ETLayer is intentionally stricter than a generic OTLP logs receiver in VS1: each accepted `LogRecord` must have a non-empty `eventName` because this gateway is for product and business events rather than arbitrary application logs.
-
-The gateway preserves the original:
-
-- resource;
-- instrumentation scope;
-- log record;
-- occurrence/observation timestamps;
-- trace/span fields present in the log record.
-
-It also attaches trusted receive time and a stable ETLayer event identity. A producer-supplied `etlayer.event.id` is preserved; otherwise the gateway creates one.
+VS1 accepts JSON only.
 
 ## Durable archive
 
-The same Worker consumes `etlayer-events` and writes each managed event to R2.
+The Worker consumes `etlayer-events` and writes each managed event to R2 before any destination export is considered successful.
 
 The object key is deterministic:
 
@@ -44,18 +30,42 @@ The object key is deterministic:
 events/YYYY/MM/DD/HH/<url-encoded-event-id>.json
 ```
 
-Writes use a create-only conditional operation.
+Writes are create-only and include SHA-256 metadata. Identical retries are acknowledged as duplicates; an event-id/content conflict is retried rather than overwriting history.
 
-- the first delivery stores the event;
-- an identical retry is acknowledged as a duplicate without rewriting the object;
-- the same archive identity with different content is treated as a conflict and retried;
-- repeatedly failing messages move to `etlayer-events-dlq`.
+## PostHog exporter
 
-Each object stores SHA-256 and event metadata alongside the JSON body. The archived body is the replay source for later exporters.
+When `POSTHOG_PROJECT_TOKEN` is configured, the queue consumer projects the durable ETLayer event into PostHog using the public Capture API.
+
+The application producer remains vendor-neutral.
+
+Mapping highlights:
+
+- `event.eventName` -> PostHog `event`;
+- ETLayer/OTel attributes -> PostHog event properties;
+- `user.id`, then anonymous/session/account identity -> `distinct_id`;
+- no usable identity -> a synthetic ETLayer distinct ID with `$process_person_profile=false`;
+- original occurrence time -> PostHog `timestamp`;
+- ETLayer event identity -> stable PostHog `uuid`.
+
+A PostHog failure causes the queue message to retry. The R2 write is duplicate-safe, so a retry does not rewrite the canonical event. PostHog recommends supplying a stable event UUID because retries with the same UUID and event identity can be deduplicated.
+
+Set the destination secret:
+
+```bash
+npx wrangler secret put POSTHOG_PROJECT_TOKEN
+```
+
+Optionally set the ingest region/host:
+
+```text
+POSTHOG_HOST=https://us.i.posthog.com
+```
+
+Use the correct project region. The default is US Cloud.
 
 ## Local / first deployment setup
 
-Create the queue and archive bucket once:
+Create the queue, dead-letter queue, and archive bucket once:
 
 ```bash
 npx wrangler queues create etlayer-events
@@ -63,7 +73,7 @@ npx wrangler queues create etlayer-events-dlq
 npx wrangler r2 bucket create etlayer-events-archive
 ```
 
-Set the ingest key:
+Set the ETLayer ingest key:
 
 ```bash
 npx wrangler secret put ETLAYER_INGEST_KEY
@@ -75,4 +85,14 @@ Then run:
 npx wrangler dev
 ```
 
-The next VS1 step is the PostHog exporter reading the same managed event representation.
+## Agent-verifiable acceptance
+
+The exporter is considered complete only when an agent can query the destination and find the event by the original `etlayer.event.id`.
+
+The intended loop is:
+
+```text
+fixture -> ETLayer -> Queue -> R2 -> PostHog -> MCP query -> assert
+```
+
+Replay is the next VS1 step.

@@ -1,5 +1,6 @@
 import { consumeEventBatch } from "./archive.js";
 import { handleExportLogs } from "./otlp.js";
+import { exportToPostHog } from "./posthog.js";
 
 export default {
   async fetch(request, env) {
@@ -17,7 +18,9 @@ export default {
   },
 
   async queue(batch, env) {
-    await consumeEventBatch(batch, env);
+    await consumeEventBatch(batch, env, {
+      afterPersist: (event) => exportToPostHog(event, env),
+    });
   },
 };
 

@@ -1,12 +1,18 @@
 export async function consumeEventBatch(batch, env, options = {}) {
   const logger = options.logger || console;
+  const afterPersist = options.afterPersist || (async () => {});
 
   for (const message of batch.messages) {
     try {
-      await persistManagedEvent(env.ARCHIVE, message.body, options);
+      const archiveResult = await persistManagedEvent(
+        env.ARCHIVE,
+        message.body,
+        options,
+      );
+      await afterPersist(message.body, archiveResult);
       message.ack();
     } catch (error) {
-      logger.error?.("failed to archive ETLayer event", {
+      logger.error?.("failed to process ETLayer event", {
         eventId: message.body?.id,
         error: error instanceof Error ? error.message : String(error),
       });
