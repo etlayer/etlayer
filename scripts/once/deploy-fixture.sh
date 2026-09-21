@@ -124,8 +124,7 @@ PREFLIGHT_BODY="$(
             timeUnixNano: nowNano,
             observedTimeUnixNano: nowNano,
             attributes: [
-              { key: "etlayer.event.id", value: { stringValue: eventId } },
-              { key: "etlayer.schema.version", value: { intValue: "1" } }
+              { key: "etlayer.event.id", value: { stringValue: eventId } }
             ]
           }]
         }]
