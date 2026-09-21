@@ -12,7 +12,10 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/health") {
-      return jsonResponse({ ok: true });
+      return jsonResponse({
+        ok: true,
+        etlayerOtlpEndpoint: env.ETLAYER_OTLP_ENDPOINT || null,
+      });
     }
 
     if (request.method === "GET" && url.pathname === "/fixture.js") {
@@ -216,6 +219,7 @@ export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
         eventId,
         eventName,
         upstreamStatus: response.status,
+        upstreamUrl: env.ETLAYER_OTLP_ENDPOINT,
       },
     };
   }
