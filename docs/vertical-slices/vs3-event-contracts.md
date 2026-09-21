@@ -1,6 +1,6 @@
 # VS3: Event contracts and schema governance
 
-**Status: VS3.1 implemented and green; live contract-blocking acceptance pending.**
+**Status: Complete — live contract-governance acceptance passed on 2026-09-21.**
 
 ## Goal
 
@@ -193,15 +193,130 @@ Validation state is mutable lifecycle evidence. The canonical event remains immu
 - validation-state persistence failure remains retryable through the existing queue lifecycle;
 - integration coverage proves canonical persistence occurs before validation evidence and blocking.
 
-### VS3.2 — Live acceptance — pending
+### VS3.2 — Live acceptance — complete
 
-- deploy the VS3 branch;
-- prove the existing valid funnel still reaches PostHog + Statsig;
-- emit one deliberately invalid `account.created@1` without `account.id`;
-- prove the invalid event exists in canonical R2;
-- prove its validation state is `blocked` with `required_attribute_missing/account.id`;
-- prove neither PostHog nor Statsig receives the invalid event;
-- revalidate the preserved event path without producer re-emission.
+- deployed the VS3 branch and fixture;
+- proved the existing three-event funnel remained valid;
+- verified all three validation states were `valid` with their expected contract IDs;
+- verified all three valid events reached Statsig and PostHog;
+- emitted one deliberately invalid `account.created@1` without `account.id`;
+- proved the invalid event was canonically preserved in R2;
+- proved validation was `blocked` with the exact error `required_attribute_missing/account.id`;
+- proved PostHog and Statsig delivery state were both absent for the blocked event;
+- reread and revalidated the same canonical `sourceKey` without producer re-emission;
+- proved the preserved invalid event remained blocked with zero deliveries.
+
+## Live acceptance evidence
+
+### Valid contract-governed funnel
+
+Correlation:
+
+```text
+acceptance-20260921T222121Z-9cfd4279
+```
+
+Events:
+
+```text
+1747aa48-c84d-4c8f-a42a-e469be99c2fe  landing.hero.exposed
+47645593-93a9-46c4-8ed0-c7089cf2dc34  landing.hero.cta_clicked
+bc0b594d-31d8-46fa-9ee4-ab63054fbe93  account.created
+```
+
+Durable validation states:
+
+```text
+landing.hero.exposed      -> valid -> landing.hero.exposed@1
+landing.hero.cta_clicked  -> valid -> landing.hero.cta_clicked@1
+account.created           -> valid -> account.created@1
+```
+
+Statsig delivery state for all three logical events was `exported`.
+
+An independent PostHog query showed exactly the same three logical events with one actor and the expected causation chain.
+
+### Blocked invalid business event
+
+Correlation:
+
+```text
+vs3-invalid-account-20260921T222202Z-0adfd840
+```
+
+Event:
+
+```text
+ac8bacdb-a865-416d-8736-54e6d58a5e4c  account.created@1
+```
+
+The event intentionally omitted only:
+
+```text
+account.id
+```
+
+ETLayer accepted and canonically preserved the event at:
+
+```text
+events/2026/09/21/22/ac8bacdb-a865-416d-8736-54e6d58a5e4c.json
+```
+
+Validation evidence:
+
+```json
+{
+  "status": "blocked",
+  "schemaVersion": 1,
+  "contractId": "account.created@1",
+  "errors": [
+    {
+      "code": "required_attribute_missing",
+      "attribute": "account.id"
+    }
+  ]
+}
+```
+
+Destination state:
+
+```text
+PostHog delivery state  absent
+Statsig delivery state  absent
+```
+
+An independent PostHog query also returned zero rows for the invalid correlation.
+
+### Canonical revalidation without producer re-emission
+
+The preserved canonical `sourceKey` was passed to the protected revalidation operator.
+
+The result was:
+
+```text
+eventId      ac8bacdb-a865-416d-8736-54e6d58a5e4c
+eventName    account.created
+validation   blocked
+contract     account.created@1
+deliveries   []
+```
+
+The exact validation error remained:
+
+```text
+required_attribute_missing / account.id
+```
+
+No producer emitted a second logical event.
+
+This proves:
+
+- ETLayer preserves accepted events before governance;
+- versioned contracts are executable runtime policy, not documentation;
+- malformed product/business events can be blocked before contaminating downstream systems;
+- validation outcomes are durable and machine-readable;
+- valid events continue to route normally;
+- preserved events can be revalidated later without producer involvement.
 
 ## Non-goals
 
