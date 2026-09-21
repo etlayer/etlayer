@@ -6,13 +6,14 @@ These scripts are intentionally **not** part of the long-term ETLayer CLI. Once 
 
 ## bootstrap-cloudflare.sh
 
-Bootstraps and verifies the first ETLayer Cloudflare vertical slice using the same model we used for RunDiff: **local Wrangler OAuth**, not a GitHub CI API token.
+Bootstraps and verifies the first ETLayer Cloudflare vertical slice using the same model as RunDiff: **local Wrangler OAuth**, not a GitHub CI API token.
 
 Run from the repository root:
 
 ```bash
 git switch chore/local-cloudflare-bootstrap
-npm install
+git pull --ff-only
+rm -f package-lock.json
 ./scripts/once/bootstrap-cloudflare.sh
 ```
 
@@ -21,28 +22,15 @@ The script:
 1. checks Node/npm;
 2. uses the repository-pinned Wrangler;
 3. runs `wrangler whoami`, and opens `wrangler login` if needed;
-4. ensures these resources exist:
-   - `etlayer-events` Queue;
-   - `etlayer-events-dlq` dead-letter Queue;
-   - `etlayer-events-archive` R2 bucket;
+4. ensures the Queue, DLQ, and R2 bucket exist;
 5. generates a fresh random 256-bit `ETLAYER_INGEST_KEY`;
-6. securely prompts once for the PostHog **Project API token** for project `ETLayer` unless `POSTHOG_PROJECT_TOKEN` is already in the shell;
-7. writes both values directly to Worker secrets with `wrangler secret put`;
-8. deploys `etlayer-ingest`;
-9. checks `/health`;
-10. sends an `etlayer.acceptance.smoke` OTLP event.
+6. updates that Worker secret;
+7. reuses the existing `POSTHOG_PROJECT_TOKEN` Worker secret when present;
+8. otherwise securely prompts once for the PostHog Project API token;
+9. deploys `etlayer-ingest`;
+10. checks `/health`;
+11. sends an `etlayer.acceptance.smoke` OTLP event.
 
-No Cloudflare API token is required because deployment runs from your authenticated local Wrangler session.
+No `CLOUDFLARE_API_TOKEN` is required because deployment runs from your authenticated local Wrangler session.
 
-### Optional non-interactive PostHog token
-
-```bash
-export POSTHOG_PROJECT_TOKEN='phc_...'
-./scripts/once/bootstrap-cloudflare.sh
-```
-
-The script never writes secret values to the repository or to an `.env` file.
-
-### Important
-
-Rerunning the script generates a **new** `ETLAYER_INGEST_KEY` and replaces the Worker secret. That is intentional for this disposable bootstrap helper.
+The script never writes secret values to the repository or to an `.env` file. Re-running it intentionally rotates only the ETLayer ingest key.

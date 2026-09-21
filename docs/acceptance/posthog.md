@@ -5,7 +5,7 @@ ETLayer's first exporter is not considered complete merely because the destinati
 The acceptance loop is machine-verifiable:
 
 ```text
-fixture / smoke producer
+local smoke producer
         |
       OTLP
         |
@@ -22,35 +22,31 @@ fixture / smoke producer
       assert
 ```
 
-## GitHub Actions setup
+## Local bootstrap
 
-The `Deploy and smoke` workflow expects these repository secrets:
+For VS1, deployment intentionally follows the same model used by RunDiff: an authenticated local Wrangler session.
 
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `ETLAYER_INGEST_KEY`
-- `POSTHOG_PROJECT_TOKEN`
+```bash
+./scripts/once/bootstrap-cloudflare.sh
+```
 
-The workflow:
+The helper creates or reuses the Cloudflare resources, rotates the ETLayer ingest key, reuses the PostHog Worker secret when already configured, deploys the Worker, checks `/health`, and emits one `etlayer.acceptance.smoke` OTLP event.
 
-1. ensures the Queue, DLQ, and R2 bucket exist;
-2. configures Worker secrets;
-3. deploys the Worker;
-4. checks `/health`;
-5. emits one `etlayer.acceptance.smoke` OTLP event;
-6. stamps it with `etlayer.test.run_id=gha-<run-id>-<attempt>`.
+Each smoke is stamped with a unique `etlayer.test.run_id` beginning with `local-`.
+
+No Cloudflare API token or GitHub Actions secret is required for this VS1 bootstrap path.
 
 ## Agent verification
 
-After the workflow completes, use the connected PostHog MCP against the ETLayer project.
+After the smoke completes, use the connected PostHog MCP against project `ETLayer`.
 
 First confirm the event and property exist through PostHog schema discovery. Then query the captured event using the emitted `etlayer.test.run_id`.
 
 Assertions:
 
-- exactly the intended smoke event is present for the test run;
+- the intended smoke event is present;
 - `properties['etlayer.event.id']` is present;
-- `properties['etlayer.test.run_id']` matches the GitHub Actions run;
+- `properties['etlayer.test.run_id']` matches the smoke run;
 - the event name is `etlayer.acceptance.smoke`;
 - retries do not create uncontrolled logical duplicates.
 

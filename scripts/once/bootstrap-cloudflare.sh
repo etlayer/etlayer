@@ -7,6 +7,8 @@ WORKER_NAME="etlayer-ingest"
 QUEUE_NAME="etlayer-events"
 DLQ_NAME="etlayer-events-dlq"
 R2_BUCKET="etlayer-events-archive"
+DEPLOY_LOG="/tmp/etlayer-deploy.txt"
+WORKER_URL_FILE="/tmp/etlayer-worker-url.txt"
 
 say() {
   printf '\n==> %s\n' "$*"
@@ -31,7 +33,7 @@ ensure_dependencies() {
 
   if [ ! -d node_modules/wrangler ]; then
     say "Installing repository dependencies..."
-    npm install
+    npm install --no-package-lock
   fi
 
   npx wrangler --version >/dev/null 2>&1 ||
@@ -89,11 +91,6 @@ PY
 }
 
 prompt_posthog_token() {
-  if [ -n "${POSTHOG_PROJECT_TOKEN:-}" ]; then
-    printf '%s' "$POSTHOG_PROJECT_TOKEN"
-    return
-  fi
-
   local token=""
   printf '\nPostHog Project API token for project ETLayer (hidden input): ' >&2
   IFS= read -r -s token
@@ -108,40 +105,64 @@ prompt_posthog_token() {
   printf '%s' "$token"
 }
 
+worker_secret_exists() {
+  local name="$1"
+
+  cd "$APP_DIR"
+  npx wrangler secret list --format json 2>/dev/null |
+    grep -Fq "\"name\": \"$name\""
+}
+
 set_worker_secret() {
   local name="$1"
   local value="$2"
 
+  cd "$APP_DIR"
   printf '%s' "$value" |
     npx wrangler secret put "$name"
 }
 
+ensure_posthog_secret() {
+  if [ -n "${POSTHOG_PROJECT_TOKEN:-}" ]; then
+    say "Updating POSTHOG_PROJECT_TOKEN from current shell environment"
+    set_worker_secret "POSTHOG_PROJECT_TOKEN" "$POSTHOG_PROJECT_TOKEN"
+    return
+  fi
+
+  if worker_secret_exists "POSTHOG_PROJECT_TOKEN"; then
+    say "Reusing existing POSTHOG_PROJECT_TOKEN Worker secret"
+    return
+  fi
+
+  local posthog_token
+  posthog_token="$(prompt_posthog_token)"
+
+  say "Creating POSTHOG_PROJECT_TOKEN Worker secret"
+  set_worker_secret "POSTHOG_PROJECT_TOKEN" "$posthog_token"
+  unset posthog_token
+}
+
 deploy_worker() {
   cd "$APP_DIR"
+  rm -f "$DEPLOY_LOG" "$WORKER_URL_FILE"
 
   say "Deploying $WORKER_NAME"
-  npx wrangler deploy | tee /tmp/etlayer-deploy.txt
+  npx wrangler deploy | tee "$DEPLOY_LOG"
 
   local url
   url="$(
-    grep -Eo 'https://[^[:space:]]+\.workers\.dev' /tmp/etlayer-deploy.txt |
+    grep -Eo 'https://[^[:space:]]+\.workers\.dev' "$DEPLOY_LOG" |
       tail -n 1 || true
   )"
 
-  if [ -z "$url" ]; then
-    url="https://$WORKER_NAME.${CLOUDFLARE_SUBDOMAIN:-}.workers.dev"
-  fi
+  [ -n "$url" ] ||
+    die "Worker deployed, but its workers.dev URL could not be parsed from Wrangler output."
 
-  printf '%s' "$url"
+  printf '%s\n' "$url" > "$WORKER_URL_FILE"
 }
 
 health_check() {
   local url="$1"
-
-  if [[ "$url" == *"..workers.dev"* ]] || [ -z "$url" ]; then
-    say "Could not infer workers.dev URL automatically; skipping health check."
-    return
-  fi
 
   say "Checking $url/health"
   curl --fail --silent --show-error "$url/health"
@@ -152,17 +173,13 @@ run_smoke() {
   local url="$1"
   local ingest_key="$2"
 
-  if [[ "$url" == *"..workers.dev"* ]] || [ -z "$url" ]; then
-    say "Could not infer workers.dev URL automatically; skipping smoke."
-    printf 'Run manually once you know the URL:\n'
-    printf 'ETLAYER_BASE_URL=https://... ETLAYER_INGEST_KEY=<key> npm run smoke:posthog\n'
-    return
-  fi
-
   cd "$ROOT_DIR"
 
   say "Sending ETLayer OTLP smoke event"
-  ETLAYER_BASE_URL="$url"   ETLAYER_INGEST_KEY="$ingest_key"   ETLAYER_TEST_RUN_ID="local-$(date -u +%Y%m%dT%H%M%SZ)"     npm run smoke:posthog
+  ETLAYER_BASE_URL="$url" \
+  ETLAYER_INGEST_KEY="$ingest_key" \
+  ETLAYER_TEST_RUN_ID="local-$(date -u +%Y%m%dT%H%M%SZ)" \
+    npm run smoke:posthog
 }
 
 main() {
@@ -179,19 +196,14 @@ main() {
   local ingest_key
   ingest_key="$(generate_ingest_key)"
 
-  local posthog_token
-  posthog_token="$(prompt_posthog_token)"
-
-  cd "$APP_DIR"
-
-  say "Configuring Worker secrets"
+  say "Rotating ETLAYER_INGEST_KEY Worker secret"
   set_worker_secret "ETLAYER_INGEST_KEY" "$ingest_key"
-  set_worker_secret "POSTHOG_PROJECT_TOKEN" "$posthog_token"
+  ensure_posthog_secret
 
-  unset posthog_token
+  deploy_worker
 
   local worker_url
-  worker_url="$(deploy_worker)"
+  worker_url="$(cat "$WORKER_URL_FILE")"
 
   health_check "$worker_url"
   run_smoke "$worker_url" "$ingest_key"
@@ -200,7 +212,6 @@ main() {
   printf 'Bootstrap complete.\n'
   printf 'Worker: %s\n' "$worker_url"
   printf 'ETLAYER_INGEST_KEY was generated locally and was not written to disk.\n'
-  printf 'Keep this terminal open only if you need the current shell state; rerunning the script rotates the ingest key.\n'
 
   unset ingest_key
 }
