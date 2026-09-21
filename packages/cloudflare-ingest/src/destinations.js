@@ -1,9 +1,14 @@
 import { exportToPostHog } from "./posthog.js";
+import { exportToStatsig } from "./statsig.js";
 
 const DEFAULT_DESTINATIONS = [
   {
     name: "posthog",
     exportEvent: exportToPostHog,
+  },
+  {
+    name: "statsig",
+    exportEvent: exportToStatsig,
   },
 ];
 
