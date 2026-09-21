@@ -1,5 +1,7 @@
 # VS1: Cloudflare Event Gateway
 
+**Status: Complete — live acceptance passed on 2026-09-21.**
+
 ## Goal
 
 Prove the smallest useful ETLayer pipeline in production-like conditions.
@@ -138,6 +140,82 @@ The first implementation may be an admin command or script rather than a polishe
 14. Replay the stored interval.
 15. PostHog receives the replayed events.
 16. Retries do not create uncontrolled duplicate logical events.
+
+## Live acceptance evidence
+
+VS1 was verified against the deployed Cloudflare reference runtime and the intended EU PostHog project.
+
+### Clean browser + backend funnel
+
+Correlation:
+
+```text
+vs1-20260921T201828Z-85a2563a
+```
+
+Exactly three destination events were observed:
+
+```text
+landing.hero.exposed
+  af7840e7-ae79-4e32-b623-6a18982f583c
+        |
+        v causation.id
+landing.hero.cta_clicked
+  d073fe88-1f5a-4237-818b-8c104bc513a9
+        |
+        v causation.id
+account.created
+  8a3ba64f-3c47-4dc8-86f1-c68dc0eca136
+```
+
+Verified properties:
+
+- one shared anonymous actor / destination `distinct_id`;
+- browser events carried `experiment.id=hero.v1` and `experiment.variant=fixture-a`;
+- the backend event carried `account.id=fixture_2911fa48-4544-4494-8593-608b7d3e564a`;
+- producer authority was `interaction` for browser events and `business_state` for the backend event;
+- no duplicate logical events were present for the correlation id.
+
+### Destination outage + recovery
+
+PostHog projection was intentionally disabled while the fixture completed another full funnel.
+
+Correlation:
+
+```text
+outage-20260921T203403Z-7f263cf4
+```
+
+Outage window:
+
+```text
+[2026-09-21T20:34:03Z, 2026-09-21T20:35:05Z)
+```
+
+Before replay, PostHog contained zero rows for this correlation id.
+
+Replay:
+
+```text
+replay-20260921T203706Z-a9f3552f
+```
+
+The replay selected exactly three canonical R2 events and exported exactly three destination events:
+
+```text
+28bf92aa-a0d1-4d08-bb65-5da25d559c3c  landing.hero.exposed
+140bed91-120d-4184-b49b-026e0a72381e  landing.hero.cta_clicked
+dc781d79-4540-4038-93d0-40027b2004ee  account.created
+```
+
+PostHog verification showed exactly one row per original UUID. All three rows retained the original occurrence time, correlation and causation data, and carried:
+
+```text
+etlayer.delivery.mode = replay
+etlayer.replay.id = replay-20260921T203706Z-a9f3552f
+```
+
+This demonstrates preserve-first/project-second recovery with destination-side deduplication.
 
 ## Explicit non-goals
 
