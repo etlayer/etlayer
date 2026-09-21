@@ -1,6 +1,6 @@
 import { consumeEventBatch } from "./archive.js";
 import { handleExportLogs } from "./otlp.js";
-import { routeEventDestinations } from "./destinations.js";
+import { processPersistedEvent } from "./processing.js";
 import { handlePostHogReplay, handleStatsigReplay } from "./replay-http.js";
 
 export default {
@@ -42,9 +42,18 @@ export default {
           archiveKey: archiveResult.key,
         });
 
-        const deliveryResults = await routeEventDestinations(event, env);
+        const processed = await processPersistedEvent(event, env);
 
-        for (const delivery of deliveryResults) {
+        console.info("validated ETLayer event", {
+          eventId: event.id,
+          eventName: event.eventName,
+          validationStatus: processed.validation.status,
+          schemaVersion: processed.validation.schemaVersion,
+          contractId: processed.validation.contractId,
+          validationErrors: processed.validation.errors.length,
+        });
+
+        for (const delivery of processed.deliveries) {
           console.info("projected ETLayer event", {
             eventId: event.id,
             eventName: event.eventName,
