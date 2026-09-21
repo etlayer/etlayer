@@ -1,3 +1,8 @@
+import {
+  identityCustomIds,
+  resolveEventIdentity,
+} from "./identity.js";
+
 const DEFAULT_STATSIG_HOST = "https://api.statsig.com";
 
 export async function exportToStatsig(event, env, options = {}) {
@@ -50,57 +55,33 @@ export function projectToStatsig(event, options = {}) {
     ...eventAttributes,
   };
 
-  const identity = chooseStatsigIdentity(properties, event.id);
+  const identity = resolveEventIdentity(event);
+  const user = statsigUser(identity);
   const metadata = buildMetadata(event, properties, options.delivery);
 
   return {
     eventName: event.eventName,
     time: eventTimestamp(event),
-    user: identity,
+    user,
     metadata,
   };
 }
 
-function chooseStatsigIdentity(properties, eventId) {
-  const candidates = [
-    ["user.id", "userID"],
-    ["actor.anonymous.id", "anonymousID"],
-    ["session.id", "sessionID"],
-    ["account.id", "accountID"],
-  ];
+function statsigUser(identity) {
+  const user = {};
+  const customIDs = identityCustomIds(identity);
 
-  let primary;
-
-  for (const [property, customIdName] of candidates) {
-    const value = properties[property];
-    if (typeof value !== "string" || value.length === 0) continue;
-
-    if (!primary) {
-      primary = {
-        property,
-        customIdName,
-        value,
-      };
-      break;
-    }
+  if (identity.userId) {
+    user.userID = identity.userId;
   }
 
-  const userID = primary?.value || `etlayer:${eventId}`;
-  const customIDs = {};
-
-  for (const [property, customIdName] of candidates) {
-    const value = properties[property];
-    if (
-      typeof value === "string" &&
-      value.length > 0 &&
-      value !== userID
-    ) {
-      customIDs[customIdName] = value;
-    }
+  if (Object.keys(customIDs).length > 0) {
+    user.customIDs = customIDs;
   }
 
-  const user = { userID };
-  if (Object.keys(customIDs).length > 0) user.customIDs = customIDs;
+  if (!user.userID && !user.customIDs) {
+    user.userID = identity.primary.id;
+  }
 
   return user;
 }
