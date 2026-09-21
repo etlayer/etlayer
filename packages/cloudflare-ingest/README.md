@@ -95,4 +95,37 @@ The intended loop is:
 fixture -> ETLayer -> Queue -> R2 -> PostHog -> MCP query -> assert
 ```
 
-Replay is the next VS1 step.
+## Deterministic replay
+
+VS1 can replay a missing destination interval from the immutable R2 archive without recreating the business event.
+
+The operator endpoint is:
+
+```text
+POST /_ops/replay/posthog
+Authorization: Bearer <replay-key>
+Content-Type: application/json
+```
+
+Replay uses a half-open time range `[from, to)`, reads canonical events from R2 in deterministic order, and passes them through the same PostHog projector. Original event identity and occurrence time are preserved, so the PostHog UUID remains stable across retries.
+
+Replay delivery metadata is destination-only:
+
+```text
+etlayer.delivery.mode = replay
+etlayer.replay.id      = <replay id>
+```
+
+The canonical R2 object is never rewritten.
+
+For VS1 use the one-time operator helper:
+
+```bash
+./scripts/once/replay-posthog.sh \
+  --from 2026-09-21T18:36:00Z \
+  --to   2026-09-21T18:45:00Z
+```
+
+The helper rotates an independent `ETLAYER_REPLAY_KEY`, deploys the current Worker, and invokes the replay endpoint.
+
+See `docs/acceptance/replay.md` for the recovery proof.

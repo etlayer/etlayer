@@ -1,6 +1,7 @@
 import { consumeEventBatch } from "./archive.js";
 import { handleExportLogs } from "./otlp.js";
 import { exportToPostHog } from "./posthog.js";
+import { handlePostHogReplay } from "./replay-http.js";
 
 export default {
   async fetch(request, env) {
@@ -12,6 +13,13 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/v1/logs") {
       return handleExportLogs(request, env);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/_ops/replay/posthog"
+    ) {
+      return handlePostHogReplay(request, env);
     }
 
     return new Response("Not found", { status: 404 });

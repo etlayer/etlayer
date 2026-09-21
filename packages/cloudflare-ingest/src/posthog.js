@@ -8,6 +8,7 @@ export async function exportToPostHog(event, env, options = {}) {
   const fetchImpl = options.fetch || fetch;
   const payload = await projectToPostHog(event, {
     crypto: options.crypto || globalThis.crypto,
+    delivery: options.delivery,
   });
 
   const host = String(env.POSTHOG_HOST || DEFAULT_POSTHOG_HOST).replace(/\/$/, "");
@@ -54,6 +55,8 @@ export async function projectToPostHog(event, options = {}) {
   if (event.logRecord?.traceId) properties["otel.trace_id"] = event.logRecord.traceId;
   if (event.logRecord?.spanId) properties["otel.span_id"] = event.logRecord.spanId;
 
+  addDeliveryMetadata(properties, options.delivery);
+
   const identity = chooseDistinctId(properties, event.id);
   if (!identity.processPersonProfile) {
     properties.$process_person_profile = false;
@@ -94,6 +97,18 @@ export async function stablePostHogUuid(eventId, cryptoImpl = globalThis.crypto)
     hex.slice(16, 20),
     hex.slice(20),
   ].join("-");
+}
+
+function addDeliveryMetadata(properties, delivery) {
+  if (!delivery || typeof delivery !== "object") return;
+
+  if (typeof delivery.mode === "string" && delivery.mode.length > 0) {
+    properties["etlayer.delivery.mode"] = delivery.mode;
+  }
+
+  if (typeof delivery.replayId === "string" && delivery.replayId.length > 0) {
+    properties["etlayer.replay.id"] = delivery.replayId;
+  }
 }
 
 function chooseDistinctId(properties, eventId) {
