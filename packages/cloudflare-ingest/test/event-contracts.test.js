@@ -181,3 +181,27 @@ test("validation is deterministic for repeated processing", () => {
     validateEventContract(managed),
   );
 });
+
+
+test("validates identity.linked@1 as a backend-authoritative transition", () => {
+  const result = validateEventContract(
+    event("identity.linked", {
+      "etlayer.schema.version": 1,
+      "actor.anonymous.id": "anon_1",
+      "user.id": "user_1",
+      "account.id": "account_1",
+      "session.id": "session_1",
+      "correlation.id": "corr_1",
+      "causation.id": "cause_1",
+      "etlayer.producer.kind": "backend",
+      "etlayer.authority.kind": "business_state",
+    }),
+  );
+
+  assert.deepEqual(result, {
+    status: "valid",
+    schemaVersion: 1,
+    contractId: "identity.linked@1",
+    errors: [],
+  });
+});
