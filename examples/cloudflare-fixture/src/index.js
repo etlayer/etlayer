@@ -15,6 +15,14 @@ export default {
       return jsonResponse({ ok: true });
     }
 
+    if (request.method === "GET" && url.pathname === "/fixture.js") {
+      return javascriptResponse(browserScript());
+    }
+
+    if (request.method === "GET" && url.pathname === "/favicon.ico") {
+      return new Response(null, { status: 204 });
+    }
+
     if (request.method === "GET" && url.pathname === "/") {
       const context = contextForLanding(request, url);
       return htmlResponse(indexHtml(context), context.setCookies);
@@ -376,7 +384,7 @@ function htmlResponse(body, setCookies = []) {
 }
 
 function indexHtml(context) {
-  const runId = JSON.stringify(context.correlationId);
+  const correlationId = escapeHtml(context.correlationId);
 
   return `<!doctype html>
 <html lang="en">
@@ -390,10 +398,9 @@ function indexHtml(context) {
     .meta { opacity: .72; font-size: 14px; }
     button { margin: 8px 8px 8px 0; padding: 10px 14px; }
     pre { margin-top: 24px; padding: 16px; background: rgba(127,127,127,.12); overflow: auto; white-space: pre-wrap; }
-    .ok { font-weight: 600; }
   </style>
 </head>
-<body>
+<body data-correlation-id="${correlationId}">
   <h1>ETLayer VS1 Funnel</h1>
   <p>Browser interaction → browser CTA → backend account state transition. One OTLP path.</p>
   <p class="meta">correlation.id: <code id="run-id"></code></p>
@@ -402,96 +409,116 @@ function indexHtml(context) {
   <button id="account" disabled>Create test account</button>
 
   <pre id="output">Starting funnel…</pre>
-
-  <script>
-    const correlationId = ${runId};
-    const output = document.getElementById("output");
-    const cta = document.getElementById("cta");
-    const account = document.getElementById("account");
-    document.getElementById("run-id").textContent = correlationId;
-
-    const state = {
-      correlationId,
-      exposedEventId: null,
-      ctaEventId: null,
-      accountEventId: null,
-      accountId: null,
-    };
-
-    function render(message) {
-      output.textContent = message + "\\n\\n" + JSON.stringify(state, null, 2);
-    }
-
-    async function post(path, body) {
-      const response = await fetch(path, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body || {}),
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(JSON.stringify(result));
-      }
-      return result;
-    }
-
-    async function exposeHero() {
-      const result = await post("/api/browser-event", {
-        eventName: "landing.hero.exposed",
-        attributes: {
-          "page.path": location.pathname,
-        },
-      });
-
-      state.exposedEventId = result.eventId;
-      cta.disabled = false;
-      render("✓ landing.hero.exposed");
-    }
-
-    cta.addEventListener("click", async () => {
-      cta.disabled = true;
-
-      try {
-        const result = await post("/api/browser-event", {
-          eventName: "landing.hero.cta_clicked",
-          causationId: state.exposedEventId,
-          attributes: {
-            "page.path": location.pathname,
-            "cta.name": "try_etlayer",
-          },
-        });
-
-        state.ctaEventId = result.eventId;
-        account.disabled = false;
-        render("✓ landing.hero.cta_clicked");
-      } catch (error) {
-        cta.disabled = false;
-        render("✗ CTA failed: " + error.message);
-      }
-    });
-
-    account.addEventListener("click", async () => {
-      account.disabled = true;
-
-      try {
-        const result = await post("/api/account", {
-          causationId: state.ctaEventId,
-        });
-
-        state.accountEventId = result.eventId;
-        state.accountId = result.accountId;
-        render("✓ account.created — funnel complete");
-      } catch (error) {
-        account.disabled = false;
-        render("✗ account creation failed: " + error.message);
-      }
-    });
-
-    exposeHero().catch((error) => {
-      render("✗ hero exposure failed: " + error.message);
-    });
-  </script>
+  <script src="/fixture.js" defer></script>
 </body>
 </html>`;
+}
+
+function browserScript() {
+  return String.raw`
+const correlationId = document.body.dataset.correlationId;
+const output = document.getElementById("output");
+const cta = document.getElementById("cta");
+const account = document.getElementById("account");
+document.getElementById("run-id").textContent = correlationId;
+
+const state = {
+  correlationId,
+  exposedEventId: null,
+  ctaEventId: null,
+  accountEventId: null,
+  accountId: null,
+};
+
+function render(message) {
+  output.textContent = message + "\\n\\n" + JSON.stringify(state, null, 2);
+}
+
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(result));
+  }
+  return result;
+}
+
+async function exposeHero() {
+  const result = await post("/api/browser-event", {
+    eventName: "landing.hero.exposed",
+    attributes: {
+      "page.path": location.pathname,
+    },
+  });
+
+  state.exposedEventId = result.eventId;
+  cta.disabled = false;
+  render("✓ landing.hero.exposed");
+}
+
+cta.addEventListener("click", async () => {
+  cta.disabled = true;
+
+  try {
+    const result = await post("/api/browser-event", {
+      eventName: "landing.hero.cta_clicked",
+      causationId: state.exposedEventId,
+      attributes: {
+        "page.path": location.pathname,
+        "cta.name": "try_etlayer",
+      },
+    });
+
+    state.ctaEventId = result.eventId;
+    account.disabled = false;
+    render("✓ landing.hero.cta_clicked");
+  } catch (error) {
+    cta.disabled = false;
+    render("✗ CTA failed: " + error.message);
+  }
+});
+
+account.addEventListener("click", async () => {
+  account.disabled = true;
+
+  try {
+    const result = await post("/api/account", {
+      causationId: state.ctaEventId,
+    });
+
+    state.accountEventId = result.eventId;
+    state.accountId = result.accountId;
+    render("✓ account.created — funnel complete");
+  } catch (error) {
+    account.disabled = false;
+    render("✗ account creation failed: " + error.message);
+  }
+});
+
+exposeHero().catch((error) => {
+  render("✗ hero exposure failed: " + error.message);
+});
+`;
+}
+
+function javascriptResponse(body) {
+  return new Response(body, {
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
