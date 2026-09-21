@@ -2,7 +2,7 @@
 
 The first executable ETLayer gateway.
 
-It accepts named OpenTelemetry events over OTLP/HTTP JSON and enqueues a loss-preserving managed representation for downstream persistence and export.
+It accepts named OpenTelemetry events over OTLP/HTTP JSON, places them on Cloudflare Queues, and consumes those messages into an immutable R2 event archive.
 
 ## Endpoint
 
@@ -34,12 +34,33 @@ The gateway preserves the original:
 
 It also attaches trusted receive time and a stable ETLayer event identity. A producer-supplied `etlayer.event.id` is preserved; otherwise the gateway creates one.
 
-## Local setup
+## Durable archive
 
-Create the queue once:
+The same Worker consumes `etlayer-events` and writes each managed event to R2.
+
+The object key is deterministic:
+
+```text
+events/YYYY/MM/DD/HH/<url-encoded-event-id>.json
+```
+
+Writes use a create-only conditional operation.
+
+- the first delivery stores the event;
+- an identical retry is acknowledged as a duplicate without rewriting the object;
+- the same archive identity with different content is treated as a conflict and retried;
+- repeatedly failing messages move to `etlayer-events-dlq`.
+
+Each object stores SHA-256 and event metadata alongside the JSON body. The archived body is the replay source for later exporters.
+
+## Local / first deployment setup
+
+Create the queue and archive bucket once:
 
 ```bash
 npx wrangler queues create etlayer-events
+npx wrangler queues create etlayer-events-dlq
+npx wrangler r2 bucket create etlayer-events-archive
 ```
 
 Set the ingest key:
@@ -54,4 +75,4 @@ Then run:
 npx wrangler dev
 ```
 
-The next VS1 step consumes the queue and writes the replayable durable event archive.
+The next VS1 step is the PostHog exporter reading the same managed event representation.

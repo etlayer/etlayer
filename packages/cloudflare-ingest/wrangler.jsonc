@@ -12,6 +12,21 @@
         "binding": "EVENTS",
         "queue": "etlayer-events"
       }
+    ],
+    "consumers": [
+      {
+        "queue": "etlayer-events",
+        "max_batch_size": 100,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "etlayer-events-dlq"
+      }
     ]
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "ARCHIVE",
+      "bucket_name": "etlayer-events-archive"
+    }
+  ]
 }

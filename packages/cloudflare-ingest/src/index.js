@@ -1,3 +1,4 @@
+import { consumeEventBatch } from "./archive.js";
 import { handleExportLogs } from "./otlp.js";
 
 export default {
@@ -13,6 +14,10 @@ export default {
     }
 
     return new Response("Not found", { status: 404 });
+  },
+
+  async queue(batch, env) {
+    await consumeEventBatch(batch, env);
   },
 };
 
