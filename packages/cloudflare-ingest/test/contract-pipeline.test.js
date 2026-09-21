@@ -102,6 +102,10 @@ test("queue preserves an invalid event before blocking destination routing", asy
   );
 
   assert.equal(validation.status, "blocked");
+  assert.equal(
+    validation.sourceKey,
+    "events/2026/09/22/00/evt-blocked-1.json",
+  );
   assert.deepEqual(validation.errors, [
     {
       code: "required_attribute_missing",
