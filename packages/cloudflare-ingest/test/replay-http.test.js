@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handlePostHogReplay } from "../src/replay-http.js";
+import { handlePostHogReplay, handleStatsigReplay } from "../src/replay-http.js";
 
 function request(token = "replay-key", body = {}) {
   return new Request("https://events.test/_ops/replay/posthog", {
@@ -58,4 +58,45 @@ test("returns replay summary from the operator endpoint", async () => {
   assert.equal(body.replayId, "replay-http-test");
   assert.equal(body.selected, 2);
   assert.equal(body.exported, 2);
+});
+
+
+test("returns Statsig replay summary from the Statsig operator endpoint", async () => {
+  const statsigRequest = new Request(
+    "https://events.test/_ops/replay/statsig",
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer replay-key",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "2026-09-21T18:35:00.000Z",
+        to: "2026-09-21T18:40:00.000Z",
+        replayId: "replay-statsig-http-test",
+      }),
+    },
+  );
+
+  const response = await handleStatsigReplay(
+    statsigRequest,
+    { ETLAYER_REPLAY_KEY: "replay-key" },
+    {
+      replay: async (_env, input) => ({
+        destination: "statsig",
+        replayId: input.replayId,
+        from: input.from,
+        to: input.to,
+        selected: 1,
+        exported: 1,
+        deliveries: [],
+      }),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.destination, "statsig");
+  assert.equal(body.replayId, "replay-statsig-http-test");
+  assert.equal(body.exported, 1);
 });
