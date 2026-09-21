@@ -205,3 +205,65 @@ test("validates identity.linked@1 as a backend-authoritative transition", () => 
     errors: [],
   });
 });
+
+
+test("validates agent.tool.call@1 with explicit agent actor and user delegation", () => {
+  const result = validateEventContract(
+    event("agent.tool.call", {
+      "etlayer.schema.version": 1,
+      "actor.type": "agent",
+      "actor.id": "agent_hanna",
+      "user.id": "usr_42",
+      "account.id": "account_1",
+      "session.id": "session_1",
+      "correlation.id": "corr_1",
+      "causation.id": "cause_1",
+      "delegation.0.relationship": "on_behalf_of",
+      "delegation.0.principal.type": "user",
+      "delegation.0.principal.id": "usr_42",
+      "agent.turn.id": "turn_17",
+      "agent.tool_call.id": "call_abc",
+      "etlayer.producer.kind": "backend",
+      "etlayer.authority.kind": "business_state",
+    }),
+  );
+
+  assert.deepEqual(result, {
+    status: "valid",
+    schemaVersion: 1,
+    contractId: "agent.tool.call@1",
+    errors: [],
+  });
+});
+
+test("validates subagent delegation chain explicitly", () => {
+  const result = validateEventContract(
+    event("agent.subagent.tool.call", {
+      "etlayer.schema.version": 1,
+      "actor.type": "agent",
+      "actor.id": "agent_child",
+      "user.id": "usr_42",
+      "account.id": "account_1",
+      "session.id": "session_1",
+      "correlation.id": "corr_1",
+      "causation.id": "cause_1",
+      "delegation.0.relationship": "delegated_by",
+      "delegation.0.principal.type": "agent",
+      "delegation.0.principal.id": "agent_parent",
+      "delegation.1.relationship": "on_behalf_of",
+      "delegation.1.principal.type": "user",
+      "delegation.1.principal.id": "usr_42",
+      "agent.turn.id": "turn_18",
+      "agent.tool_call.id": "call_child",
+      "etlayer.producer.kind": "backend",
+      "etlayer.authority.kind": "business_state",
+    }),
+  );
+
+  assert.deepEqual(result, {
+    status: "valid",
+    schemaVersion: 1,
+    contractId: "agent.subagent.tool.call@1",
+    errors: [],
+  });
+});
