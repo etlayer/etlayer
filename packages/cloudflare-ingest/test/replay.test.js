@@ -5,6 +5,7 @@ import { archiveKey } from "../src/archive.js";
 import { projectToPostHog } from "../src/posthog.js";
 import {
   replayPostHogRange,
+  replayStatsigRange,
   ReplayLimitError,
   selectArchivedEvents,
 } from "../src/replay.js";
@@ -178,5 +179,113 @@ test("fails instead of silently truncating a replay range", async () => {
         maxEvents: 1,
       }),
     ReplayLimitError,
+  );
+});
+
+
+test("Statsig-targeted replay calls Statsig only", async () => {
+  const managedEvent = event();
+  const archive = fakeArchive([managedEvent]);
+  const requests = [];
+
+  const result = await replayStatsigRange(
+    {
+      ARCHIVE: archive,
+      STATSIG_SERVER_SECRET: "secret-test",
+      STATSIG_HOST: "https://api.statsig.test",
+    },
+    {
+      from: "2026-09-21T18:35:00.000Z",
+      to: "2026-09-21T18:40:00.000Z",
+      replayId: "replay-statsig-only",
+    },
+    {
+      fetch: async (url, init) => {
+        requests.push({ url, init });
+        return new Response('{"success":true}', { status: 202 });
+      },
+    },
+  );
+
+  assert.equal(result.destination, "statsig");
+  assert.equal(result.selected, 1);
+  assert.equal(result.exported, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "https://api.statsig.test/v1/log_event");
+
+  const body = JSON.parse(requests[0].init.body);
+  assert.equal(body.events.length, 1);
+  assert.equal(
+    body.events[0].metadata["etlayer.delivery.mode"],
+    "replay",
+  );
+  assert.equal(
+    body.events[0].metadata["etlayer.replay.id"],
+    "replay-statsig-only",
+  );
+});
+
+
+test("repeating a Statsig replay does not send an already exported event again", async () => {
+  const managedEvent = event();
+  const canonicalKey = archiveKey(managedEvent);
+  const objects = new Map([
+    [canonicalKey, JSON.stringify(managedEvent)],
+  ]);
+  const requests = [];
+
+  const archive = {
+    async list({ prefix }) {
+      return {
+        objects: [...objects.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .sort()
+          .map((key) => ({ key })),
+        truncated: false,
+      };
+    },
+    async get(key) {
+      const body = objects.get(key);
+      if (body == null) return null;
+      return {
+        async text() {
+          return body;
+        },
+      };
+    },
+    async put(key, body) {
+      objects.set(key, body);
+    },
+  };
+
+  const env = {
+    ARCHIVE: archive,
+    STATSIG_SERVER_SECRET: "secret-test",
+    STATSIG_HOST: "https://api.statsig.test",
+  };
+  const input = {
+    from: "2026-09-21T18:35:00.000Z",
+    to: "2026-09-21T18:40:00.000Z",
+    replayId: "replay-statsig-idempotent",
+  };
+  const options = {
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      return new Response('{"success":true}', { status: 202 });
+    },
+  };
+
+  const first = await replayStatsigRange(env, input, options);
+  const second = await replayStatsigRange(env, input, options);
+
+  assert.equal(first.exported, 1);
+  assert.equal(first.skipped, 0);
+  assert.equal(second.exported, 0);
+  assert.equal(second.skipped, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(second.deliveries[0].status, "skipped");
+  assert.equal(
+    second.deliveries[0].reason,
+    "already_exported",
   );
 });

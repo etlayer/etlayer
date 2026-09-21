@@ -7,7 +7,8 @@
   "preview_urls": false,
   "vars": {
     "ETLAYER_MAX_REQUEST_BYTES": "1048576",
-    "POSTHOG_HOST": "https://eu.i.posthog.com"
+    "POSTHOG_HOST": "https://eu.i.posthog.com",
+    "STATSIG_HOST": "https://api.statsig.com"
   },
   "queues": {
     "producers": [
