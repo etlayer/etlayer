@@ -42,7 +42,9 @@ export default {
           archiveKey: archiveResult.key,
         });
 
-        const processed = await processPersistedEvent(event, env);
+        const processed = await processPersistedEvent(event, env, {
+          sourceKey: archiveResult.key,
+        });
 
         console.info("validated ETLayer event", {
           eventId: event.id,
