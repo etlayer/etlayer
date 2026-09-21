@@ -1,42 +1,48 @@
 # Once
 
-This directory contains **one-time bootstrap helpers**.
+Temporary one-time bootstrap helpers live here.
 
-These scripts are intentionally temporary. They automate setup that should not become part of ETLayer's long-term runtime or public CLI.
+These scripts are intentionally **not** part of the long-term ETLayer CLI. Once the deployment path is stable, delete this directory or replace it with durable provisioning.
 
-Once a bootstrap flow is stable and no longer needed, delete or replace the script with a durable provisioning mechanism.
+## bootstrap-cloudflare.sh
 
-## setup-github-secrets.sh
-
-Configures the GitHub Actions repository secrets required by the first Cloudflare + PostHog vertical slice.
-
-It:
-
-1. verifies or installs GitHub CLI on macOS when Homebrew is available;
-2. authenticates GitHub CLI if needed;
-3. installs repository dependencies so the pinned Wrangler is available;
-4. authenticates Wrangler through Cloudflare OAuth if needed;
-5. attempts to discover the Cloudflare Account ID from `wrangler whoami`;
-6. securely prompts for a scoped Cloudflare API token if it is not already in the environment;
-7. securely prompts for the PostHog ETLayer Project API token if it is not already in the environment;
-8. generates a fresh 256-bit `ETLAYER_INGEST_KEY` locally;
-9. writes all four values to GitHub repository secrets through `gh secret set`.
-
-It does **not** write secret values into the repository or an `.env` file.
+Bootstraps and verifies the first ETLayer Cloudflare vertical slice using the same model we used for RunDiff: **local Wrangler OAuth**, not a GitHub CI API token.
 
 Run from the repository root:
 
 ```bash
-chmod +x scripts/once/setup-github-secrets.sh
-./scripts/once/setup-github-secrets.sh
+git switch chore/local-cloudflare-bootstrap
+npm install
+./scripts/once/bootstrap-cloudflare.sh
 ```
 
-Optional environment variables:
+The script:
+
+1. checks Node/npm;
+2. uses the repository-pinned Wrangler;
+3. runs `wrangler whoami`, and opens `wrangler login` if needed;
+4. ensures these resources exist:
+   - `etlayer-events` Queue;
+   - `etlayer-events-dlq` dead-letter Queue;
+   - `etlayer-events-archive` R2 bucket;
+5. generates a fresh random 256-bit `ETLAYER_INGEST_KEY`;
+6. securely prompts once for the PostHog **Project API token** for project `ETLayer` unless `POSTHOG_PROJECT_TOKEN` is already in the shell;
+7. writes both values directly to Worker secrets with `wrangler secret put`;
+8. deploys `etlayer-ingest`;
+9. checks `/health`;
+10. sends an `etlayer.acceptance.smoke` OTLP event.
+
+No Cloudflare API token is required because deployment runs from your authenticated local Wrangler session.
+
+### Optional non-interactive PostHog token
 
 ```bash
-export CLOUDFLARE_API_TOKEN='...'
 export POSTHOG_PROJECT_TOKEN='phc_...'
-./scripts/once/setup-github-secrets.sh
+./scripts/once/bootstrap-cloudflare.sh
 ```
 
-The script cannot safely mint a new Cloudflare CI API token from Wrangler's local OAuth session, nor can it mint a PostHog project token without an already-authorized API credential. Those two values therefore require one secure paste unless already present in the environment.
+The script never writes secret values to the repository or to an `.env` file.
+
+### Important
+
+Rerunning the script generates a **new** `ETLAYER_INGEST_KEY` and replaces the Worker secret. That is intentional for this disposable bootstrap helper.
