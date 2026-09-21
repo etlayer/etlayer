@@ -31,7 +31,8 @@ export function classifyAttribute(attribute) {
   if (
     attribute.startsWith("experiment.") ||
     attribute.startsWith("page.") ||
-    attribute.startsWith("cta.")
+    attribute.startsWith("cta.") ||
+    attribute.startsWith("attribution.")
   ) {
     return "product_context";
   }
