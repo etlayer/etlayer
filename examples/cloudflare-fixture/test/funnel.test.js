@@ -167,7 +167,7 @@ test("account.created follows a real backend state write and preserves the same 
 });
 
 
-test("generated landing-page script is valid JavaScript", async () => {
+test("landing page references the external fixture script", async () => {
   const response = await worker.fetch(
     new Request("https://fixture.test/?run=funnel_test"),
     {},
@@ -176,8 +176,22 @@ test("generated landing-page script is valid JavaScript", async () => {
   assert.equal(response.status, 200);
 
   const html = await response.text();
-  const match = html.match(/<script>([\s\S]*?)<\/script>/);
+  assert.match(html, /<script src="\/fixture\.js" defer><\/script>/);
+  assert.doesNotMatch(html, /<script>.*<\/script>/s);
+});
 
-  assert.ok(match, "landing page must contain an inline script");
-  assert.doesNotThrow(() => new Function(match[1]));
+test("served fixture.js is valid JavaScript", async () => {
+  const response = await worker.fetch(
+    new Request("https://fixture.test/fixture.js"),
+    {},
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(
+    response.headers.get("content-type"),
+    /^application\/javascript/,
+  );
+
+  const script = await response.text();
+  assert.doesNotThrow(() => new Function(script));
 });
