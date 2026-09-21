@@ -2,6 +2,7 @@ import { consumeEventBatch } from "./archive.js";
 import { handleExportLogs } from "./otlp.js";
 import { processPersistedEvent } from "./processing.js";
 import { handlePostHogReplay, handleStatsigReplay } from "./replay-http.js";
+import { handleRevalidate } from "./revalidate-http.js";
 
 export default {
   async fetch(request, env) {
@@ -27,6 +28,13 @@ export default {
       url.pathname === "/_ops/replay/statsig"
     ) {
       return handleStatsigReplay(request, env);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/_ops/revalidate"
+    ) {
+      return handleRevalidate(request, env);
     }
 
     return new Response("Not found", { status: 404 });
