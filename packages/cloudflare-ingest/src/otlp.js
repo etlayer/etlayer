@@ -44,7 +44,7 @@ export async function handleExportLogs(request, env, options = {}) {
     return otlpError(503, 14, "event queue is not configured");
   }
 
-  for (const batch of chunks(events, QUEEE_BATCH_SIZE)) {
+  for (const batch of chunks(events, QUEUE_BATCH_SIZE)) {
     await env.EVENTS.sendBatch(batch.map((body) => ({ body })));
   }
 
