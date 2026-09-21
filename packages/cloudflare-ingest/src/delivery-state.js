@@ -1,3 +1,50 @@
+export async function readDeliveryState(
+  archive,
+  eventId,
+  destination,
+) {
+  if (!archive || typeof archive.get !== "function") {
+    return null;
+  }
+
+  const key = deliveryStateKey(destination, eventId);
+  const object = await archive.get(key);
+  if (!object) return null;
+
+  let text;
+  if (typeof object.text === "function") {
+    text = await object.text();
+  } else if (object.body != null) {
+    text = await new Response(object.body).text();
+  } else {
+    throw new DeliveryStateConfigurationError(
+      `delivery state has no readable body: ${key}`,
+    );
+  }
+
+  let state;
+  try {
+    state = JSON.parse(text);
+  } catch {
+    throw new DeliveryStateConfigurationError(
+      `delivery state is not valid JSON: ${key}`,
+    );
+  }
+
+  if (
+    !state ||
+    state.eventId !== eventId ||
+    state.destination !== destination ||
+    typeof state.status !== "string"
+  ) {
+    throw new DeliveryStateConfigurationError(
+      `delivery state does not match requested event/destination: ${key}`,
+    );
+  }
+
+  return state;
+}
+
 export async function recordDeliveryState(
   archive,
   event,
