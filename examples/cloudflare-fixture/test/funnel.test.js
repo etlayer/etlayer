@@ -165,3 +165,19 @@ test("account.created follows a real backend state write and preserves the same 
   assert.match(attributes["account.id"], /^fixture_/);
   assert.equal(attributes["experiment.id"], undefined);
 });
+
+
+test("generated landing-page script is valid JavaScript", async () => {
+  const response = await worker.fetch(
+    new Request("https://fixture.test/?run=funnel_test"),
+    {},
+  );
+
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  const match = html.match(/<script>([\s\S]*?)<\/script>/);
+
+  assert.ok(match, "landing page must contain an inline script");
+  assert.doesNotThrow(() => new Function(match[1]));
+});
