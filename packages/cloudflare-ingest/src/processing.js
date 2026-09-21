@@ -20,6 +20,7 @@ export async function processPersistedEvent(
     validation,
     {
       now: options.now,
+      sourceKey: options.sourceKey,
     },
   );
 
