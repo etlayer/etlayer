@@ -6,6 +6,7 @@ ETLAYER_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_DIR="$ROOT_DIR/examples/cloudflare-fixture"
 STATE_BUCKET="etlayer-fixture-state"
 ETLAYER_URL="https://etlayer-ingest.sergii-ponomarov.workers.dev"
+ETLAYER_OTLP_ENDPOINT="$ETLAYER_URL/v1/logs"
 
 say() {
   printf '\n==> %s\n' "$*"
@@ -92,6 +93,54 @@ health_check() {
 say "Health checks"
 health_check "$ETLAYER_URL"
 health_check "$FIXTURE_URL"
+
+say "Authenticated ETLayer OTLP preflight"
+PREFLIGHT_EVENT_ID="$(python3 - <<'PY'
+import uuid
+print(uuid.uuid4())
+PY
+)"
+PREFLIGHT_NOW_NANO="$(python3 - <<'PY'
+import time
+print(time.time_ns())
+PY
+)"
+
+PREFLIGHT_BODY="$(
+  node -e '
+    const [eventId, nowNano] = process.argv.slice(1);
+    process.stdout.write(JSON.stringify({
+      resourceLogs: [{
+        resource: {
+          attributes: [
+            { key: "service.name", value: { stringValue: "etlayer-fixture-preflight" } },
+            { key: "deployment.environment.name", value: { stringValue: "acceptance" } }
+          ]
+        },
+        scopeLogs: [{
+          scope: { name: "etlayer.fixture.preflight", version: "0.1.0" },
+          logRecords: [{
+            eventName: "etlayer.acceptance.fixture_preflight",
+            timeUnixNano: nowNano,
+            observedTimeUnixNano: nowNano,
+            attributes: [
+              { key: "etlayer.event.id", value: { stringValue: eventId } },
+              { key: "etlayer.schema.version", value: { intValue: "1" } }
+            ]
+          }]
+        }]
+      }]
+    }));
+  ' "$PREFLIGHT_EVENT_ID" "$PREFLIGHT_NOW_NANO"
+)"
+
+PREFLIGHT_RESPONSE="$(
+  curl --fail-with-body --silent --show-error     -X POST "$ETLAYER_OTLP_ENDPOINT"     -H "authorization: Bearer $INGEST_KEY"     -H "content-type: application/json"     --data "$PREFLIGHT_BODY"
+)" || die "Authenticated OTLP preflight failed: $ETLAYER_OTLP_ENDPOINT"
+
+printf 'OTLP endpoint: %s\n' "$ETLAYER_OTLP_ENDPOINT"
+printf 'Preflight event id: %s\n' "$PREFLIGHT_EVENT_ID"
+printf 'Preflight response: %s\n' "$PREFLIGHT_RESPONSE"
 
 RUN_ID="vs1-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)"
 RUN_URL="$FIXTURE_URL/?run=$RUN_ID"
