@@ -197,3 +197,33 @@ test("identified Statsig event carries all known IDs", () => {
     accountID: "account_789",
   });
 });
+
+
+test("agent actor is retained as Statsig custom identity while user remains subject", () => {
+  const payload = projectToStatsig(
+    managedEvent({
+      eventName: "agent.tool.call",
+      logRecord: {
+        attributes: [
+          { key: "actor.type", value: { stringValue: "agent" } },
+          { key: "actor.id", value: { stringValue: "agent_hanna" } },
+          { key: "user.id", value: { stringValue: "usr_42" } },
+          { key: "account.id", value: { stringValue: "account_1" } },
+          { key: "session.id", value: { stringValue: "session_1" } },
+          { key: "delegation.0.relationship", value: { stringValue: "on_behalf_of" } },
+          { key: "delegation.0.principal.type", value: { stringValue: "user" } },
+          { key: "delegation.0.principal.id", value: { stringValue: "usr_42" } },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(payload.user.userID, "usr_42");
+  assert.deepEqual(payload.user.customIDs, {
+    sessionID: "session_1",
+    accountID: "account_1",
+    agentID: "agent_hanna",
+  });
+  assert.equal(payload.metadata["actor.type"], "agent");
+  assert.equal(payload.metadata["actor.id"], "agent_hanna");
+});
