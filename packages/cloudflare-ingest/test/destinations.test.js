@@ -151,3 +151,47 @@ test("rejects malformed destination definitions", async () => {
     DestinationRouterConfigurationError,
   );
 });
+
+
+test("already exported destination is not sent again", async () => {
+  let exportCalls = 0;
+  let stateWrites = 0;
+
+  const results = await routeEventDestinations(
+    { id: "evt_done", eventName: "account.created" },
+    {},
+    {
+      destinations: [
+        {
+          name: "statsig",
+          async exportEvent() {
+            exportCalls += 1;
+            return { status: "exported" };
+          },
+        },
+      ],
+      async readState(_archive, eventId, destination) {
+        assert.equal(eventId, "evt_done");
+        assert.equal(destination, "statsig");
+        return {
+          eventId,
+          destination,
+          status: "exported",
+        };
+      },
+      async recordState() {
+        stateWrites += 1;
+      },
+    },
+  );
+
+  assert.equal(exportCalls, 0);
+  assert.equal(stateWrites, 0);
+  assert.deepEqual(results, [
+    {
+      destination: "statsig",
+      status: "skipped",
+      reason: "already_exported",
+    },
+  ]);
+});
