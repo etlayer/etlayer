@@ -66,6 +66,13 @@ export default {
       return handleIdentityFlowAcceptance(request, env);
     }
 
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/acceptance/agent-flow"
+    ) {
+      return handleAgentDelegationAcceptance(request, env);
+    }
+
     return new Response("Not found", { status: 404 });
   },
 };
@@ -525,6 +532,210 @@ export async function handleIdentityFlowAcceptance(
       attribution: context.attribution,
     },
     accountResult.status,
+  );
+}
+
+export async function handleAgentDelegationAcceptance(
+  request,
+  env,
+  options = {},
+) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse(
+      { ok: false, error: "missing_funnel_context" },
+      409,
+    );
+  }
+
+  if (!env.STATE || typeof env.STATE.put !== "function") {
+    return jsonResponse(
+      { ok: false, error: "missing_backend_state" },
+      503,
+    );
+  }
+
+  const payload = (await readJson(request)) || {};
+  const userId =
+    safeIdentifier(payload.userId) ||
+    safeIdentifier(options.userId);
+  const accountId =
+    safeIdentifier(payload.accountId) ||
+    safeIdentifier(options.accountId);
+  const causationId =
+    safeIdentifier(payload.causationId) ||
+    "vs5_agent_acceptance_root";
+
+  if (!userId || !accountId) {
+    return jsonResponse(
+      { ok: false, error: "missing_identity_context" },
+      400,
+    );
+  }
+
+  const directAgentId =
+    safeIdentifier(options.directAgentId) ||
+    `agent_direct_${crypto.randomUUID()}`;
+  const childAgentId =
+    safeIdentifier(options.childAgentId) ||
+    `agent_child_${crypto.randomUUID()}`;
+  const directTurnId =
+    safeIdentifier(options.directTurnId) ||
+    `turn_${crypto.randomUUID()}`;
+  const childTurnId =
+    safeIdentifier(options.childTurnId) ||
+    `turn_${crypto.randomUUID()}`;
+  const directToolCallId =
+    safeIdentifier(options.directToolCallId) ||
+    `call_${crypto.randomUUID()}`;
+  const childToolCallId =
+    safeIdentifier(options.childToolCallId) ||
+    `call_${crypto.randomUUID()}`;
+
+  const {
+    directEventId,
+    childEventId,
+    userId: _userId,
+    accountId: _accountId,
+    directAgentId: _directAgentId,
+    childAgentId: _childAgentId,
+    directTurnId: _directTurnId,
+    childTurnId: _childTurnId,
+    directToolCallId: _directToolCallId,
+    childToolCallId: _childToolCallId,
+    ...emitOptions
+  } = options;
+
+  const common = {
+    "user.id": userId,
+    "account.id": accountId,
+    "session.id": context.sessionId,
+    "correlation.id": context.correlationId,
+    ...attributionAttributes(context.attribution),
+    "etlayer.producer.kind": "backend",
+    "etlayer.authority.kind": "business_state",
+  };
+
+  await env.STATE.put(
+    `agent-actions/${directToolCallId}.json`,
+    JSON.stringify({
+      actorType: "agent",
+      actorId: directAgentId,
+      userId,
+      accountId,
+      sessionId: context.sessionId,
+      toolCallId: directToolCallId,
+      result: "succeeded",
+      delegation: [
+        {
+          relationship: "on_behalf_of",
+          principal: { type: "user", id: userId },
+        },
+      ],
+    }),
+  );
+
+  const directResult = await emitOtlpEvent(
+    env,
+    "agent.tool.call",
+    {
+      ...common,
+      "actor.type": "agent",
+      "actor.id": directAgentId,
+      "causation.id": causationId,
+      "delegation.0.relationship": "on_behalf_of",
+      "delegation.0.principal.type": "user",
+      "delegation.0.principal.id": userId,
+      "agent.turn.id": directTurnId,
+      "agent.tool_call.id": directToolCallId,
+      "tool.name": "update_file",
+    },
+    {
+      ...emitOptions,
+      eventId: directEventId,
+    },
+  );
+
+  if (
+    directResult.status < 200 ||
+    directResult.status >= 300 ||
+    !directResult.body?.ok
+  ) {
+    return jsonResponse(
+      {
+        ...directResult.body,
+        correlationId: context.correlationId,
+        stage: "agent.tool.call",
+      },
+      directResult.status,
+    );
+  }
+
+  await env.STATE.put(
+    `agent-actions/${childToolCallId}.json`,
+    JSON.stringify({
+      actorType: "agent",
+      actorId: childAgentId,
+      userId,
+      accountId,
+      sessionId: context.sessionId,
+      toolCallId: childToolCallId,
+      result: "succeeded",
+      delegation: [
+        {
+          relationship: "delegated_by",
+          principal: { type: "agent", id: directAgentId },
+        },
+        {
+          relationship: "on_behalf_of",
+          principal: { type: "user", id: userId },
+        },
+      ],
+    }),
+  );
+
+  const childResult = await emitOtlpEvent(
+    env,
+    "agent.subagent.tool.call",
+    {
+      ...common,
+      "actor.type": "agent",
+      "actor.id": childAgentId,
+      "causation.id": directResult.body.eventId,
+      "delegation.0.relationship": "delegated_by",
+      "delegation.0.principal.type": "agent",
+      "delegation.0.principal.id": directAgentId,
+      "delegation.1.relationship": "on_behalf_of",
+      "delegation.1.principal.type": "user",
+      "delegation.1.principal.id": userId,
+      "agent.turn.id": childTurnId,
+      "agent.tool_call.id": childToolCallId,
+      "tool.name": "update_file",
+    },
+    {
+      ...emitOptions,
+      eventId: childEventId,
+    },
+  );
+
+  return jsonResponse(
+    {
+      ok: childResult.body?.ok === true,
+      correlationId: context.correlationId,
+      sessionId: context.sessionId,
+      userId,
+      accountId,
+      directAgentId,
+      childAgentId,
+      directEventId: directResult.body?.eventId || null,
+      childEventId: childResult.body?.eventId || null,
+      directTurnId,
+      childTurnId,
+      directToolCallId,
+      childToolCallId,
+      attribution: context.attribution,
+    },
+    childResult.status,
   );
 }
 
