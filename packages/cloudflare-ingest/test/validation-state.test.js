@@ -53,6 +53,7 @@ test("records blocked validation evidence durably", async () => {
     },
     {
       now: new Date("2026-09-22T00:10:00.000Z"),
+      sourceKey: "events/2026/09/22/00/evt%2Fblocked.json",
     },
   );
 
@@ -78,6 +79,7 @@ test("records blocked validation evidence durably", async () => {
         attribute: "account.id",
       },
     ],
+    sourceKey: "events/2026/09/22/00/evt%2Fblocked.json",
     updatedAt: "2026-09-22T00:10:00.000Z",
   });
 });
