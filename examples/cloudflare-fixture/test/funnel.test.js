@@ -7,6 +7,7 @@ import worker, {
   handleInvalidAccountAcceptance,
   handlePrivacyAccountAcceptance,
   handleIdentityFlowAcceptance,
+  handleAgentDelegationAcceptance,
 } from "../src/index.js";
 
 function cookieHeader() {
@@ -568,4 +569,128 @@ test("landing creates a stable session and persists attribution cookies", async 
   assert.match(joined, /etel_attr_source=docs/);
   assert.match(joined, /etel_attr_medium=acceptance/);
   assert.match(joined, /etel_attr_campaign=vs5/);
+});
+
+
+test("VS5 agent acceptance preserves immediate actors and ordered delegation", async () => {
+  const captures = [];
+  const stateWrites = [];
+
+  const request = new Request(
+    "https://fixture.test/api/acceptance/agent-flow",
+    {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        userId: "usr_42",
+        accountId: "account_42",
+        causationId: "account_event_1",
+      }),
+    },
+  );
+
+  const response = await handleAgentDelegationAcceptance(
+    request,
+    {
+      ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
+      ETLAYER_INGEST_KEY: "test-key",
+      STATE: {
+        async put(key, body) {
+          stateWrites.push({ key, body });
+        },
+      },
+    },
+    {
+      fetch: captureFetch(captures),
+      directAgentId: "agent_parent",
+      childAgentId: "agent_child",
+      directTurnId: "turn_17",
+      childTurnId: "turn_18",
+      directToolCallId: "call_parent",
+      childToolCallId: "call_child",
+      directEventId: "88888888-8888-4888-8888-888888888888",
+      childEventId: "99999999-9999-4999-8999-999999999999",
+      nowMs: 1_790_000_000_000,
+    },
+  );
+
+  assert.equal(response.status, 202);
+  assert.equal(stateWrites.length, 2);
+  assert.equal(captures.length, 2);
+
+  const direct = recordFrom(captures[0]);
+  const directAttrs = decodeAttributes(direct.attributes);
+  assert.equal(direct.eventName, "agent.tool.call");
+  assert.equal(directAttrs["actor.type"], "agent");
+  assert.equal(directAttrs["actor.id"], "agent_parent");
+  assert.equal(directAttrs["user.id"], "usr_42");
+  assert.equal(directAttrs["account.id"], "account_42");
+  assert.equal(directAttrs["session.id"], "session_test");
+  assert.equal(
+    directAttrs["delegation.0.relationship"],
+    "on_behalf_of",
+  );
+  assert.equal(
+    directAttrs["delegation.0.principal.type"],
+    "user",
+  );
+  assert.equal(
+    directAttrs["delegation.0.principal.id"],
+    "usr_42",
+  );
+  assert.equal(directAttrs["agent.turn.id"], "turn_17");
+  assert.equal(directAttrs["agent.tool_call.id"], "call_parent");
+  assert.equal(directAttrs["causation.id"], "account_event_1");
+
+  const child = recordFrom(captures[1]);
+  const childAttrs = decodeAttributes(child.attributes);
+  assert.equal(child.eventName, "agent.subagent.tool.call");
+  assert.equal(childAttrs["actor.type"], "agent");
+  assert.equal(childAttrs["actor.id"], "agent_child");
+  assert.equal(childAttrs["user.id"], "usr_42");
+  assert.equal(
+    childAttrs["delegation.0.relationship"],
+    "delegated_by",
+  );
+  assert.equal(
+    childAttrs["delegation.0.principal.type"],
+    "agent",
+  );
+  assert.equal(
+    childAttrs["delegation.0.principal.id"],
+    "agent_parent",
+  );
+  assert.equal(
+    childAttrs["delegation.1.relationship"],
+    "on_behalf_of",
+  );
+  assert.equal(
+    childAttrs["delegation.1.principal.type"],
+    "user",
+  );
+  assert.equal(
+    childAttrs["delegation.1.principal.id"],
+    "usr_42",
+  );
+  assert.equal(
+    childAttrs["causation.id"],
+    "88888888-8888-4888-8888-888888888888",
+  );
+
+  const body = await response.json();
+  assert.equal(body.userId, "usr_42");
+  assert.equal(body.accountId, "account_42");
+  assert.equal(body.directAgentId, "agent_parent");
+  assert.equal(body.childAgentId, "agent_child");
+  assert.equal(
+    body.directEventId,
+    "88888888-8888-4888-8888-888888888888",
+  );
+  assert.equal(
+    body.childEventId,
+    "99999999-9999-4999-8999-999999999999",
+  );
 });
