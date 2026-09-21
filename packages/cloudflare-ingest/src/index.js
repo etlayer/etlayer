@@ -63,6 +63,15 @@ export default {
           validationErrors: processed.validation.errors.length,
         });
 
+        console.info("applied ETLayer privacy policy", {
+          eventId: event.id,
+          eventName: event.eventName,
+          privacyStatus: processed.privacy.status,
+          privacyPolicyVersion: processed.privacy.policyVersion,
+          ingestPrivacyActions: processed.privacy.ingestActions.length,
+          deliveryPrivacyActions: processed.privacy.deliveryActions.length,
+        });
+
         for (const delivery of processed.deliveries) {
           console.info("projected ETLayer event", {
             eventId: event.id,
