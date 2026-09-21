@@ -4,6 +4,7 @@ import test from "node:test";
 import worker, {
   handleAccountCreated,
   handleBrowserEvent,
+  handleInvalidAccountAcceptance,
 } from "../src/index.js";
 
 function cookieHeader() {
@@ -314,4 +315,59 @@ test("reloading the same funnel does not emit a second hero exposure", async () 
   assert.equal(firstBody.eventId, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
   assert.equal(secondBody.eventId, firstBody.eventId);
   assert.equal(secondBody.duplicate, true);
+});
+
+
+test("VS3 invalid-account acceptance event omits only account.id from the contract", async () => {
+  const captures = [];
+
+  const request = new Request(
+    "https://fixture.test/api/acceptance/invalid-account",
+    {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        causationId: "acceptance_cause_1",
+      }),
+    },
+  );
+
+  const response = await handleInvalidAccountAcceptance(
+    request,
+    {
+      ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
+      ETLAYER_INGEST_KEY: "test-key",
+    },
+    {
+      fetch: captureFetch(captures),
+      eventId: "44444444-4444-4444-8444-444444444444",
+      nowMs: 1_790_000_000_000,
+    },
+  );
+
+  assert.equal(response.status, 202);
+  assert.equal(captures.length, 1);
+
+  const record = recordFrom(captures[0]);
+  const attributes = decodeAttributes(record.attributes);
+
+  assert.equal(record.eventName, "account.created");
+  assert.equal(attributes["etlayer.schema.version"], 1);
+  assert.equal(attributes["actor.anonymous.id"], "anon_test");
+  assert.equal(attributes["correlation.id"], "funnel_test");
+  assert.equal(attributes["causation.id"], "acceptance_cause_1");
+  assert.equal(attributes["etlayer.producer.kind"], "backend");
+  assert.equal(
+    attributes["etlayer.authority.kind"],
+    "business_state",
+  );
+  assert.equal(attributes["account.id"], undefined);
+  assert.equal(attributes["experiment.id"], undefined);
+
+  const body = await response.json();
+  assert.equal(body.intentionallyInvalid, true);
+  assert.equal(body.missingAttribute, "account.id");
 });

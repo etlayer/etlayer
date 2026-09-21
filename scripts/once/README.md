@@ -98,3 +98,32 @@ Runtime destination secrets:
 POSTHOG_PROJECT_TOKEN
 STATSIG_SERVER_SECRET
 ```
+
+
+## VS3 invalid-event contract acceptance
+
+After deploying the current ETLayer Worker and fixture, this helper emits one intentionally invalid versioned business event:
+
+```text
+account.created@1
+missing: account.id
+```
+
+Run:
+
+```bash
+./scripts/once/vs3-invalid-account.sh
+```
+
+The helper verifies:
+
+- the event was accepted by OTLP ingest;
+- the canonical event exists in R2;
+- durable validation state is `blocked`;
+- the exact error is `required_attribute_missing/account.id`;
+- validation state points back to the exact canonical `sourceKey`;
+- PostHog delivery state is absent;
+- Statsig delivery state is absent;
+- the same canonical object can be revalidated through `/_ops/revalidate` without a producer re-emitting it.
+
+The revalidation operator endpoint is temporarily protected by `ETLAYER_REPLAY_KEY`, the same one-time operator credential used by replay acceptance helpers. A future operator-auth abstraction may replace this shared acceptance credential.
