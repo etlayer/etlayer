@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "etlayer-ingest",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-21",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "ETLAYER_MAX_REQUEST_BYTES": "1048576",
+    "POSTHOG_HOST": "https://eu.i.posthog.com"
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "EVENTS",
+        "queue": "etlayer-events"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "etlayer-events",
+        "max_batch_size": 100,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "etlayer-events-dlq"
+      }
+    ]
+  },
+  "r2_buckets": [
+    {
+      "binding": "ARCHIVE",
+      "bucket_name": "etlayer-events-archive"
+    }
+  ]
+}
