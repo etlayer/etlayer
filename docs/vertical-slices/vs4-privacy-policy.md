@@ -1,6 +1,6 @@
 # VS4: Privacy policy and field classification
 
-**Status: In progress.**
+**Status: VS4.1 implemented; live privacy acceptance pending.**
 
 ## Goal
 
@@ -191,6 +191,32 @@ Statsig projection   email ✗   token ✗
 10. Statsig receives the same privacy-sanitized logical event.
 11. Normal existing funnel behavior remains unchanged.
 12. Revalidation reapplies current delivery privacy policy to the canonical event.
+## Implementation status
+
+### VS4.1 — Privacy enforcement core — complete
+
+- executable privacy policy v1 added;
+- deterministic field classification added;
+- credential-like secret fields are scrubbed before Queue enqueue;
+- canonical events retain ingest privacy evidence without secret values;
+- direct identifiers are removed from the copy passed to the destination router;
+- durable privacy state is stored under `privacy/<event-id>.json`;
+- blocked VS3 events still record privacy evidence but do not route;
+- revalidation reapplies delivery privacy policy;
+- normal unversioned migration events also pass through privacy enforcement;
+- acceptance fixture can emit a valid authoritative `account.created@1` containing `user.email` + fake `auth.token`;
+- `scripts/once/vs4-privacy-account.sh` verifies canonical/storage/delivery invariants.
+
+### VS4.2 — Live acceptance — pending
+
+- deploy the VS4 branch and fixture;
+- run the normal three-event funnel to prove no regression;
+- run `./scripts/once/vs4-privacy-account.sh`;
+- verify canonical R2 contains `user.email` but not `auth.token`;
+- verify validation remains `valid`;
+- verify privacy evidence records both policy actions;
+- verify PostHog stores the event without `user.email` or `auth.token`;
+- verify Statsig delivery succeeds from the same privacy-sanitized event.
 
 ## Non-goals
 
