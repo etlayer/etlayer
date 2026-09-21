@@ -1,6 +1,6 @@
 # VS3: Event contracts and schema governance
 
-**Status: In progress.**
+**Status: VS3.1 implemented and green; live contract-blocking acceptance pending.**
 
 ## Goal
 
@@ -179,6 +179,29 @@ Validation state is mutable lifecycle evidence. The canonical event remains immu
 10. That invalid event never invokes Statsig.
 11. Validation is deterministic under repeated processing.
 12. The same preserved event can be revalidated later without producer involvement.
+
+## Implementation status
+
+### VS3.1 — Contract enforcement core — complete
+
+- versioned pure-data contracts exist for the three reference fixture events;
+- `validateEventContract()` enforces required attributes, primitive types, exact values, and forbidden attributes;
+- unversioned events are recorded as `unmanaged` during migration;
+- versioned events without a matching contract are blocked;
+- validation outcome is persisted under `validation/<event-id>.json`;
+- blocked events do not invoke destination routing;
+- validation-state persistence failure remains retryable through the existing queue lifecycle;
+- integration coverage proves canonical persistence occurs before validation evidence and blocking.
+
+### VS3.2 — Live acceptance — pending
+
+- deploy the VS3 branch;
+- prove the existing valid funnel still reaches PostHog + Statsig;
+- emit one deliberately invalid `account.created@1` without `account.id`;
+- prove the invalid event exists in canonical R2;
+- prove its validation state is `blocked` with `required_attribute_missing/account.id`;
+- prove neither PostHog nor Statsig receives the invalid event;
+- revalidate the preserved event path without producer re-emission.
 
 ## Non-goals
 
