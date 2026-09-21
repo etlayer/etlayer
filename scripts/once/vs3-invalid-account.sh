@@ -170,6 +170,23 @@ say "Revalidating the preserved canonical event without producer re-emission"
 OPERATOR_KEY="$(openssl rand -hex 32)"
 printf '%s' "$OPERATOR_KEY" | npx wrangler secret put ETLAYER_REPLAY_KEY >/dev/null
 
+say "Deploying Worker version with rotated operator credential"
+npx wrangler deploy >/tmp/etlayer-vs3-revalidate-deploy-$.txt
+cat /tmp/etlayer-vs3-revalidate-deploy-$.txt
+
+say "Waiting for deployed Worker health"
+for attempt in $(seq 1 20); do
+  if curl --fail --silent --show-error "$ETLAYER_URL/health" >/dev/null 2>&1; then
+    break
+  fi
+
+  if [ "$attempt" -eq 20 ]; then
+    die "Worker did not become healthy after operator credential rotation."
+  fi
+
+  sleep 1
+done
+
 REVALIDATE_BODY="$(
   node -e '
     const sourceKey = process.argv[1];
