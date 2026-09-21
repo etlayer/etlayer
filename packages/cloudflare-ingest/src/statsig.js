@@ -80,7 +80,7 @@ function statsigUser(identity) {
   }
 
   if (!user.userID && !user.customIDs) {
-    user.userID = identity.primary.id;
+    user.userID = identity.subject.id;
   }
 
   return user;
