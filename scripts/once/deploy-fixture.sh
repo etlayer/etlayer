@@ -161,7 +161,7 @@ printf 'Fixture preflight response: %s\n' "$FIXTURE_PREFLIGHT_RESPONSE"
 rm -f "$COOKIE_JAR"
 trap - EXIT
 
-RUN_ID="vs1-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)"
+RUN_ID="acceptance-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)"
 RUN_URL="$FIXTURE_URL/?run=$RUN_ID"
 
 unset INGEST_KEY
