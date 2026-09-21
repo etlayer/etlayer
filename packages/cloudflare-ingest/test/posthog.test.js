@@ -172,3 +172,28 @@ test("throws on destination failure so the queue can retry", async () => {
     /PostHog capture failed with HTTP 503/,
   );
 });
+
+
+test("projects identity.linked as PostHog anonymous-to-user identify", async () => {
+  const linked = event({
+    eventName: "identity.linked",
+    logRecord: {
+      eventName: "identity.linked",
+      attributes: [
+        { key: "actor.anonymous.id", value: { stringValue: "anon-1" } },
+        { key: "user.id", value: { stringValue: "user-1" } },
+        { key: "account.id", value: { stringValue: "account-1" } },
+        { key: "session.id", value: { stringValue: "session-1" } },
+      ],
+    },
+  });
+
+  const projected = await projectToPostHog(linked);
+
+  assert.equal(projected.event, "$identify");
+  assert.equal(projected.distinct_id, "user-1");
+  assert.equal(projected.properties.$anon_distinct_id, "anon-1");
+  assert.equal(projected.properties["user.id"], "user-1");
+  assert.equal(projected.properties["session.id"], "session-1");
+  assert.equal(projected.properties.$process_person_profile, undefined);
+});
