@@ -23,6 +23,7 @@ function archivedEvent() {
 
 function archiveWith(event) {
   return {
+    async put() {},
     async get(key) {
       if (
         key !==
