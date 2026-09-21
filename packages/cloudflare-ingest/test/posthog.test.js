@@ -197,3 +197,34 @@ test("projects identity.linked as PostHog anonymous-to-user identify", async () 
   assert.equal(projected.properties["session.id"], "session-1");
   assert.equal(projected.properties.$process_person_profile, undefined);
 });
+
+
+test("agent actor does not replace the user analytics subject in PostHog", async () => {
+  const projected = await projectToPostHog(
+    event({
+      eventName: "agent.tool.call",
+      logRecord: {
+        eventName: "agent.tool.call",
+        attributes: [
+          { key: "actor.type", value: { stringValue: "agent" } },
+          { key: "actor.id", value: { stringValue: "agent_hanna" } },
+          { key: "user.id", value: { stringValue: "usr_42" } },
+          { key: "account.id", value: { stringValue: "account_1" } },
+          { key: "session.id", value: { stringValue: "session_1" } },
+          { key: "delegation.0.relationship", value: { stringValue: "on_behalf_of" } },
+          { key: "delegation.0.principal.type", value: { stringValue: "user" } },
+          { key: "delegation.0.principal.id", value: { stringValue: "usr_42" } },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(projected.event, "agent.tool.call");
+  assert.equal(projected.distinct_id, "usr_42");
+  assert.equal(projected.properties["actor.type"], "agent");
+  assert.equal(projected.properties["actor.id"], "agent_hanna");
+  assert.equal(
+    projected.properties["delegation.0.principal.id"],
+    "usr_42",
+  );
+});
