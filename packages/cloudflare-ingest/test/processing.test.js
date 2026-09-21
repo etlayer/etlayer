@@ -15,7 +15,7 @@ function privacyResult(event, deliveryActions = []) {
 function privacyState(status = "clean") {
   return {
     state: {
-      version: 1,
+      version: 2,
       eventId: "evt",
       eventName: "example",
       policyVersion: 1,
@@ -31,15 +31,25 @@ function privacyState(status = "clean") {
 function resolvedIdentity(event, overrides = {}) {
   return {
     status: "resolved",
-    primary: {
+    subject: {
       kind: "anonymous",
       id: "anon_1",
     },
+    actor: {
+      type: "anonymous",
+      id: "anon_1",
+      source: "inferred",
+    },
+    delegation: [],
     anonymousId: "anon_1",
     userId: null,
     accountId: null,
     sessionId: "session_1",
     transition: null,
+    agent: {
+      turnId: null,
+      toolCallId: null,
+    },
     attribution: {
       source: null,
       medium: null,
@@ -123,7 +133,7 @@ test("blocked validation records validation, privacy, and identity evidence but 
     "record-identity",
   ]);
   assert.equal(result.validation.status, "blocked");
-  assert.equal(result.identity.primary.id, "anon_1");
+  assert.equal(result.identity.subject.id, "anon_1");
   assert.deepEqual(result.deliveries, []);
 });
 
@@ -152,7 +162,12 @@ test("valid events route only the privacy-sanitized copy after identity evidence
   };
 
   const identity = resolvedIdentity(sanitized, {
-    primary: { kind: "user", id: "user_1" },
+    subject: { kind: "user", id: "user_1" },
+    actor: {
+      type: "user",
+      id: "user_1",
+      source: "inferred",
+    },
     userId: "user_1",
     accountId: "account_1",
   });
@@ -215,7 +230,7 @@ test("valid events route only the privacy-sanitized copy after identity evidence
     "record-identity",
     "route",
   ]);
-  assert.equal(result.identity.primary.id, "user_1");
+  assert.equal(result.identity.subject.id, "user_1");
   assert.equal(result.deliveries.length, 1);
 });
 
