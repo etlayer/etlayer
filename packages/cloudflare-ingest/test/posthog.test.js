@@ -120,12 +120,25 @@ test("skips delivery when PostHog is not configured", async () => {
   assert.equal(called, false);
 });
 
+test("refuses to guess a PostHog region when the host is missing", async () => {
+  await assert.rejects(
+    () =>
+      exportToPostHog(event(), {
+        POSTHOG_PROJECT_TOKEN: "phc_test",
+      }),
+    /POSTHOG_HOST is required/,
+  );
+});
+
 test("throws on destination failure so the queue can retry", async () => {
   await assert.rejects(
     () =>
       exportToPostHog(
         event(),
-        { POSTHOG_PROJECT_TOKEN: "phc_test" },
+        {
+          POSTHOG_PROJECT_TOKEN: "phc_test",
+          POSTHOG_HOST: "https://us.i.posthog.com",
+        },
         {
           fetch: async () =>
             new Response("destination unavailable", { status: 503 }),

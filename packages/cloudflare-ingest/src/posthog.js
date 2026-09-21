@@ -1,8 +1,12 @@
-const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
-
 export async function exportToPostHog(event, env, options = {}) {
   if (!env.POSTHOG_PROJECT_TOKEN) {
     return { status: "skipped", reason: "posthog_not_configured" };
+  }
+
+  if (!env.POSTHOG_HOST) {
+    throw new PostHogConfigurationError(
+      "POSTHOG_HOST is required when POSTHOG_PROJECT_TOKEN is configured",
+    );
   }
 
   const fetchImpl = options.fetch || fetch;
@@ -11,7 +15,7 @@ export async function exportToPostHog(event, env, options = {}) {
     delivery: options.delivery,
   });
 
-  const host = String(env.POSTHOG_HOST || DEFAULT_POSTHOG_HOST).replace(/\/$/, "");
+  const host = String(env.POSTHOG_HOST).replace(/\/$/, "");
   const response = await fetchImpl(`${host}/i/v0/e/`, {
     method: "POST",
     headers: {

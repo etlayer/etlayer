@@ -22,6 +22,23 @@ local smoke producer
       assert
 ```
 
+## Destination configuration
+
+The PostHog project token and ingestion region must match.
+
+For the current ETLayer reference project, PostHog is hosted in EU Cloud, so the Worker configuration is explicit:
+
+```text
+POSTHOG_HOST=https://eu.i.posthog.com
+```
+
+ETLayer deliberately does not guess a default PostHog region. If `POSTHOG_PROJECT_TOKEN` is configured without `POSTHOG_HOST`, the exporter fails configuration instead of silently sending to the wrong cloud region.
+
+PostHog documents the ingestion hosts as:
+
+- US Cloud: `https://us.i.posthog.com`
+- EU Cloud: `https://eu.i.posthog.com`
+
 ## Local bootstrap
 
 For VS1, deployment intentionally follows the same model used by RunDiff: an authenticated local Wrangler session.

@@ -36,6 +36,18 @@ The canonical R2 object is not modified.
 
 Retries remain bounded by the stable PostHog UUID derived from the original `etlayer.event.id`.
 
+## Region safety
+
+Replay uses the same destination configuration as live delivery. The PostHog region must be explicit and must match the project token.
+
+For the current ETLayer reference project:
+
+```text
+POSTHOG_HOST=https://eu.i.posthog.com
+```
+
+A configured token without a configured host is treated as a configuration error.
+
 ## Operator command
 
 The VS1 helper uses an independently rotated replay credential, not the producer ingest key:

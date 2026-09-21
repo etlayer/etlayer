@@ -6,7 +6,8 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "ETLAYER_MAX_REQUEST_BYTES": "1048576"
+    "ETLAYER_MAX_REQUEST_BYTES": "1048576",
+    "POSTHOG_HOST": "https://eu.i.posthog.com"
   },
   "queues": {
     "producers": [
