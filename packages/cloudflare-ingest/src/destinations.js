@@ -1,3 +1,4 @@
+import { recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
 
@@ -14,15 +15,37 @@ const DEFAULT_DESTINATIONS = [
 
 export async function routeEventDestinations(event, env, options = {}) {
   const destinations = options.destinations || DEFAULT_DESTINATIONS;
+  const recordState = options.recordState || recordDeliveryState;
   const results = [];
 
   for (const destination of destinations) {
     validateDestination(destination);
 
-    const result = await destination.exportEvent(
+    const destinationOptions = options[destination.name] || {};
+    let result;
+
+    try {
+      result = await destination.exportEvent(
+        event,
+        env,
+        destinationOptions,
+      );
+    } catch (error) {
+      result = {
+        status: "failed",
+        error,
+      };
+    }
+
+    await recordState(
+      env.ARCHIVE,
       event,
-      env,
-      options[destination.name] || {},
+      destination.name,
+      result,
+      {
+        now: options.now,
+        delivery: destinationOptions.delivery,
+      },
     );
 
     results.push({
