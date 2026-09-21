@@ -15,6 +15,8 @@ export default {
       return jsonResponse({
         ok: true,
         etlayerOtlpEndpoint: env.ETLAYER_OTLP_ENDPOINT || null,
+        etlayerServiceBinding:
+          Boolean(env.ETLAYER && typeof env.ETLAYER.fetch === "function"),
       });
     }
 
@@ -203,12 +205,21 @@ export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
     headers.authorization = `Bearer ${env.ETLAYER_INGEST_KEY}`;
   }
 
-  const fetchImpl = options.fetch || fetch;
-  const response = await fetchImpl(env.ETLAYER_OTLP_ENDPOINT, {
+  const request = new Request(env.ETLAYER_OTLP_ENDPOINT, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
   });
+
+  let response;
+
+  if (options.fetch) {
+    response = await options.fetch(request);
+  } else if (env.ETLAYER && typeof env.ETLAYER.fetch === "function") {
+    response = await env.ETLAYER.fetch(request);
+  } else {
+    response = await fetch(request);
+  }
 
   if (!response.ok) {
     return {
