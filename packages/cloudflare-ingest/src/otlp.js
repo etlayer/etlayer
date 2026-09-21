@@ -1,3 +1,5 @@
+import { applyIngestPrivacy } from "./privacy.js";
+
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
 const QUEUE_BATCH_SIZE = 100;
 
@@ -39,6 +41,13 @@ export async function handleExportLogs(request, env, options = {}) {
     }
     throw error;
   }
+
+  const applyPrivacy =
+    options.applyIngestPrivacy || applyIngestPrivacy;
+
+  events = events.map(
+    (event) => applyPrivacy(event).event,
+  );
 
   if (!env.EVENTS || typeof env.EVENTS.sendBatch !== "function") {
     return otlpError(503, 14, "event queue is not configured");
