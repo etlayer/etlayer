@@ -48,6 +48,13 @@ export default {
       return handleInvalidAccountAcceptance(request, env);
     }
 
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/acceptance/privacy-account"
+    ) {
+      return handlePrivacyAccountAcceptance(request, env);
+    }
+
     return new Response("Not found", { status: 404 });
   },
 };
@@ -278,6 +285,93 @@ export async function handleInvalidAccountAcceptance(
       correlationId: context.correlationId,
       intentionallyInvalid: true,
       missingAttribute: "account.id",
+    },
+    result.status,
+  );
+}
+
+export async function handlePrivacyAccountAcceptance(
+  request,
+  env,
+  options = {},
+) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse(
+      { ok: false, error: "missing_funnel_context" },
+      409,
+    );
+  }
+
+  if (
+    !env.STATE ||
+    typeof env.STATE.put !== "function"
+  ) {
+    return jsonResponse(
+      { ok: false, error: "missing_backend_state" },
+      503,
+    );
+  }
+
+  const payload = (await readJson(request)) || {};
+  const accountId =
+    options.accountId ||
+    `fixture_privacy_${crypto.randomUUID()}`;
+  const createdAt = new Date(
+    options.nowMs ?? Date.now(),
+  ).toISOString();
+  const stateKey = `accounts/${accountId}.json`;
+
+  await env.STATE.put(
+    stateKey,
+    JSON.stringify({
+      id: accountId,
+      createdAt,
+      actorAnonymousId: context.actorId,
+      correlationId: context.correlationId,
+      acceptanceKind: "privacy",
+    }),
+    {
+      httpMetadata: {
+        contentType: "application/json; charset=utf-8",
+      },
+      customMetadata: {
+        account_id: accountId,
+        correlation_id: context.correlationId,
+      },
+    },
+  );
+
+  const causationId =
+    safeIdentifier(payload.causationId) ||
+    "vs4_privacy_acceptance_root";
+
+  const result = await emitOtlpEvent(
+    env,
+    "account.created",
+    {
+      "actor.anonymous.id": context.actorId,
+      "account.id": accountId,
+      "correlation.id": context.correlationId,
+      "causation.id": causationId,
+      "etlayer.producer.kind": "backend",
+      "etlayer.authority.kind": "business_state",
+      "user.email": "acceptance@example.test",
+      "auth.token": "acceptance-secret-do-not-store",
+    },
+    options,
+  );
+
+  return jsonResponse(
+    {
+      ...result.body,
+      correlationId: context.correlationId,
+      accountId,
+      stateKey,
+      privacyAcceptance: true,
+      expectedCanonicalField: "user.email",
+      expectedIngestDrop: "auth.token",
+      expectedDeliveryDrop: "user.email",
     },
     result.status,
   );

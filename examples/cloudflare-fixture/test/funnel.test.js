@@ -5,6 +5,7 @@ import worker, {
   handleAccountCreated,
   handleBrowserEvent,
   handleInvalidAccountAcceptance,
+  handlePrivacyAccountAcceptance,
 } from "../src/index.js";
 
 function cookieHeader() {
@@ -370,4 +371,75 @@ test("VS3 invalid-account acceptance event omits only account.id from the contra
   const body = await response.json();
   assert.equal(body.intentionallyInvalid, true);
   assert.equal(body.missingAttribute, "account.id");
+});
+
+
+test("VS4 privacy acceptance emits a valid authoritative account event with sensitive test fields", async () => {
+  const captures = [];
+  const stateWrites = [];
+
+  const request = new Request(
+    "https://fixture.test/api/acceptance/privacy-account",
+    {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        causationId: "privacy_cause_1",
+      }),
+    },
+  );
+
+  const response = await handlePrivacyAccountAcceptance(
+    request,
+    {
+      ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
+      ETLAYER_INGEST_KEY: "test-key",
+      STATE: {
+        async put(key, body, options) {
+          stateWrites.push({ key, body, options });
+        },
+      },
+    },
+    {
+      fetch: captureFetch(captures),
+      eventId: "55555555-5555-4555-8555-555555555555",
+      accountId: "fixture_privacy_test",
+      nowMs: 1_790_000_000_000,
+    },
+  );
+
+  assert.equal(response.status, 202);
+  assert.equal(stateWrites.length, 1);
+  assert.equal(captures.length, 1);
+
+  const attributes = decodeAttributes(
+    recordFrom(captures[0]).attributes,
+  );
+
+  assert.equal(attributes["etlayer.schema.version"], 1);
+  assert.equal(attributes["account.id"], "fixture_privacy_test");
+  assert.equal(attributes["correlation.id"], "funnel_test");
+  assert.equal(attributes["causation.id"], "privacy_cause_1");
+  assert.equal(attributes["etlayer.producer.kind"], "backend");
+  assert.equal(
+    attributes["etlayer.authority.kind"],
+    "business_state",
+  );
+  assert.equal(
+    attributes["user.email"],
+    "acceptance@example.test",
+  );
+  assert.equal(
+    attributes["auth.token"],
+    "acceptance-secret-do-not-store",
+  );
+
+  const body = await response.json();
+  assert.equal(body.privacyAcceptance, true);
+  assert.equal(body.expectedCanonicalField, "user.email");
+  assert.equal(body.expectedIngestDrop, "auth.token");
+  assert.equal(body.expectedDeliveryDrop, "user.email");
 });

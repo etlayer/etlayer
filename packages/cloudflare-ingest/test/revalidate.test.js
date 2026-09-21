@@ -23,6 +23,7 @@ function archivedEvent() {
 
 function archiveWith(event) {
   return {
+    async put() {},
     async get(key) {
       if (
         key !==
@@ -150,4 +151,57 @@ test("a corrected policy can route the preserved event", async () => {
       status: "exported",
     },
   ]);
+});
+
+
+test("revalidation reapplies delivery privacy before routing the canonical event", async () => {
+  const event = archivedEvent();
+  event.logRecord.attributes = [
+    {
+      key: "user.email",
+      value: { stringValue: "person@example.test" },
+    },
+    {
+      key: "account.id",
+      value: { stringValue: "account_1" },
+    },
+  ];
+
+  let routedEvent;
+
+  const result = await revalidateArchivedEvent(
+    { ARCHIVE: archiveWith(event) },
+    {
+      sourceKey:
+        "events/2026/09/22/00/evt_revalidate_1.json",
+    },
+    {
+      validate() {
+        return {
+          status: "valid",
+          schemaVersion: 1,
+          contractId: "account.created@1",
+          errors: [],
+        };
+      },
+      async recordValidationState() {},
+      async route(receivedEvent) {
+        routedEvent = receivedEvent;
+        return [
+          {
+            destination: "posthog",
+            status: "exported",
+          },
+        ];
+      },
+    },
+  );
+
+  const keys = routedEvent.logRecord.attributes.map(
+    ({ key }) => key,
+  );
+
+  assert.equal(keys.includes("user.email"), false);
+  assert.equal(keys.includes("account.id"), true);
+  assert.equal(result.validation.status, "valid");
 });

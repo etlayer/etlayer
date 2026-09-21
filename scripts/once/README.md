@@ -127,3 +127,31 @@ The helper verifies:
 - the same canonical object can be revalidated through `/_ops/revalidate` without a producer re-emitting it.
 
 The revalidation operator endpoint is temporarily protected by `ETLAYER_REPLAY_KEY`, the same one-time operator credential used by replay acceptance helpers. A future operator-auth abstraction may replace this shared acceptance credential.
+
+
+## VS4 privacy acceptance
+
+After deploying the current ETLayer Worker and fixture, this helper emits one valid `account.created@1` with two acceptance-only sensitive attributes:
+
+```text
+user.email = acceptance@example.test
+auth.token = acceptance-secret-do-not-store
+```
+
+Run:
+
+```bash
+./scripts/once/vs4-privacy-account.sh
+```
+
+The helper verifies:
+
+- `auth.token` was removed before canonical R2 storage;
+- the secret literal does not exist in the canonical object;
+- `user.email` remains in canonical ETLayer storage;
+- contract validation remains `valid`;
+- privacy evidence records the ingest secret drop;
+- privacy evidence records the delivery direct-identifier drop;
+- both PostHog and Statsig delivery states are `exported`.
+
+The destination adapters receive the privacy-sanitized event. Live PostHog verification can additionally confirm that the dropped fields are absent from the stored destination properties.
