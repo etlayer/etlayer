@@ -155,3 +155,45 @@ The helper verifies:
 - both PostHog and Statsig delivery states are `exported`.
 
 The destination adapters receive the privacy-sanitized event. Live PostHog verification can additionally confirm that the dropped fields are absent from the stored destination properties.
+
+
+## VS5 identity continuity acceptance
+
+After deploying the current ETLayer Worker and fixture, this helper proves anonymous-to-user identity continuity without any producer-side PostHog or Statsig identify calls.
+
+Run:
+
+```bash
+./scripts/once/vs5-identity-continuity.sh
+```
+
+The helper creates an isolated session with:
+
+```text
+attribution.source   docs
+attribution.medium   acceptance
+attribution.campaign vs5
+```
+
+It then emits:
+
+```text
+landing.hero.exposed
+        ↓
+identity.linked@1
+        ↓
+account.created
+```
+
+and verifies:
+
+- the anonymous event resolves primary identity to `actor.anonymous.id`;
+- `identity.linked@1` resolves primary identity to `user.id`;
+- the link records an `anonymous_to_user` transition;
+- the subsequent account event keeps the same user/anonymous/session/account coordinates;
+- attribution is identical across the three events;
+- all three events are contract-valid;
+- PostHog delivery state is exported for all three;
+- Statsig delivery state is exported for all three.
+
+Independent PostHog verification should additionally confirm that `identity.linked` was projected as `$identify`, with `$anon_distinct_id`, and that pre/post-identification events resolve to the same PostHog person.
