@@ -25,16 +25,19 @@ export async function recordIdentityState(
   }
 
   const state = {
-    version: 1,
+    version: 2,
     eventId: event.id,
     eventName: event.eventName,
     status: identity.status,
-    primary: identity.primary,
+    subject: identity.subject,
+    actor: identity.actor,
+    delegation: identity.delegation,
     anonymousId: identity.anonymousId,
     userId: identity.userId,
     accountId: identity.accountId,
     sessionId: identity.sessionId,
     transition: identity.transition,
+    agent: identity.agent,
     attribution: identity.attribution,
     sourceKey:
       typeof options.sourceKey === "string" &&
@@ -54,7 +57,8 @@ export async function recordIdentityState(
       event_id: event.id,
       event_name: event.eventName,
       status: identity.status,
-      primary_kind: identity.primary.kind,
+      subject_kind: identity.subject.kind,
+      actor_type: identity.actor?.type || "",
       source_key: state.sourceKey || "",
       updated_at: state.updatedAt,
     },
@@ -120,9 +124,10 @@ function validateIdentity(identity) {
   if (
     !identity ||
     !["resolved", "fallback"].includes(identity.status) ||
-    !identity.primary ||
-    typeof identity.primary.id !== "string" ||
-    typeof identity.primary.kind !== "string"
+    !identity.subject ||
+    typeof identity.subject.id !== "string" ||
+    typeof identity.subject.kind !== "string" ||
+    !Array.isArray(identity.delegation)
   ) {
     throw new IdentityStateConfigurationError(
       "identity result is invalid",
