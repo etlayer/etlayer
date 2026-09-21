@@ -42,6 +42,7 @@ export async function revalidateArchivedEvent(
     eventId: event.id,
     eventName: event.eventName,
     validation: result.validation,
+    identity: result.identity || null,
     deliveries: result.deliveries.map((delivery) => ({
       destination: delivery.destination,
       status: delivery.status,
