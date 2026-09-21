@@ -1,73 +1,166 @@
-# VS5: Identity continuity and attribution semantics
+# VS5: Identity, actor, delegation, and attribution semantics
 
-**Status: VS5.1 implemented and green; live identity-continuity acceptance pending.**
+**Status: VS5.1 anonymous-to-user continuity is live-proven; actor/delegation extension implemented; final agent live acceptance pending.**
 
 ## Goal
 
-Define deterministic anonymous-to-user identity continuity and attribution semantics in ETLayer without turning ETLayer into a general identity graph.
+Define deterministic product identity continuity while preserving the immediate actor and responsibility chain.
 
-The reference lifecycle is:
+ETLayer separates four concepts:
 
 ```text
-landing.hero.exposed
-  anonymous + session + attribution
-          |
-          v
-identity.linked@1
-  anonymous + user + account + same session
-          |
-          v
-account.created
-  user + anonymous + account + same session
+subject     who the product analytics event belongs to
+actor       who directly performed the action
+delegation  on whose behalf / through which principal chain
+attribution where the product journey came from
 ```
 
-The application emits vendor-neutral identity facts. ETLayer owns normalization and destination projection.
+This follows the same core accountability principle used by AuditSpec: an agent acting for a user remains an agent actor and is not rewritten as the user.
 
 ## Canonical identity model
 
-Recognized identifiers:
+Recognized product identity coordinates:
 
 - `actor.anonymous.id`
 - `user.id`
 - `account.id`
 - `session.id`
 
-Primary subject precedence:
+Recognized explicit actor coordinates:
+
+- `actor.type`
+- `actor.id`
+
+Supported actor types:
+
+- `anonymous`
+- `user`
+- `agent`
+- `service`
+- `api_key`
+- `system`
+- `automation`
+
+Actor type is explicit semantics. ID prefixes such as `agent_`, `user_`, or `anon_` are conventions only and MUST NOT be used to infer actor type.
+
+### Analytics subject
+
+ETLayer resolves one analytics subject for destination projection:
 
 ```text
 user.id
   > actor.anonymous.id
+  > explicit non-user actor
   > session.id
   > account.id
   > etlayer:<event-id>
 ```
 
-The primary subject is a projection choice, not destructive normalization. All known IDs remain in the identity envelope.
+The subject is not the immediate actor.
 
-## Explicit transition event
+For example:
 
-VS5 adds:
+```text
+actor.type = agent
+actor.id   = agent_hanna
+user.id    = usr_42
+
+subject = user/usr_42
+actor   = agent/agent_hanna
+```
+
+PostHog and Statsig may therefore remain user-centric while ETLayer preserves accountability.
+
+## Delegation
+
+ETLayer represents an ordered responsibility chain with flattened OTLP attributes:
+
+```text
+delegation.0.relationship
+delegation.0.principal.type
+delegation.0.principal.id
+
+delegation.1.relationship
+delegation.1.principal.type
+delegation.1.principal.id
+...
+```
+
+Supported relationships:
+
+- `on_behalf_of`
+- `delegated_by`
+- `impersonation`
+- `assumed_role`
+
+Example direct agent:
+
+```text
+actor = agent_hanna
+delegation.0 = on_behalf_of -> user/usr_42
+```
+
+Example subagent:
+
+```text
+actor = agent_child
+delegation.0 = delegated_by -> agent/agent_parent
+delegation.1 = on_behalf_of -> user/usr_42
+```
+
+The first delegation entry is nearest to the immediate actor.
+
+## Explicit identity transition
+
+VS5 retains:
 
 ```text
 identity.linked@1
 ```
 
-It is backend-authoritative and requires:
+It represents:
 
-- `actor.anonymous.id`
+```text
+anonymous actor/session
+        ↓
+stable user/account context
+```
+
+The event enables destination-specific stitching without producer-side PostHog or Statsig identify calls.
+
+## Agent events
+
+VS5 adds executable contracts for:
+
+```text
+agent.tool.call@1
+agent.subagent.tool.call@1
+```
+
+### agent.tool.call@1
+
+Requires:
+
+- explicit `actor.type=agent`
+- explicit `actor.id`
 - `user.id`
 - `account.id`
 - `session.id`
-- `correlation.id`
-- `causation.id`
-- `etlayer.producer.kind = backend`
-- `etlayer.authority.kind = business_state`
+- direct `on_behalf_of -> user` delegation
+- `agent.turn.id`
+- `agent.tool_call.id`
 
-Semantics:
+### agent.subagent.tool.call@1
 
-> The backend has established that the anonymous actor/session belongs to this stable user and account context.
+Requires:
 
-This is an explicit fact event. It does not create a mutable cross-device identity graph.
+- explicit child-agent actor
+- first delegation entry `delegated_by -> agent`
+- second delegation entry `on_behalf_of -> user`
+- the same user/account/session product context
+- agent turn/tool-call correlation
+
+These contracts intentionally preserve the immediate actor rather than flattening it into the user.
 
 ## Attribution envelope
 
@@ -77,9 +170,9 @@ VS5 recognizes:
 - `attribution.medium`
 - `attribution.campaign`
 
-Acceptance keeps the same attribution values on the anonymous event, the identity link, and the subsequent account event.
+Attribution remains attached to the product journey across anonymous, user, agent, and subagent events.
 
-VS5 deliberately does not compute historical first-touch or last-touch attribution.
+VS5 does not compute historical first-touch or last-touch attribution.
 
 ## Durable identity evidence
 
@@ -89,44 +182,70 @@ Identity semantics are recorded per event:
 identity/<event-id>.json
 ```
 
-Example:
+Version 2 evidence separates subject and actor:
 
 ```json
 {
-  "version": 1,
-  "eventId": "event-id",
-  "eventName": "identity.linked",
-  "status": "resolved",
-  "primary": {
+  "version": 2,
+  "eventName": "agent.subagent.tool.call",
+  "subject": {
     "kind": "user",
-    "id": "user_123"
+    "id": "usr_42"
   },
-  "anonymousId": "anon_123",
-  "userId": "user_123",
-  "accountId": "account_123",
-  "sessionId": "session_123",
-  "transition": {
-    "kind": "anonymous_to_user",
-    "from": "anon_123",
-    "to": "user_123"
+  "actor": {
+    "type": "agent",
+    "id": "agent_child",
+    "source": "explicit"
   },
-  "attribution": {
-    "source": "docs",
-    "medium": "acceptance",
-    "campaign": "vs5"
-  }
+  "delegation": [
+    {
+      "relationship": "delegated_by",
+      "principal": {
+        "type": "agent",
+        "id": "agent_parent"
+      }
+    },
+    {
+      "relationship": "on_behalf_of",
+      "principal": {
+        "type": "user",
+        "id": "usr_42"
+      }
+    }
+  ]
 }
 ```
 
-This state is evidence of how ETLayer interpreted one event. It is not a graph or mutable user profile.
+This is per-event semantic evidence, not an identity graph.
+
+## Agent correlation
+
+VS5 records:
+
+- `agent.turn.id`
+- `agent.tool_call.id`
+
+These are correlation coordinates, not identity replacements.
 
 ## Destination projection
 
 ### PostHog
 
-Ordinary events use the canonical primary identity for `distinct_id`.
+The analytics subject drives `distinct_id`.
 
-For `identity.linked@1`, ETLayer projects:
+Therefore:
+
+```text
+agent acting for user
+  distinct_id = user.id
+
+properties:
+  actor.type = agent
+  actor.id   = agent_hanna
+  delegation.* preserved
+```
+
+For `identity.linked@1`:
 
 ```text
 event = $identify
@@ -134,20 +253,38 @@ distinct_id = user.id
 $anon_distinct_id = actor.anonymous.id
 ```
 
-The application never calls PostHog `identify()`.
+This keeps anonymous -> identified person stitching while retaining actor properties on agent events.
 
 ### Statsig
 
-For identified events:
+For identified user journeys:
 
 ```text
 userID = user.id
-customIDs.anonymousID = actor.anonymous.id
-customIDs.sessionID = session.id
-customIDs.accountID = account.id
 ```
 
-When the user is still anonymous, the anonymous identifier remains the primary fallback while all known IDs continue to be projected.
+Known alternate IDs are carried as custom IDs:
+
+```text
+anonymousID
+sessionID
+accountID
+agentID
+```
+
+An agent actor does not replace the user product subject.
+
+## Privacy interaction
+
+VS4 privacy policy explicitly classifies:
+
+- `actor.type` as operational;
+- `actor.id` as pseudonymous identifier;
+- delegation principal IDs as pseudonymous identifiers;
+- delegation relationships/types as operational;
+- agent turn/tool-call IDs as operational.
+
+VS5 therefore does not create a privacy bypass.
 
 ## Processing order
 
@@ -158,66 +295,109 @@ contract validation
    |
 privacy projection
    |
-identity resolution + durable identity state
+identity / actor / delegation resolution
+   |
+durable identity evidence
    |
 destination routing
 ```
 
-A blocked event may still produce semantic evidence, but it never reaches destinations.
+Blocked events may still produce semantic evidence but never reach destinations.
 
-## Acceptance
+## Live proof: anonymous -> user continuity
 
-1. Add executable `identity.linked@1` contract.
-2. Add one shared identity resolver.
-3. Record `identity/<event-id>.json`.
-4. Give the acceptance browser a stable `session.id`.
-5. Preserve attribution across anonymous -> identified transition.
-6. Anonymous hero event resolves primary identity to the anonymous actor.
-7. Identity link resolves primary identity to `user.id`.
-8. Subsequent account event resolves primary identity to the same `user.id`.
-9. PostHog anonymous event uses anonymous distinct ID.
-10. PostHog identity link is stored as `$identify` with `$anon_distinct_id`.
-11. PostHog subsequent account event uses `user.id`.
-12. Statsig identified events use `userID=user.id` plus anonymous/session/account custom IDs.
-13. Attribution values are identical across the acceptance lifecycle.
-14. Revalidation and replay use the same identity resolver.
-15. Existing three-event funnel remains unchanged.
+Correlation:
+
+```text
+vs5-identity-20260921T234009Z-56fbd4f5
+```
+
+ETLayer recorded:
+
+```text
+landing.hero.exposed
+  subject = anonymous
+
+identity.linked
+  subject = user
+  transition = anonymous_to_user
+
+account.created
+  subject = same user
+```
+
+PostHog independently proved:
+
+```text
+hero distinct_id          anon_c313fd49-b762-4483-ae0f-dec5a1c321c9
+$identify distinct_id     user_65b17c19-9511-4a51-9e69-9c2e1333f044
+$anon_distinct_id         anon_c313fd49-b762-4483-ae0f-dec5a1c321c9
+account.created distinct  user_65b17c19-9511-4a51-9e69-9c2e1333f044
+
+PostHog person_id for all three:
+e61da9a0-0025-5dee-b98d-3c94b84287d7
+```
+
+This proves real anonymous -> identified stitching.
+
 ## Implementation status
 
-### VS5.1 — Identity semantics core — complete
+### VS5.1 — Anonymous/user identity continuity — live proven
 
-- executable `identity.linked@1` contract added;
-- one canonical identity resolver added;
-- durable per-event identity evidence added under `identity/<event-id>.json`;
-- processing now records validation -> privacy -> identity -> delivery lifecycle;
-- PostHog and Statsig both use the same ETLayer identity resolver;
-- PostHog projects `identity.linked` as `$identify` with `$anon_distinct_id`;
-- Statsig uses `userID` for known users and retains anonymous/session/account IDs as custom IDs;
-- attribution context is normalized and privacy-classified as product context;
-- revalidation exposes and reapplies current identity semantics;
-- acceptance fixture has stable session and attribution context;
-- acceptance-only backend flow emits `identity.linked -> account.created`;
-- `scripts/once/vs5-identity-continuity.sh` verifies semantic continuity and delivery outcomes.
+- executable `identity.linked@1` contract;
+- stable session + attribution;
+- canonical subject resolver;
+- PostHog `$identify`;
+- Statsig user/custom-ID projection;
+- live anonymous -> user person stitching proven.
 
-### VS5.2 — Live acceptance — pending
+### VS5.2 — Actor and delegation semantics — implemented, live acceptance pending
 
-- deploy VS5 Worker + fixture;
-- run normal funnel to prove no regression;
-- run `./scripts/once/vs5-identity-continuity.sh`;
-- verify three durable identity states;
-- independently query PostHog:
-  - anonymous event distinct ID = anonymous actor;
-  - identity transition event = `$identify`;
-  - `$anon_distinct_id` matches the anonymous actor;
-  - subsequent account event distinct ID = stable user ID;
-  - anonymous and identified events resolve to the same PostHog person;
-- verify Statsig delivery state is exported for all three identity-flow events.
+- explicit `actor.type` + `actor.id`;
+- ordered delegation parsing;
+- AuditSpec-aligned immediate-actor preservation;
+- `agent.tool.call@1` contract;
+- `agent.subagent.tool.call@1` contract;
+- identity evidence v2 with separate `subject`, `actor`, and `delegation`;
+- agent actor projected separately from user analytics subject;
+- agent/subagent fixture flow;
+- `scripts/once/vs5-agent-delegation.sh` acceptance helper.
+
+## Final acceptance
+
+The remaining live proof is:
+
+```text
+user subject
+  |
+  +-- actor=agent_parent
+  |     on_behalf_of -> user
+  |
+  +-- actor=agent_child
+        delegated_by -> agent_parent
+        on_behalf_of -> user
+```
+
+Expected:
+
+1. both agent events are contract-valid;
+2. identity evidence version is 2;
+3. both events have `subject.kind=user`;
+4. direct event actor remains the parent agent;
+5. subagent event actor remains the child agent;
+6. ordered delegation is preserved exactly;
+7. PostHog `distinct_id` remains the same user for both;
+8. PostHog properties preserve both agent actor IDs;
+9. Statsig `userID` remains the same user;
+10. Statsig carries the current agent as `customIDs.agentID`;
+11. all events preserve session/account/attribution continuity;
+12. no producer code calls PostHog/Statsig identity APIs.
 
 ## Non-goals
 
 - general identity graph;
 - cross-device probabilistic matching;
-- email or phone matching;
+- email or phone identity matching;
 - merge/split UI;
 - account hierarchy;
 - historical first-touch/last-touch computation;
