@@ -32,6 +32,10 @@ export async function recordValidationState(
     status: validation.status,
     contractId: validation.contractId,
     errors: validation.errors || [],
+    sourceKey:
+      typeof options.sourceKey === "string" && options.sourceKey.length > 0
+        ? options.sourceKey
+        : null,
     updatedAt: now.toISOString(),
   };
 
@@ -50,6 +54,7 @@ export async function recordValidationState(
           ? ""
           : String(validation.schemaVersion),
       contract_id: validation.contractId || "",
+      source_key: state.sourceKey || "",
       updated_at: state.updatedAt,
     },
   });
