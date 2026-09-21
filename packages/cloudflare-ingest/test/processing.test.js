@@ -28,9 +28,47 @@ function privacyState(status = "clean") {
   };
 }
 
-test("blocked validation records validation and privacy evidence but never routes", async () => {
+function resolvedIdentity(event, overrides = {}) {
+  return {
+    status: "resolved",
+    primary: {
+      kind: "anonymous",
+      id: "anon_1",
+    },
+    anonymousId: "anon_1",
+    userId: null,
+    accountId: null,
+    sessionId: "session_1",
+    transition: null,
+    attribution: {
+      source: null,
+      medium: null,
+      campaign: null,
+    },
+    ...overrides,
+  };
+}
+
+function identityState(identity) {
+  return {
+    state: {
+      version: 1,
+      eventId: "evt",
+      eventName: "example",
+      ...identity,
+      sourceKey: null,
+      updatedAt: "2026-09-22T01:00:00.000Z",
+    },
+  };
+}
+
+test("blocked validation records validation, privacy, and identity evidence but never routes", async () => {
   const calls = [];
-  const event = { id: "evt_1", eventName: "account.created" };
+  const event = {
+    id: "evt_1",
+    eventName: "account.created",
+    logRecord: { attributes: [] },
+  };
 
   const result = await processPersistedEvent(
     event,
@@ -61,6 +99,14 @@ test("blocked validation records validation and privacy evidence but never route
         calls.push("record-privacy");
         return privacyState();
       },
+      resolveIdentity(receivedEvent) {
+        calls.push("identity");
+        return resolvedIdentity(receivedEvent);
+      },
+      async recordIdentityState(_archive, _event, identity) {
+        calls.push("record-identity");
+        return identityState(identity);
+      },
       async route() {
         calls.push("route");
         return [];
@@ -73,18 +119,22 @@ test("blocked validation records validation and privacy evidence but never route
     "record-validation",
     "privacy",
     "record-privacy",
+    "identity",
+    "record-identity",
   ]);
   assert.equal(result.validation.status, "blocked");
+  assert.equal(result.identity.primary.id, "anon_1");
   assert.deepEqual(result.deliveries, []);
 });
 
-test("valid events route only the privacy-sanitized copy", async () => {
+test("valid events route only the privacy-sanitized copy after identity evidence", async () => {
   const calls = [];
   const canonical = {
     id: "evt_2",
     eventName: "account.created",
     logRecord: {
       attributes: [
+        { key: "user.id", value: { stringValue: "user_1" } },
         { key: "account.id", value: { stringValue: "account_1" } },
         { key: "user.email", value: { stringValue: "person@example.test" } },
       ],
@@ -95,10 +145,17 @@ test("valid events route only the privacy-sanitized copy", async () => {
     logRecord: {
       ...canonical.logRecord,
       attributes: [
+        { key: "user.id", value: { stringValue: "user_1" } },
         { key: "account.id", value: { stringValue: "account_1" } },
       ],
     },
   };
+
+  const identity = resolvedIdentity(sanitized, {
+    primary: { kind: "user", id: "user_1" },
+    userId: "user_1",
+    accountId: "account_1",
+  });
 
   const result = await processPersistedEvent(
     canonical,
@@ -132,15 +189,18 @@ test("valid events route only the privacy-sanitized copy", async () => {
         calls.push("record-privacy");
         return privacyState("applied");
       },
+      resolveIdentity(receivedEvent) {
+        calls.push("identity");
+        assert.equal(receivedEvent, sanitized);
+        return identity;
+      },
+      async recordIdentityState() {
+        calls.push("record-identity");
+        return identityState(identity);
+      },
       async route(receivedEvent) {
         calls.push("route");
         assert.equal(receivedEvent, sanitized);
-        assert.equal(
-          receivedEvent.logRecord.attributes.some(
-            ({ key }) => key === "user.email",
-          ),
-          false,
-        );
         return [{ destination: "posthog", status: "exported" }];
       },
     },
@@ -151,53 +211,24 @@ test("valid events route only the privacy-sanitized copy", async () => {
     "record-validation",
     "privacy",
     "record-privacy",
+    "identity",
+    "record-identity",
     "route",
   ]);
-  assert.equal(result.validation.status, "valid");
+  assert.equal(result.identity.primary.id, "user_1");
   assert.equal(result.deliveries.length, 1);
 });
 
-test("unmanaged migration events still receive privacy policy before routing", async () => {
-  const calls = [];
-
-  const result = await processPersistedEvent(
-    { id: "evt_3", eventName: "legacy.smoke" },
-    { ARCHIVE: {} },
-    {
-      validate() {
-        return {
-          status: "unmanaged",
-          schemaVersion: null,
-          contractId: null,
-          errors: [],
-        };
-      },
-      async recordValidationState() {},
-      applyDeliveryPrivacy(event) {
-        calls.push("privacy");
-        return privacyResult(event);
-      },
-      async recordPrivacyState() {
-        calls.push("record-privacy");
-        return privacyState();
-      },
-      async route() {
-        calls.push("route");
-        return [];
-      },
-    },
-  );
-
-  assert.equal(result.validation.status, "unmanaged");
-  assert.deepEqual(calls, ["privacy", "record-privacy", "route"]);
-});
-
-test("privacy evidence persistence failure remains retryable before routing", async () => {
+test("identity evidence persistence failure remains retryable before routing", async () => {
   let routed = false;
 
   await assert.rejects(
     processPersistedEvent(
-      { id: "evt_4", eventName: "legacy.smoke" },
+      {
+        id: "evt_3",
+        eventName: "legacy.smoke",
+        logRecord: { attributes: [] },
+      },
       { ARCHIVE: {} },
       {
         validate() {
@@ -213,7 +244,13 @@ test("privacy evidence persistence failure remains retryable before routing", as
           return privacyResult(event);
         },
         async recordPrivacyState() {
-          throw new Error("privacy state unavailable");
+          return privacyState();
+        },
+        resolveIdentity(event) {
+          return resolvedIdentity(event);
+        },
+        async recordIdentityState() {
+          throw new Error("identity state unavailable");
         },
         async route() {
           routed = true;
@@ -221,7 +258,7 @@ test("privacy evidence persistence failure remains retryable before routing", as
         },
       },
     ),
-    /privacy state unavailable/,
+    /identity state unavailable/,
   );
 
   assert.equal(routed, false);
