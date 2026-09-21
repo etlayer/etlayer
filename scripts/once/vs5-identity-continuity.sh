@@ -139,21 +139,27 @@ node -e '
 
   const heroOk =
     hero.status === "resolved" &&
-    hero.primary?.kind === "anonymous" &&
-    hero.primary?.id === anonId &&
+    hero.subject?.kind === "anonymous" &&
+    hero.subject?.id === anonId &&
     hero.anonymousId === anonId &&
     hero.userId === null &&
     hero.sessionId === sessionId &&
+    hero.actor?.type === "anonymous" &&
+    hero.actor?.id === anonId &&
+    Array.isArray(hero.delegation) &&
+    hero.delegation.length === 0 &&
     sameAttribution(hero.attribution);
 
   const linkOk =
     link.status === "resolved" &&
-    link.primary?.kind === "user" &&
-    link.primary?.id === userId &&
+    link.subject?.kind === "user" &&
+    link.subject?.id === userId &&
     link.anonymousId === anonId &&
     link.userId === userId &&
     link.accountId === accountId &&
     link.sessionId === sessionId &&
+    link.actor?.type === "user" &&
+    link.actor?.id === userId &&
     link.transition?.kind === "anonymous_to_user" &&
     link.transition?.from === anonId &&
     link.transition?.to === userId &&
@@ -161,12 +167,14 @@ node -e '
 
   const accountOk =
     account.status === "resolved" &&
-    account.primary?.kind === "user" &&
-    account.primary?.id === userId &&
+    account.subject?.kind === "user" &&
+    account.subject?.id === userId &&
     account.anonymousId === anonId &&
     account.userId === userId &&
     account.accountId === accountId &&
     account.sessionId === sessionId &&
+    account.actor?.type === "user" &&
+    account.actor?.id === userId &&
     account.transition === null &&
     sameAttribution(account.attribution);
 
