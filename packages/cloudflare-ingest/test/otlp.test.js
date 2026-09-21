@@ -156,3 +156,49 @@ test("rejects requests when the event queue is not configured", async () => {
 
   assert.equal(response.status, 503);
 });
+
+
+test("scrubs secret fields before enqueue while preserving direct identifiers", async () => {
+  const { env, batches } = envWithQueue();
+  const payload = eventPayload({
+    attributes: [
+      {
+        key: "etlayer.event.id",
+        value: { stringValue: "evt-privacy" },
+      },
+      {
+        key: "user.email",
+        value: { stringValue: "person@example.test" },
+      },
+      {
+        key: "auth.token",
+        value: { stringValue: "do-not-store" },
+      },
+    ],
+  });
+
+  const response = await handleExportLogs(
+    requestFor(payload),
+    env,
+    {
+      receivedAt: "2026-09-22T01:00:00.000Z",
+      idFactory: () => "generated",
+    },
+  );
+
+  assert.equal(response.status, 200);
+  const queued = batches[0][0].body;
+  const keys = queued.logRecord.attributes.map(({ key }) => key);
+
+  assert.equal(keys.includes("user.email"), true);
+  assert.equal(keys.includes("auth.token"), false);
+  assert.equal(JSON.stringify(queued).includes("do-not-store"), false);
+  assert.deepEqual(queued.privacy.ingestActions, [
+    {
+      location: "logRecord",
+      attribute: "auth.token",
+      classification: "secret",
+      action: "drop",
+    },
+  ]);
+});
