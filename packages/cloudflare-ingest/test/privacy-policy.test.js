@@ -14,6 +14,11 @@ test("classifies reference privacy fields", () => {
   assert.equal(classifyAttribute("correlation.id"), "operational");
   assert.equal(classifyAttribute("experiment.variant"), "product_context");
   assert.equal(classifyAttribute("attribution.campaign"), "product_context");
+  assert.equal(classifyAttribute("actor.type"), "operational");
+  assert.equal(classifyAttribute("actor.id"), "pseudonymous_identifier");
+  assert.equal(classifyAttribute("delegation.0.principal.id"), "pseudonymous_identifier");
+  assert.equal(classifyAttribute("delegation.0.relationship"), "operational");
+  assert.equal(classifyAttribute("agent.turn.id"), "operational");
   assert.equal(classifyAttribute("custom.metric"), "unclassified");
 });
 
