@@ -142,6 +142,26 @@ printf 'OTLP endpoint: %s\n' "$ETLAYER_OTLP_ENDPOINT"
 printf 'Preflight event id: %s\n' "$PREFLIGHT_EVENT_ID"
 printf 'Preflight response: %s\n' "$PREFLIGHT_RESPONSE"
 
+say "Fixture browser-event preflight"
+FIXTURE_PREFLIGHT_RUN="fixture-preflight-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)"
+COOKIE_JAR="/tmp/etlayer-fixture-cookies-$.txt"
+trap 'rm -f "$COOKIE_JAR"' EXIT
+
+curl --fail --silent --show-error   -c "$COOKIE_JAR"   "$FIXTURE_URL/?run=$FIXTURE_PREFLIGHT_RUN"   >/dev/null
+
+FIXTURE_PREFLIGHT_RESPONSE="$(
+  curl --fail-with-body --silent --show-error     -b "$COOKIE_JAR"     -X POST "$FIXTURE_URL/api/browser-event"     -H "content-type: application/json"     --data '{"eventName":"landing.hero.exposed","attributes":{"page.path":"/preflight"}}'
+)" || {
+  printf '\nFixture runtime config:\n' >&2
+  curl --silent --show-error "$FIXTURE_URL/health" >&2 || true
+  printf '\n' >&2
+  die "Fixture browser-event preflight failed."
+}
+
+printf 'Fixture preflight response: %s\n' "$FIXTURE_PREFLIGHT_RESPONSE"
+rm -f "$COOKIE_JAR"
+trap - EXIT
+
 RUN_ID="vs1-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)"
 RUN_URL="$FIXTURE_URL/?run=$RUN_ID"
 
