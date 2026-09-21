@@ -1,6 +1,6 @@
 # VS2: Multi-destination routing
 
-**Status: In progress.**
+**Status: Implementation complete through VS2.4; live acceptance (VS2.5) pending Statsig runtime secret.**
 
 ## Goal
 
@@ -174,37 +174,43 @@ Replaying Statsig must not invoke PostHog.
 
 ## Implementation slices
 
-### VS2.1 — Router boundary
+### VS2.1 — Router boundary — complete
 
-- introduce a destination-router abstraction;
-- keep PostHog as the only configured destination;
-- preserve VS1 behavior and tests.
+- destination-router abstraction introduced;
+- PostHog routed through the new boundary;
+- VS1 behavior retained while the boundary was extracted.
 
-### VS2.2 — Statsig adapter
+### VS2.2 — Statsig adapter — complete
 
-- project canonical ETLayer events to Statsig custom events;
-- add unit tests for identity, timestamp, metadata, limits, and errors;
-- configuration through Worker secrets only.
+- canonical ETLayer events project to Statsig custom events;
+- identity, timestamp, metadata, errors, disabled mode, and no-exposure reinterpretation are unit-tested;
+- runtime activation is controlled only by `STATSIG_SERVER_SECRET`.
 
-### VS2.3 — Independent outcomes
+### VS2.3 — Independent outcomes — complete
 
-- run all configured destinations without one adapter preventing another healthy adapter from being attempted;
-- retain enough failure evidence to make recovery deterministic;
-- preserve canonical persistence as the authority.
+- all configured destinations are attempted independently;
+- one adapter failure does not prevent another healthy adapter from running;
+- per-destination delivery state is persisted under `deliveries/<destination>/<event-id>.json`;
+- canonical R2 persistence remains the authority;
+- queue retry remains available if delivery-state persistence itself cannot be recorded.
 
-### VS2.4 — Targeted replay
+### VS2.4 — Targeted replay — complete
 
-- make replay destination-aware;
-- support Statsig-only replay;
-- prove that targeted replay does not invoke PostHog.
+- replay is destination-aware;
+- `/_ops/replay/posthog` remains compatible;
+- `/_ops/replay/statsig` replays only Statsig;
+- tests prove Statsig-targeted replay does not invoke PostHog;
+- acceptance helpers are destination-aware while the old PostHog wrappers remain compatible.
 
-### VS2.5 — Live acceptance
+### VS2.5 — Live acceptance — pending
 
+- configure the Statsig Server Secret as `STATSIG_SERVER_SECRET`;
 - deploy;
 - verify PostHog + Statsig;
-- run Statsig-only outage;
-- replay;
-- verify destination isolation and dedupe.
+- run a Statsig-only outage;
+- confirm PostHog remains healthy;
+- replay only Statsig;
+- verify destination isolation and logical-event dedupe.
 
 ## Non-goals
 
