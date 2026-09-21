@@ -1,6 +1,6 @@
 # VS4: Privacy policy and field classification
 
-**Status: VS4.1 implemented; live privacy acceptance pending.**
+**Status: Complete — live privacy acceptance passed on 2026-09-21.**
 
 ## Goal
 
@@ -207,16 +207,123 @@ Statsig projection   email ✗   token ✗
 - acceptance fixture can emit a valid authoritative `account.created@1` containing `user.email` + fake `auth.token`;
 - `scripts/once/vs4-privacy-account.sh` verifies canonical/storage/delivery invariants.
 
-### VS4.2 — Live acceptance — pending
+### VS4.2 — Live acceptance — complete
 
-- deploy the VS4 branch and fixture;
-- run the normal three-event funnel to prove no regression;
-- run `./scripts/once/vs4-privacy-account.sh`;
-- verify canonical R2 contains `user.email` but not `auth.token`;
-- verify validation remains `valid`;
-- verify privacy evidence records both policy actions;
-- verify PostHog stores the event without `user.email` or `auth.token`;
-- verify Statsig delivery succeeds from the same privacy-sanitized event.
+- deployed the VS4 branch and fixture;
+- ran the normal three-event funnel and observed no regression;
+- ran `./scripts/once/vs4-privacy-account.sh`;
+- verified canonical R2 preserved `user.email`;
+- verified `auth.token` and the secret literal were absent from canonical R2;
+- verified contract validation remained `valid`;
+- verified privacy evidence recorded both policy actions;
+- verified PostHog stored the privacy acceptance event without `user.email` or `auth.token`;
+- verified Statsig delivery state was `exported` for the same privacy-sanitized logical event.
+
+## Live acceptance evidence
+
+### Normal funnel regression check
+
+Correlation:
+
+```text
+acceptance-20260921T230603Z-7c984378
+```
+
+Logical events:
+
+```text
+225123d8-1e67-4dd5-a1b5-e462e12e30fc  landing.hero.exposed
+774295a1-c342-4161-8939-debb3a6cbd14  landing.hero.cta_clicked
+ba0d1418-94f2-452d-adb2-c713e0cf2897  account.created
+```
+
+PostHog independently showed exactly one row for each logical event.
+
+### Privacy acceptance event
+
+Correlation:
+
+```text
+vs4-privacy-20260921T230945Z-583659c6
+```
+
+Event:
+
+```text
+20da3f3f-2936-4edd-a880-8cabac66bbe9  account.created@1
+```
+
+Acceptance-only sensitive fields emitted by the producer:
+
+```text
+user.email = acceptance@example.test
+auth.token = acceptance-secret-do-not-store
+```
+
+Canonical R2:
+
+```text
+user.email                 preserved
+auth.token                 absent
+secret literal             absent
+```
+
+Canonical source:
+
+```text
+events/2026/09/21/23/20da3f3f-2936-4edd-a880-8cabac66bbe9.json
+```
+
+Contract validation:
+
+```text
+status       valid
+contract     account.created@1
+errors       []
+```
+
+Privacy evidence:
+
+```text
+policyVersion  1
+status         applied
+
+ingest:
+  auth.token
+  classification=secret
+  action=drop
+
+delivery:
+  user.email
+  classification=direct_identifier
+  action=drop
+```
+
+Destination outcomes:
+
+```text
+PostHog delivery state  exported
+Statsig delivery state  exported
+```
+
+An independent PostHog query showed exactly one row for the privacy event, with both:
+
+```text
+user.email  absent/null
+auth.token  absent/null
+```
+
+PostHog's project taxonomy also had no known `user.email` or `auth.token` property entries at verification time.
+
+This proves:
+
+- secret/credential-like attributes can be removed before Queue and durable canonical storage;
+- ETLayer can retain a direct identifier canonically while withholding it from downstream analytics;
+- privacy enforcement is independent of producer instrumentation and destination SDKs;
+- contract validation remains intact after ingest privacy scrubbing;
+- privacy lifecycle evidence is durable and does not copy removed secret values;
+- PostHog and Statsig can still receive the same logical event after privacy projection;
+- normal product-event routing remains unchanged.
 
 ## Non-goals
 
