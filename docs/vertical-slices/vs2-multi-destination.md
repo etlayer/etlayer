@@ -1,6 +1,6 @@
 # VS2: Multi-destination routing
 
-**Status: Implementation complete through VS2.4; live acceptance (VS2.5) pending Statsig runtime secret.**
+**Status: Complete — live multi-destination acceptance passed on 2026-09-21.**
 
 ## Goal
 
@@ -202,15 +202,125 @@ Replaying Statsig must not invoke PostHog.
 - tests prove Statsig-targeted replay does not invoke PostHog;
 - acceptance helpers are destination-aware while the old PostHog wrappers remain compatible.
 
-### VS2.5 — Live acceptance — pending
+### VS2.5 — Live acceptance — complete
 
-- configure the Statsig Server Secret as `STATSIG_SERVER_SECRET`;
-- deploy;
-- verify PostHog + Statsig;
-- run a Statsig-only outage;
-- confirm PostHog remains healthy;
-- replay only Statsig;
-- verify destination isolation and logical-event dedupe.
+- Statsig Server Secret configured as `STATSIG_SERVER_SECRET`;
+- deployed VS2 branch to the Cloudflare reference runtime;
+- verified the clean funnel in PostHog and successful Statsig delivery state for the same three logical events;
+- ran a Statsig-only outage while PostHog remained healthy;
+- restored Statsig and replayed only the missing interval;
+- repeated the same Statsig replay and observed zero additional exports;
+- independently verified PostHog remained at exactly one row per original UUID.
+
+## Live acceptance evidence
+
+### Baseline multi-destination funnel
+
+Correlation:
+
+```text
+vs1-20260921T213806Z-cb0ccede
+```
+
+Logical events:
+
+```text
+landing.hero.exposed
+  93d83f38-cc22-40c4-a8b6-46dd0bdbc18c
+        |
+        v causation.id
+landing.hero.cta_clicked
+  8109a18c-b3a6-4d16-a125-d1fc821f18a3
+        |
+        v causation.id
+account.created
+  8cd7550b-0631-4349-b80d-b189d6cbbe55
+```
+
+PostHog contained exactly those three logical events with one actor and the expected causal chain.
+
+ETLayer durable delivery state recorded:
+
+```text
+statsig / 93d83f38-cc22-40c4-a8b6-46dd0bdbc18c -> exported
+statsig / 8109a18c-b3a6-4d16-a125-d1fc821f18a3 -> exported
+statsig / 8cd7550b-0631-4349-b80d-b189d6cbbe55 -> exported
+```
+
+This proves one producer stream reached both configured destinations without producer-specific PostHog or Statsig instrumentation.
+
+### Statsig-only outage
+
+Correlation:
+
+```text
+vs2-statsig-outage-20260921T214628Z-676abe8c
+```
+
+Window:
+
+```text
+[2026-09-21T21:46:25Z, 2026-09-21T21:47:14Z)
+```
+
+While Statsig projection was deliberately disabled:
+
+```text
+PostHog  -> 3/3 exported
+Statsig  -> 3/3 skipped, reason=statsig_disabled
+R2       -> canonical events preserved
+```
+
+The logical events were:
+
+```text
+3f6bd6c7-50b3-4c99-a75d-2cbae6f24eb0  landing.hero.exposed
+55ec3642-bd00-4873-967a-96f1191d81ae  landing.hero.cta_clicked
+79083104-bec1-4238-9f91-dc3b08fc27ca  account.created
+```
+
+PostHog retained the correct actor and causation chain throughout the Statsig-only outage.
+
+### Statsig-only recovery and idempotency
+
+After Statsig was restored, targeted replay of the outage interval produced:
+
+```text
+selected: 3
+exported: 3
+skipped: 0
+```
+
+Replay ID:
+
+```text
+replay-statsig-20260921T215240Z-f8d98d8c
+```
+
+Running the same Statsig-only replay again produced:
+
+```text
+selected: 3
+exported: 0
+skipped: 3
+reason: already_exported
+```
+
+Second replay ID:
+
+```text
+replay-statsig-20260921T215305Z-4b79789c
+```
+
+An independent PostHog query after both Statsig replays still showed exactly one row for each original UUID.
+
+This proves:
+
+- one canonical event can feed multiple destinations;
+- one destination can fail without blocking another healthy destination;
+- recovery can target only the missing destination;
+- replay does not fan out to unrelated destinations;
+- ETLayer-side durable delivery state prevents repeated replay from producing uncontrolled duplicate outbound deliveries.
 
 ## Non-goals
 
