@@ -76,8 +76,8 @@ export async function projectToPostHog(event, options = {}) {
   if (isIdentityLink) {
     properties.$anon_distinct_id = identity.anonymousId;
   } else if (
-    identity.primary.kind !== "user" &&
-    identity.primary.kind !== "anonymous"
+    identity.subject.kind !== "user" &&
+    identity.subject.kind !== "anonymous"
   ) {
     properties.$process_person_profile = false;
   }
@@ -86,7 +86,7 @@ export async function projectToPostHog(event, options = {}) {
     event: isIdentityLink ? "$identify" : event.eventName,
     distinct_id: isIdentityLink
       ? identity.userId
-      : identity.primary.id.slice(0, 200),
+      : identity.subject.id.slice(0, 200),
     timestamp: eventTimestamp(event),
     uuid: await stablePostHogUuid(event.id, options.crypto || globalThis.crypto),
     properties,
