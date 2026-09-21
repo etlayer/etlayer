@@ -23,8 +23,13 @@ function decodeAttributes(list) {
 }
 
 function captureFetch(captures) {
-  return async (_url, init) => {
-    captures.push(JSON.parse(init.body));
+  return async (input, init) => {
+    const body =
+      input instanceof Request
+        ? await input.clone().text()
+        : init?.body;
+
+    captures.push(JSON.parse(body));
     return new Response("{}", { status: 200 });
   };
 }
@@ -74,6 +79,48 @@ test("browser exposure preserves stable actor, correlation, source, and experime
   assert.equal(attributes["etlayer.authority.kind"], "interaction");
   assert.equal(attributes["experiment.id"], "hero.v1");
   assert.equal(attributes["experiment.variant"], "fixture-a");
+});
+
+test("deployed-style browser event uses the ETLayer service binding", async () => {
+  const calls = [];
+
+  const request = new Request("https://fixture.test/api/browser-event", {
+    method: "POST",
+    headers: {
+      cookie: cookieHeader(),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      eventName: "landing.hero.exposed",
+    }),
+  });
+
+  const response = await handleBrowserEvent(request, {
+    ETLAYER_OTLP_ENDPOINT: "https://etlayer-ingest.example/v1/logs",
+    ETLAYER_INGEST_KEY: "test-key",
+    ETLAYER: {
+      async fetch(upstreamRequest) {
+        calls.push({
+          url: upstreamRequest.url,
+          method: upstreamRequest.method,
+          authorization: upstreamRequest.headers.get("authorization"),
+          body: JSON.parse(await upstreamRequest.clone().text()),
+        });
+
+        return new Response("{}", { status: 200 });
+      },
+    },
+  });
+
+  assert.equal(response.status, 202);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://etlayer-ingest.example/v1/logs");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].authorization, "Bearer test-key");
+  assert.equal(
+    calls[0].body.resourceLogs[0].scopeLogs[0].logRecords[0].eventName,
+    "landing.hero.exposed",
+  );
 });
 
 test("browser CTA records causation from the exposure event", async () => {
