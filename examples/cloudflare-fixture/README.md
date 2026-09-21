@@ -1,8 +1,8 @@
 # Cloudflare fixture
 
-A deliberately tiny external consumer for ETLayer VS1.
+A deliberately small external consumer for ETLayer VS1.
 
-It proves that a browser interaction event and a backend business event can use the same ETLayer OTLP/HTTP ingest path without embedding a destination SDK.
+It proves that browser interaction events and a backend-authoritative business event can use the same ETLayer OTLP/HTTP ingest path without embedding a destination SDK.
 
 ## Flow
 
@@ -19,8 +19,9 @@ Fixture Worker proxy
   v
 ETLayer /v1/logs
 
-Fixture Worker
+Fixture backend
   |
+  +-- persist account -> R2 fixture state
   +-- account.created
   |
   | OTLP/HTTP
@@ -30,50 +31,38 @@ ETLayer /v1/logs
 
 The browser uses a same-origin proxy so the ETLayer ingest credential is never exposed to client-side JavaScript.
 
-## Configure
+## Identity and causality
 
-Set the ETLayer endpoint:
+A stable anonymous actor is kept in an HttpOnly cookie. Each acceptance run gets one `correlation.id`.
+
+The browser keeps the returned ETLayer event IDs only long enough to form the causal chain:
+
+```text
+hero exposure event id
+        |
+        v
+CTA causation.id
+        |
+        v
+account.created causation.id
+```
+
+The backend does not trust the browser to declare that an account exists. It writes the account state first and emits `account.created` itself.
+
+## Deploy the VS1 fixture
+
+From the repository root:
 
 ```bash
-npx wrangler secret put ETLAYER_INGEST_KEY
+./scripts/once/deploy-fixture.sh
 ```
 
-Then set `ETLAYER_OTLP_ENDPOINT` in `wrangler.jsonc` or override it for your deployment.
+The script prints a one-time URL with the acceptance `correlation.id`.
 
-The endpoint should include the OTLP logs path, for example:
-
-```text
-https://events.example.com/v1/logs
-```
-
-## Run locally
-
-```bash
-npx wrangler dev
-```
-
-Open the local URL.
-
-The page automatically emits:
-
-```text
-landing.hero.exposed
-```
-
-Click **Try ETLayer** to emit:
-
-```text
-landing.hero.cta_clicked
-```
-
-Click **Create test account** to make the Worker emit:
-
-```text
-account.created
-```
+Open that URL. The page automatically emits the hero exposure, then enables the CTA, then enables account creation after the CTA succeeds.
 
 ## Intentional limitations
 
-This fixture is not an SDK example.
+This fixture is not an SDK example and not a production identity system.
 
 It intentionally contains a tiny OTLP JSON encoder so it can test the protocol boundary independently of future ETLayer helper libraries.

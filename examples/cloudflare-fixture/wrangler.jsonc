@@ -3,7 +3,16 @@
   "name": "etlayer-cloudflare-fixture",
   "main": "src/index.js",
   "compatibility_date": "2026-09-21",
+  "workers_dev": true,
+  "preview_urls": false,
   "vars": {
-    "ETLAYER_OTLP_ENDPOINT": "http://localhost:8788/v1/logs"
-  }
+    "ETLAYER_OTLP_ENDPOINT": "https://etlayer-ingest.sergii-ponomarov.workers.dev/v1/logs",
+    "DEPLOYMENT_ENVIRONMENT_NAME": "acceptance"
+  },
+  "r2_buckets": [
+    {
+      "binding": "STATE",
+      "bucket_name": "etlayer-fixture-state"
+    }
+  ]
 }

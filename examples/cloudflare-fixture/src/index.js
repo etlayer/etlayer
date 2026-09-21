@@ -1,14 +1,23 @@
-const browserEvents = new Set([
+const BROWSER_EVENTS = new Set([
   "landing.hero.exposed",
   "landing.hero.cta_clicked",
 ]);
+
+const ACTOR_COOKIE = "etel_actor_id";
+const FUNNEL_COOKIE = "etel_funnel_id";
+const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    if (request.method === "GET" && url.pathname === "/health") {
+      return jsonResponse({ ok: true });
+    }
+
     if (request.method === "GET" && url.pathname === "/") {
-      return htmlResponse(indexHtml());
+      const context = contextForLanding(request, url);
+      return htmlResponse(indexHtml(context), context.setCookies);
     }
 
     if (request.method === "POST" && url.pathname === "/api/browser-event") {
@@ -16,49 +25,119 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/api/account") {
-      return handleAccountCreated(env);
+      return handleAccountCreated(request, env);
     }
 
     return new Response("Not found", { status: 404 });
   },
 };
 
-async function handleBrowserEvent(request, env) {
+export async function handleBrowserEvent(request, env, options = {}) {
   const payload = await readJson(request);
 
-  if (!payload || !browserEvents.has(payload.eventName)) {
+  if (!payload || !BROWSER_EVENTS.has(payload.eventName)) {
     return jsonResponse({ ok: false, error: "unsupported_event" }, 400);
   }
 
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse({ ok: false, error: "missing_funnel_context" }, 409);
+  }
+
   const attributes = {
-    "event.source.type": "browser",
+    ...sanitizeAttributes(payload.attributes),
+    "actor.anonymous.id": context.actorId,
+    "correlation.id": context.correlationId,
+    "etlayer.producer.kind": "browser",
+    "etlayer.authority.kind": "interaction",
     "experiment.id": "hero.v1",
     "experiment.variant": "fixture-a",
-    ...sanitizeAttributes(payload.attributes),
   };
 
-  const result = await emitOtlpEvent(env, payload.eventName, attributes);
-  return jsonResponse(result.body, result.status);
-}
+  const causationId = safeIdentifier(payload.causationId);
+  if (causationId) attributes["causation.id"] = causationId;
 
-async function handleAccountCreated(env) {
-  const accountId = `fixture_${crypto.randomUUID()}`;
-
-  const result = await emitOtlpEvent(env, "account.created", {
-    "event.source.type": "backend",
-    "account.id": accountId,
-  });
+  const result = await emitOtlpEvent(
+    env,
+    payload.eventName,
+    attributes,
+    options,
+  );
 
   return jsonResponse(
     {
       ...result.body,
-      accountId,
+      correlationId: context.correlationId,
     },
     result.status,
   );
 }
 
-async function emitOtlpEvent(env, eventName, attributes) {
+export async function handleAccountCreated(request, env, options = {}) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse({ ok: false, error: "missing_funnel_context" }, 409);
+  }
+
+  if (!env.STATE || typeof env.STATE.put !== "function") {
+    return jsonResponse({ ok: false, error: "missing_backend_state" }, 503);
+  }
+
+  const payload = (await readJson(request)) || {};
+  const accountId = `fixture_${crypto.randomUUID()}`;
+  const createdAt = new Date().toISOString();
+  const stateKey = `accounts/${accountId}.json`;
+
+  await env.STATE.put(
+    stateKey,
+    JSON.stringify({
+      id: accountId,
+      createdAt,
+      actorAnonymousId: context.actorId,
+      correlationId: context.correlationId,
+    }),
+    {
+      httpMetadata: {
+        contentType: "application/json; charset=utf-8",
+      },
+      customMetadata: {
+        account_id: accountId,
+        correlation_id: context.correlationId,
+      },
+    },
+  );
+
+  const attributes = {
+    "actor.anonymous.id": context.actorId,
+    "account.id": accountId,
+    "correlation.id": context.correlationId,
+    "etlayer.producer.kind": "backend",
+    "etlayer.authority.kind": "business_state",
+  };
+
+  const causationId = safeIdentifier(payload.causationId);
+  if (causationId) attributes["causation.id"] = causationId;
+
+  const result = await emitOtlpEvent(
+    env,
+    "account.created",
+    attributes,
+    options,
+  );
+
+  return jsonResponse(
+    {
+      ...result.body,
+      accountId,
+      stateKey,
+      createdAt,
+      correlationId: context.correlationId,
+    },
+    result.status,
+  );
+}
+
+export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
   if (!env.ETLAYER_OTLP_ENDPOINT) {
     return {
       status: 500,
@@ -66,8 +145,10 @@ async function emitOtlpEvent(env, eventName, attributes) {
     };
   }
 
-  const eventId = crypto.randomUUID();
-  const nowUnixNano = (BigInt(Date.now()) * 1_000_000n).toString();
+  const eventId = options.eventId || crypto.randomUUID();
+  const nowUnixNano = (
+    BigInt(options.nowMs ?? Date.now()) * 1_000_000n
+  ).toString();
 
   const body = {
     resourceLogs: [
@@ -75,14 +156,15 @@ async function emitOtlpEvent(env, eventName, attributes) {
         resource: {
           attributes: toOtlpAttributes({
             "service.name": "etlayer-cloudflare-fixture",
-            "deployment.environment.name": "development",
+            "deployment.environment.name":
+              env.DEPLOYMENT_ENVIRONMENT_NAME || "acceptance",
           }),
         },
         scopeLogs: [
           {
             scope: {
               name: "etlayer.cloudflare-fixture",
-              version: "0.1.0",
+              version: "0.2.0",
             },
             logRecords: [
               {
@@ -110,7 +192,8 @@ async function emitOtlpEvent(env, eventName, attributes) {
     headers.authorization = `Bearer ${env.ETLAYER_INGEST_KEY}`;
   }
 
-  const response = await fetch(env.ETLAYER_OTLP_ENDPOINT, {
+  const fetchImpl = options.fetch || fetch;
+  const response = await fetchImpl(env.ETLAYER_OTLP_ENDPOINT, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
@@ -123,6 +206,7 @@ async function emitOtlpEvent(env, eventName, attributes) {
         ok: false,
         error: "etlayer_rejected_event",
         eventId,
+        eventName,
         upstreamStatus: response.status,
       },
     };
@@ -138,14 +222,103 @@ async function emitOtlpEvent(env, eventName, attributes) {
   };
 }
 
+function contextForLanding(request, url) {
+  const cookies = parseCookies(request.headers.get("cookie"));
+  let actorId = safeIdentifier(cookies[ACTOR_COOKIE]);
+  const setCookies = [];
+
+  if (!actorId) {
+    actorId = `anon_${crypto.randomUUID()}`;
+    setCookies.push(
+      cookieHeader(ACTOR_COOKIE, actorId, {
+        maxAge: COOKIE_MAX_AGE_SECONDS,
+      }),
+    );
+  }
+
+  const requestedRun = safeIdentifier(url.searchParams.get("run"));
+  const correlationId =
+    requestedRun || `funnel_${crypto.randomUUID()}`;
+
+  setCookies.push(cookieHeader(FUNNEL_COOKIE, correlationId));
+
+  return {
+    actorId,
+    correlationId,
+    setCookies,
+  };
+}
+
+function contextFromRequest(request) {
+  const cookies = parseCookies(request.headers.get("cookie"));
+  const actorId = safeIdentifier(cookies[ACTOR_COOKIE]);
+  const correlationId = safeIdentifier(cookies[FUNNEL_COOKIE]);
+
+  if (!actorId || !correlationId) return null;
+
+  return { actorId, correlationId };
+}
+
+function safeIdentifier(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+
+  if (
+    trimmed.length === 0 ||
+    trimmed.length > 200 ||
+    !/^[A-Za-z0-9._:-]+$/.test(trimmed)
+  ) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function cookieHeader(name, value, options = {}) {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    "Path=/",
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax",
+  ];
+
+  if (options.maxAge) {
+    parts.push(`Max-Age=${options.maxAge}`);
+  }
+
+  return parts.join("; ");
+}
+
+function parseCookies(header) {
+  if (!header) return {};
+
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const index = part.indexOf("=");
+        if (index < 0) return [part, ""];
+        return [
+          part.slice(0, index),
+          decodeURIComponent(part.slice(index + 1)),
+        ];
+      }),
+  );
+}
+
 function sanitizeAttributes(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return {};
   }
 
   return Object.fromEntries(
-    Object.entries(input).filter(([, value]) =>
-      ["string", "number", "boolean"].includes(typeof value),
+    Object.entries(input).filter(
+      ([key, value]) =>
+        typeof key === "string" &&
+        ["string", "number", "boolean"].includes(typeof value),
     ),
   );
 }
@@ -189,39 +362,65 @@ function jsonResponse(body, status = 200) {
   });
 }
 
-function htmlResponse(body) {
-  return new Response(body, {
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-    },
+function htmlResponse(body, setCookies = []) {
+  const headers = new Headers({
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
   });
+
+  for (const cookie of setCookies) {
+    headers.append("set-cookie", cookie);
+  }
+
+  return new Response(body, { headers });
 }
 
-function indexHtml() {
+function indexHtml(context) {
+  const runId = JSON.stringify(context.correlationId);
+
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ETLayer Cloudflare Fixture</title>
+  <title>ETLayer VS1 Funnel Fixture</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 64px auto; padding: 0 20px; }
-    button { margin-right: 8px; padding: 10px 14px; }
-    pre { margin-top: 24px; padding: 16px; background: #f4f4f4; overflow: auto; }
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 64px auto; padding: 0 20px; }
+    .meta { opacity: .72; font-size: 14px; }
+    button { margin: 8px 8px 8px 0; padding: 10px 14px; }
+    pre { margin-top: 24px; padding: 16px; background: rgba(127,127,127,.12); overflow: auto; white-space: pre-wrap; }
+    .ok { font-weight: 600; }
   </style>
 </head>
 <body>
-  <h1>ETLayer Cloudflare Fixture</h1>
-  <p>One browser producer. One backend producer. One OTLP ingest path.</p>
+  <h1>ETLayer VS1 Funnel</h1>
+  <p>Browser interaction → browser CTA → backend account state transition. One OTLP path.</p>
+  <p class="meta">correlation.id: <code id="run-id"></code></p>
 
-  <button id="cta">Try ETLayer</button>
-  <button id="account">Create test account</button>
+  <button id="cta" disabled>Try ETLayer</button>
+  <button id="account" disabled>Create test account</button>
 
-  <pre id="output">Ready.</pre>
+  <pre id="output">Starting funnel…</pre>
 
   <script>
+    const correlationId = ${runId};
     const output = document.getElementById("output");
+    const cta = document.getElementById("cta");
+    const account = document.getElementById("account");
+    document.getElementById("run-id").textContent = correlationId;
+
+    const state = {
+      correlationId,
+      exposedEventId: null,
+      ctaEventId: null,
+      accountEventId: null,
+      accountId: null,
+    };
+
+    function render(message) {
+      output.textContent = message + "\n\n" + JSON.stringify(state, null, 2);
+    }
 
     async function post(path, body) {
       const response = await fetch(path, {
@@ -231,30 +430,67 @@ function indexHtml() {
       });
 
       const result = await response.json();
-      output.textContent = JSON.stringify(result, null, 2);
+      if (!response.ok) {
+        throw new Error(JSON.stringify(result));
+      }
       return result;
     }
 
-    post("/api/browser-event", {
-      eventName: "landing.hero.exposed",
-      attributes: {
-        "page.path": location.pathname,
-      },
-    });
-
-    document.getElementById("cta").addEventListener("click", () =>
-      post("/api/browser-event", {
-        eventName: "landing.hero.cta_clicked",
+    async function exposeHero() {
+      const result = await post("/api/browser-event", {
+        eventName: "landing.hero.exposed",
         attributes: {
           "page.path": location.pathname,
-          "cta.name": "try_etlayer",
         },
-      }),
-    );
+      });
 
-    document.getElementById("account").addEventListener("click", () =>
-      post("/api/account"),
-    );
+      state.exposedEventId = result.eventId;
+      cta.disabled = false;
+      render("✓ landing.hero.exposed");
+    }
+
+    cta.addEventListener("click", async () => {
+      cta.disabled = true;
+
+      try {
+        const result = await post("/api/browser-event", {
+          eventName: "landing.hero.cta_clicked",
+          causationId: state.exposedEventId,
+          attributes: {
+            "page.path": location.pathname,
+            "cta.name": "try_etlayer",
+          },
+        });
+
+        state.ctaEventId = result.eventId;
+        account.disabled = false;
+        render("✓ landing.hero.cta_clicked");
+      } catch (error) {
+        cta.disabled = false;
+        render("✗ CTA failed: " + error.message);
+      }
+    });
+
+    account.addEventListener("click", async () => {
+      account.disabled = true;
+
+      try {
+        const result = await post("/api/account", {
+          causationId: state.ctaEventId,
+        });
+
+        state.accountEventId = result.eventId;
+        state.accountId = result.accountId;
+        render("✓ account.created — funnel complete");
+      } catch (error) {
+        account.disabled = false;
+        render("✗ account creation failed: " + error.message);
+      }
+    });
+
+    exposeHero().catch((error) => {
+      render("✗ hero exposure failed: " + error.message);
+    });
   </script>
 </body>
 </html>`;

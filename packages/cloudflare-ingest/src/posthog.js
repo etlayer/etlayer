@@ -1,4 +1,8 @@
 export async function exportToPostHog(event, env, options = {}) {
+  if (env.POSTHOG_EXPORT_DISABLED === "1") {
+    return { status: "skipped", reason: "posthog_disabled" };
+  }
+
   if (!env.POSTHOG_PROJECT_TOKEN) {
     return { status: "skipped", reason: "posthog_not_configured" };
   }

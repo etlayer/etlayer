@@ -103,6 +103,31 @@ test("exports through the PostHog capture API", async () => {
   assert.equal(body.uuid, event().id);
 });
 
+test("skips delivery when PostHog projection is intentionally disabled", async () => {
+  let called = false;
+
+  const result = await exportToPostHog(
+    event(),
+    {
+      POSTHOG_EXPORT_DISABLED: "1",
+      POSTHOG_PROJECT_TOKEN: "phc_test",
+      POSTHOG_HOST: "https://eu.i.posthog.com",
+    },
+    {
+      fetch: async () => {
+        called = true;
+        return new Response("ok");
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    status: "skipped",
+    reason: "posthog_disabled",
+  });
+  assert.equal(called, false);
+});
+
 test("skips delivery when PostHog is not configured", async () => {
   let called = false;
 

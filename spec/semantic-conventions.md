@@ -118,3 +118,24 @@ When OpenTelemetry introduces an appropriate upstream convention:
 4. retain compatibility in replay/export where practical.
 
 The goal is to shrink ETLayer's custom semantic surface over time, not expand it indefinitely.
+
+
+## Producer source and authority
+
+OpenTelemetry's generic `source.*` attributes describe network senders, not product-event authority, so VS1 does not reuse them for browser-vs-backend provenance.
+
+Until an upstream convention covers this product-event concept, ETLayer may preserve:
+
+```text
+etlayer.producer.kind
+etlayer.authority.kind
+```
+
+Initial VS1 values:
+
+```text
+etlayer.producer.kind = browser | backend
+etlayer.authority.kind = interaction | business_state
+```
+
+These describe where the product event was produced and what kind of fact that producer is authoritative for. They do not replace trace context, identity, correlation, or causation.
