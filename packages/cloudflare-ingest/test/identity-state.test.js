@@ -26,25 +26,39 @@ function archive() {
   };
 }
 
-test("records per-event identity evidence without building a graph", async () => {
+test("records subject actor and delegation without building a graph", async () => {
   const store = archive();
   const result = await recordIdentityState(
     store,
     {
       id: "evt_identity_1",
-      eventName: "identity.linked",
+      eventName: "agent.tool.call",
     },
     {
       status: "resolved",
-      primary: { kind: "user", id: "user_1" },
-      anonymousId: "anon_1",
-      userId: "user_1",
+      subject: { kind: "user", id: "usr_42" },
+      actor: {
+        type: "agent",
+        id: "agent_hanna",
+        source: "explicit",
+      },
+      delegation: [
+        {
+          relationship: "on_behalf_of",
+          principal: {
+            type: "user",
+            id: "usr_42",
+          },
+        },
+      ],
+      anonymousId: null,
+      userId: "usr_42",
       accountId: "account_1",
       sessionId: "session_1",
-      transition: {
-        kind: "anonymous_to_user",
-        from: "anon_1",
-        to: "user_1",
+      transition: null,
+      agent: {
+        turnId: "turn_17",
+        toolCallId: "call_abc",
       },
       attribution: {
         source: "docs",
@@ -59,8 +73,10 @@ test("records per-event identity evidence without building a graph", async () =>
   );
 
   assert.equal(result.key, "identity/evt_identity_1.json");
-  assert.equal(result.state.primary.id, "user_1");
-  assert.equal(result.state.transition.kind, "anonymous_to_user");
+  assert.equal(result.state.version, 2);
+  assert.equal(result.state.subject.id, "usr_42");
+  assert.equal(result.state.actor.id, "agent_hanna");
+  assert.equal(result.state.delegation.length, 1);
   assert.equal(
     result.state.sourceKey,
     "events/2026/09/22/02/evt_identity_1.json",
