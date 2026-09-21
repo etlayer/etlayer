@@ -14,5 +14,11 @@
       "binding": "STATE",
       "bucket_name": "etlayer-fixture-state"
     }
+  ],
+  "services": [
+    {
+      "binding": "ETLAYER",
+      "service": "etlayer-ingest"
+    }
   ]
 }
