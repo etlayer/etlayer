@@ -539,7 +539,7 @@ function indexHtml(context) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ETLayer VS1 Funnel Fixture</title>
+  <title>ETLayer Acceptance Funnel</title>
   <style>
     :root { color-scheme: light dark; }
     body { font-family: system-ui, sans-serif; max-width: 760px; margin: 64px auto; padding: 0 20px; }
@@ -549,7 +549,7 @@ function indexHtml(context) {
   </style>
 </head>
 <body data-correlation-id="${correlationId}">
-  <h1>ETLayer VS1 Funnel</h1>
+  <h1>ETLayer Acceptance Funnel</h1>
   <p>Browser interaction → browser CTA → backend account state transition. One OTLP path.</p>
   <p class="meta">correlation.id: <code id="run-id"></code></p>
 
