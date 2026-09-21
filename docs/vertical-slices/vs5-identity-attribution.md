@@ -1,6 +1,6 @@
 # VS5: Identity continuity and attribution semantics
 
-**Status: In progress.**
+**Status: VS5.1 implemented and green; live identity-continuity acceptance pending.**
 
 ## Goal
 
@@ -182,6 +182,36 @@ A blocked event may still produce semantic evidence, but it never reaches destin
 13. Attribution values are identical across the acceptance lifecycle.
 14. Revalidation and replay use the same identity resolver.
 15. Existing three-event funnel remains unchanged.
+## Implementation status
+
+### VS5.1 — Identity semantics core — complete
+
+- executable `identity.linked@1` contract added;
+- one canonical identity resolver added;
+- durable per-event identity evidence added under `identity/<event-id>.json`;
+- processing now records validation -> privacy -> identity -> delivery lifecycle;
+- PostHog and Statsig both use the same ETLayer identity resolver;
+- PostHog projects `identity.linked` as `$identify` with `$anon_distinct_id`;
+- Statsig uses `userID` for known users and retains anonymous/session/account IDs as custom IDs;
+- attribution context is normalized and privacy-classified as product context;
+- revalidation exposes and reapplies current identity semantics;
+- acceptance fixture has stable session and attribution context;
+- acceptance-only backend flow emits `identity.linked -> account.created`;
+- `scripts/once/vs5-identity-continuity.sh` verifies semantic continuity and delivery outcomes.
+
+### VS5.2 — Live acceptance — pending
+
+- deploy VS5 Worker + fixture;
+- run normal funnel to prove no regression;
+- run `./scripts/once/vs5-identity-continuity.sh`;
+- verify three durable identity states;
+- independently query PostHog:
+  - anonymous event distinct ID = anonymous actor;
+  - identity transition event = `$identify`;
+  - `$anon_distinct_id` matches the anonymous actor;
+  - subsequent account event distinct ID = stable user ID;
+  - anonymous and identified events resolve to the same PostHog person;
+- verify Statsig delivery state is exported for all three identity-flow events.
 
 ## Non-goals
 
