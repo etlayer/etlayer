@@ -19,7 +19,23 @@ export default {
 
   async queue(batch, env) {
     await consumeEventBatch(batch, env, {
-      afterPersist: (event) => exportToPostHog(event, env),
+      afterPersist: async (event, archiveResult) => {
+        console.info("persisted ETLayer event", {
+          eventId: event.id,
+          eventName: event.eventName,
+          archiveStatus: archiveResult.status,
+          archiveKey: archiveResult.key,
+        });
+
+        const exportResult = await exportToPostHog(event, env);
+
+        console.info("projected ETLayer event", {
+          eventId: event.id,
+          eventName: event.eventName,
+          destination: "posthog",
+          exportStatus: exportResult.status,
+        });
+      },
     });
   },
 };
