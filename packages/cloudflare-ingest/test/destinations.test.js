@@ -8,6 +8,7 @@ import {
 
 test("routes an event through configured destinations in order", async () => {
   const calls = [];
+  const states = [];
   const event = { id: "evt_1", eventName: "account.created" };
   const env = { example: true };
 
@@ -30,6 +31,9 @@ test("routes an event through configured destinations in order", async () => {
     ],
     first: { marker: 1 },
     second: { marker: 2 },
+    async recordState(_archive, receivedEvent, destination, result) {
+      states.push({ receivedEvent, destination, result });
+    },
   });
 
   assert.deepEqual(
@@ -41,6 +45,16 @@ test("routes an event through configured destinations in order", async () => {
   );
   assert.equal(calls[0][1], event);
   assert.equal(calls[0][2], env);
+  assert.deepEqual(
+    states.map(({ destination, result }) => [
+      destination,
+      result.status,
+    ]),
+    [
+      ["first", "exported"],
+      ["second", "skipped"],
+    ],
+  );
   assert.deepEqual(results, [
     {
       destination: "first",
@@ -55,9 +69,53 @@ test("routes an event through configured destinations in order", async () => {
   ]);
 });
 
-test("preserves current fail-fast semantics until independent recovery exists", async () => {
+test("a failed destination does not prevent another destination from being attempted", async () => {
   const calls = [];
+  const states = [];
 
+  const results = await routeEventDestinations(
+    { id: "evt_1", eventName: "account.created" },
+    {},
+    {
+      destinations: [
+        {
+          name: "posthog",
+          async exportEvent() {
+            calls.push("posthog");
+            const error = new Error("destination failed");
+            error.status = 503;
+            throw error;
+          },
+        },
+        {
+          name: "statsig",
+          async exportEvent() {
+            calls.push("statsig");
+            return { status: "exported" };
+          },
+        },
+      ],
+      async recordState(_archive, _event, destination, result) {
+        states.push([destination, result.status]);
+      },
+    },
+  );
+
+  assert.deepEqual(calls, ["posthog", "statsig"]);
+  assert.deepEqual(states, [
+    ["posthog", "failed"],
+    ["statsig", "exported"],
+  ]);
+  assert.equal(results[0].destination, "posthog");
+  assert.equal(results[0].status, "failed");
+  assert.match(results[0].error.message, /destination failed/);
+  assert.deepEqual(results[1], {
+    destination: "statsig",
+    status: "exported",
+  });
+});
+
+test("delivery-state persistence failure remains retryable", async () => {
   await assert.rejects(
     routeEventDestinations(
       { id: "evt_1", eventName: "account.created" },
@@ -67,24 +125,17 @@ test("preserves current fail-fast semantics until independent recovery exists", 
           {
             name: "posthog",
             async exportEvent() {
-              calls.push("posthog");
-              throw new Error("destination failed");
-            },
-          },
-          {
-            name: "statsig",
-            async exportEvent() {
-              calls.push("statsig");
               return { status: "exported" };
             },
           },
         ],
+        async recordState() {
+          throw new Error("delivery state unavailable");
+        },
       },
     ),
-    /destination failed/,
+    /delivery state unavailable/,
   );
-
-  assert.deepEqual(calls, ["posthog"]);
 });
 
 test("rejects malformed destination definitions", async () => {
@@ -94,6 +145,7 @@ test("rejects malformed destination definitions", async () => {
       {},
       {
         destinations: [{ name: "", exportEvent: async () => ({}) }],
+        async recordState() {},
       },
     ),
     DestinationRouterConfigurationError,
