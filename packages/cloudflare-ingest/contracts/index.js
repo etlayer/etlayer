@@ -1,11 +1,13 @@
 import accountCreatedV1 from "./account.created.v1.js";
 import heroCtaClickedV1 from "./landing.hero.cta_clicked.v1.js";
 import heroExposedV1 from "./landing.hero.exposed.v1.js";
+import identityLinkedV1 from "./identity.linked.v1.js";
 
 const CONTRACTS = [
   heroExposedV1,
   heroCtaClickedV1,
   accountCreatedV1,
+  identityLinkedV1,
 ];
 
 const CONTRACTS_BY_KEY = new Map(
