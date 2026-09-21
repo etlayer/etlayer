@@ -15,7 +15,7 @@ Browser
   v
 Fixture Worker proxy
   |
-  | OTLP/HTTP
+  | OTLP/HTTP over Cloudflare Service Binding
   v
 ETLayer /v1/logs
 
@@ -66,3 +66,12 @@ Open that URL. The page automatically emits the hero exposure, then enables the 
 This fixture is not an SDK example and not a production identity system.
 
 It intentionally contains a tiny OTLP JSON encoder so it can test the protocol boundary independently of future ETLayer helper libraries.
+
+
+## Cloudflare Worker-to-Worker transport
+
+The deployed fixture uses a Cloudflare Service Binding named `ETLAYER` targeting the `etlayer-ingest` Worker.
+
+The application-level protocol remains OTLP/HTTP: the fixture constructs the same authenticated `POST /v1/logs` request, but delivers it through `env.ETLAYER.fetch(request)` rather than making a public `workers.dev` network hop.
+
+This matters because same-account Worker-to-Worker communication on `workers.dev` is expected to use Service Bindings.
