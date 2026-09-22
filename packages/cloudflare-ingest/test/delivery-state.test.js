@@ -40,7 +40,7 @@ test("records exported destination state separately from canonical events", asyn
 
   assert.equal(
     recorded.key,
-    "deliveries/posthog/evt%2F1.json",
+    "projects/etlayer-default/deliveries/posthog/evt%2F1.json",
   );
   assert.equal(archive.writes.length, 1);
 
@@ -85,7 +85,7 @@ test("records failed destination state with a serializable error", async () => {
 test("uses deterministic per-destination delivery state keys", () => {
   assert.equal(
     deliveryStateKey("statsig", "event 1"),
-    "deliveries/statsig/event%201.json",
+    "projects/etlayer-default/deliveries/statsig/event%201.json",
   );
 });
 
