@@ -228,3 +228,37 @@ test("agent actor does not replace the user analytics subject in PostHog", async
     "usr_42",
   );
 });
+
+
+test("trusted project provenance overrides a producer project claim in PostHog", async () => {
+  const projected = await projectToPostHog(
+    event({
+      provenance: {
+        version: 2,
+        projectId: "etlayer-secondary",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+      logRecord: {
+        eventName: "account.created",
+        attributes: [
+          {
+            key: "user.id",
+            value: { stringValue: "user-42" },
+          },
+          {
+            key: "etlayer.project.id",
+            value: { stringValue: "etlayer-default" },
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(
+    projected.properties["etlayer.project.id"],
+    "etlayer-secondary",
+  );
+});
