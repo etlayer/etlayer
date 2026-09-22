@@ -1,5 +1,7 @@
 import { findContract } from "../contracts/index.js";
 
+export const CONTRACT_VALIDATOR_VERSION = 1;
+
 export function validateEventContract(event, options = {}) {
   validateManagedEvent(event);
 
@@ -9,6 +11,7 @@ export function validateEventContract(event, options = {}) {
   if (rawVersion == null) {
     return {
       status: "unmanaged",
+      validatorVersion: CONTRACT_VALIDATOR_VERSION,
       schemaVersion: null,
       contractId: null,
       errors: [],
@@ -96,6 +99,7 @@ export function validateEventContract(event, options = {}) {
 
   return {
     status: "valid",
+    validatorVersion: CONTRACT_VALIDATOR_VERSION,
     schemaVersion,
     contractId: contract.id,
     errors: [],
@@ -109,6 +113,7 @@ export function decodeEventAttributes(event) {
 function blocked(schemaVersion, contractId, errors) {
   return {
     status: "blocked",
+    validatorVersion: CONTRACT_VALIDATOR_VERSION,
     schemaVersion,
     contractId,
     errors,
