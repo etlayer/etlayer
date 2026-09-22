@@ -50,6 +50,7 @@ test("validates the reference hero exposure contract", () => {
 
   assert.deepEqual(result, {
     status: "valid",
+    validatorVersion: 1,
     schemaVersion: 1,
     contractId: "landing.hero.exposed@1",
     errors: [],
@@ -139,6 +140,7 @@ test("treats unversioned events as unmanaged during migration", () => {
 
   assert.deepEqual(result, {
     status: "unmanaged",
+    validatorVersion: 1,
     schemaVersion: null,
     contractId: null,
     errors: [],
@@ -154,6 +156,7 @@ test("blocks a versioned event with no matching contract", () => {
 
   assert.deepEqual(result, {
     status: "blocked",
+    validatorVersion: 1,
     schemaVersion: 1,
     contractId: null,
     errors: [
@@ -200,6 +203,7 @@ test("validates identity.linked@1 as a backend-authoritative transition", () => 
 
   assert.deepEqual(result, {
     status: "valid",
+    validatorVersion: 1,
     schemaVersion: 1,
     contractId: "identity.linked@1",
     errors: [],
@@ -230,6 +234,7 @@ test("validates agent.tool.call@1 with explicit agent actor and user delegation"
 
   assert.deepEqual(result, {
     status: "valid",
+    validatorVersion: 1,
     schemaVersion: 1,
     contractId: "agent.tool.call@1",
     errors: [],
@@ -262,6 +267,7 @@ test("validates subagent delegation chain explicitly", () => {
 
   assert.deepEqual(result, {
     status: "valid",
+    validatorVersion: 1,
     schemaVersion: 1,
     contractId: "agent.subagent.tool.call@1",
     errors: [],
