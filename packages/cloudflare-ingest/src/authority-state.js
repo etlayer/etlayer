@@ -29,6 +29,7 @@ export async function recordAuthorityState(
     eventId: event.id,
     eventName: event.eventName,
     status: authority.status,
+    policyVersion: authority.policyVersion,
     profileId: authority.profileId,
     trustedProducerKind: authority.trustedProducerKind,
     claim: authority.claim,
@@ -51,6 +52,7 @@ export async function recordAuthorityState(
       event_id: event.id,
       event_name: event.eventName,
       status: authority.status,
+      policy_version: String(authority.policyVersion),
       profile_id: authority.profileId || "",
       trusted_producer_kind:
         authority.trustedProducerKind || "",
@@ -118,6 +120,8 @@ function validateEvent(event) {
 function validateAuthority(authority) {
   if (
     !authority ||
+    !Number.isSafeInteger(authority.policyVersion) ||
+    authority.policyVersion < 1 ||
     !["allowed", "blocked", "not_applicable"].includes(
       authority.status,
     ) ||
