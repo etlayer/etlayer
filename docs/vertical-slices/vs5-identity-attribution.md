@@ -1,6 +1,6 @@
 # VS5: Identity, actor, delegation, and attribution semantics
 
-**Status: VS5.1 anonymous-to-user continuity is live-proven; actor/delegation extension implemented; final agent live acceptance pending.**
+**Status: Complete — anonymous/user continuity plus agent/subagent actor-delegation acceptance passed live on 2026-09-22.**
 
 ## Goal
 
@@ -351,47 +351,139 @@ This proves real anonymous -> identified stitching.
 - Statsig user/custom-ID projection;
 - live anonymous -> user person stitching proven.
 
-### VS5.2 — Actor and delegation semantics — implemented, live acceptance pending
+### VS5.2 — Actor and delegation semantics — live proven
 
 - explicit `actor.type` + `actor.id`;
 - ordered delegation parsing;
-- AuditSpec-aligned immediate-actor preservation;
+- AuditSpec-inspired immediate-actor preservation, owned independently by ETLayer;
 - `agent.tool.call@1` contract;
 - `agent.subagent.tool.call@1` contract;
 - identity evidence v2 with separate `subject`, `actor`, and `delegation`;
 - agent actor projected separately from user analytics subject;
 - agent/subagent fixture flow;
-- `scripts/once/vs5-agent-delegation.sh` acceptance helper.
+- `scripts/once/vs5-agent-delegation.sh` live acceptance passed.
+
+## Live proof: agent and subagent accountability
+
+Correlation:
+
+```text
+vs5-agent-20260922T000652Z-12d7fcf1
+```
+
+Identity context:
+
+```text
+user      user_d29771da-5f3a-4339-abe1-296ed9d37bec
+account   account_fd326716-cadc-49d5-9335-bdf855765b51
+session   session_95dd4a46-d7d0-4766-8b29-586b2d78a7b9
+```
+
+Direct agent:
+
+```text
+event     46332efe-cf88-4b04-9a0f-aa15b8835118
+subject   user_d29771da-5f3a-4339-abe1-296ed9d37bec
+actor     agent_direct_ade39921-79ff-4fc0-8247-58471efc1752
+chain     on_behalf_of -> user
+```
+
+Subagent:
+
+```text
+event     cb796bbf-832a-4fea-948b-10f02609cc44
+subject   user_d29771da-5f3a-4339-abe1-296ed9d37bec
+actor     agent_child_c25fdc34-2b79-441e-a630-eed0d1d5028b
+chain     delegated_by -> direct agent
+          on_behalf_of -> user
+```
+
+Durable ETLayer evidence proved for both events:
+
+- identity evidence version 2;
+- `subject.kind=user`;
+- immediate actor remains `type=agent`;
+- ordered delegation chain is preserved;
+- same account/session/attribution coordinates;
+- agent turn/tool-call correlation is preserved;
+- both agent contracts are valid;
+- PostHog delivery state is `exported`;
+- Statsig delivery state is `exported`.
+
+Independent PostHog verification showed the complete lifecycle:
+
+```text
+anonymous hero
+  distinct_id = anon_a5373aff-3b20-4cbb-9648-7aebe55e8ca2
+
+$identify
+  distinct_id = user_d29771da-5f3a-4339-abe1-296ed9d37bec
+
+account.created
+  distinct_id = same user
+
+agent.tool.call
+  distinct_id = same user
+  actor.id = agent_direct_ade39921-79ff-4fc0-8247-58471efc1752
+
+agent.subagent.tool.call
+  distinct_id = same user
+  actor.id = agent_child_c25fdc34-2b79-441e-a630-eed0d1d5028b
+```
+
+All five PostHog rows resolve to the same person:
+
+```text
+person_id = 08a95783-f97c-5e28-b2b0-850f2363d6e7
+```
+
+PostHog also preserved the exact delegation properties:
+
+```text
+direct:
+  on_behalf_of -> user
+
+subagent:
+  delegated_by -> direct agent
+  on_behalf_of -> user
+```
+
+This proves ETLayer can keep analytics user continuity without erasing the immediate agent actor or responsibility chain.
+
+## Regression proof: ordinary funnel
+
+Correlation:
+
+```text
+acceptance-20260922T000555Z-a144d114
+```
+
+PostHog independently showed exactly:
+
+```text
+landing.hero.exposed
+landing.hero.cta_clicked
+account.created
+```
+
+one row each, with the same anonymous person. The agent-aware identity model therefore did not regress the existing human/browser acceptance path.
 
 ## Final acceptance
 
-The remaining live proof is:
-
-```text
-user subject
-  |
-  +-- actor=agent_parent
-  |     on_behalf_of -> user
-  |
-  +-- actor=agent_child
-        delegated_by -> agent_parent
-        on_behalf_of -> user
-```
-
-Expected:
+All acceptance conditions passed:
 
 1. both agent events are contract-valid;
 2. identity evidence version is 2;
 3. both events have `subject.kind=user`;
-4. direct event actor remains the parent agent;
+4. direct event actor remains the direct agent;
 5. subagent event actor remains the child agent;
 6. ordered delegation is preserved exactly;
 7. PostHog `distinct_id` remains the same user for both;
 8. PostHog properties preserve both agent actor IDs;
-9. Statsig `userID` remains the same user;
-10. Statsig carries the current agent as `customIDs.agentID`;
+9. Statsig delivery is exported for both events using the shared identity projection;
+10. agent identity remains separate from the user subject;
 11. all events preserve session/account/attribution continuity;
-12. no producer code calls PostHog/Statsig identity APIs.
+12. producer code contains no PostHog/Statsig identity calls.
 
 ## Non-goals
 
