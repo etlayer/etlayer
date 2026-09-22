@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
+PROJECT_PREFIX="projects/$PROJECT_ID"
 RUN_ID="${RUN_ID:-vs4-privacy-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs4-privacy-$$.txt"
 
@@ -65,7 +67,7 @@ CORRELATION_ID="$(
 
 cd "$INGEST_DIR"
 
-PRIVACY_KEY="privacy/$EVENT_ID.json"
+PRIVACY_KEY="$PROJECT_PREFIX/privacy/$EVENT_ID.json"
 PRIVACY=""
 
 say "Waiting for durable privacy evidence"
@@ -112,7 +114,7 @@ node -e '
     state.status === "applied" &&
     state.policyVersion === 1 &&
     typeof state.sourceKey === "string" &&
-    state.sourceKey.startsWith("events/") &&
+    state.sourceKey.startsWith(`projects/${process.argv[2]}/events/`) &&
     ingestOk &&
     deliveryOk;
 
@@ -120,7 +122,7 @@ node -e '
     console.error("Unexpected privacy state:", JSON.stringify(state, null, 2));
     process.exit(1);
   }
-' "$PRIVACY" || die "Privacy evidence did not match VS4 policy."
+' "$PRIVACY" "$PROJECT_ID" || die "Privacy evidence did not match VS4 policy."
 
 SOURCE_KEY="$(
   node -e '
@@ -176,7 +178,7 @@ node -e '
 say "Verifying contract validation remains valid"
 VALIDATION="$(
   npx wrangler r2 object get \
-    "$ARCHIVE_BUCKET/validation/$EVENT_ID.json" \
+    "$ARCHIVE_BUCKET/$PROJECT_PREFIX/validation/$EVENT_ID.json" \
     --remote --pipe
 )" || die "Validation state is missing."
 
@@ -201,7 +203,7 @@ say "Verifying both destinations exported the privacy-sanitized event"
 for destination in posthog statsig; do
   DELIVERY="$(
     npx wrangler r2 object get \
-      "$ARCHIVE_BUCKET/deliveries/$destination/$EVENT_ID.json" \
+      "$ARCHIVE_BUCKET/$PROJECT_PREFIX/deliveries/$destination/$EVENT_ID.json" \
       --remote --pipe
   )" || die "$destination delivery state is missing."
 
