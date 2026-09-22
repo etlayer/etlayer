@@ -158,7 +158,10 @@ export async function handleBrowserEvent(request, env, options = {}) {
     env,
     payload.eventName,
     attributes,
-    options,
+    {
+      ...options,
+      ingestProfile: "browser",
+    },
   );
 
   const responseBody = {
@@ -247,7 +250,10 @@ export async function handleAccountCreated(request, env, options = {}) {
     env,
     "account.created",
     attributes,
-    options,
+    {
+      ...options,
+      ingestProfile: "backend",
+    },
   );
 
   const responseBody = {
@@ -298,7 +304,10 @@ export async function handleInvalidAccountAcceptance(
       "etlayer.producer.kind": "backend",
       "etlayer.authority.kind": "business_state",
     },
-    options,
+    {
+      ...options,
+      ingestProfile: "backend",
+    },
   );
 
   return jsonResponse(
@@ -381,7 +390,10 @@ export async function handlePrivacyAccountAcceptance(
       "user.email": "acceptance@example.test",
       "auth.token": "acceptance-secret-do-not-store",
     },
-    options,
+    {
+      ...options,
+      ingestProfile: "backend",
+    },
   );
 
   return jsonResponse(
@@ -487,6 +499,7 @@ export async function handleIdentityFlowAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "backend",
       eventId: linkEventId,
     },
   );
@@ -515,6 +528,7 @@ export async function handleIdentityFlowAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "backend",
       eventId: accountEventId,
     },
   );
@@ -612,8 +626,8 @@ export async function handleAgentDelegationAcceptance(
     "session.id": context.sessionId,
     "correlation.id": context.correlationId,
     ...attributionAttributes(context.attribution),
-    "etlayer.producer.kind": "backend",
-    "etlayer.authority.kind": "business_state",
+    "etlayer.producer.kind": "agent_runtime",
+    "etlayer.authority.kind": "agent_runtime",
   };
 
   await env.STATE.put(
@@ -652,6 +666,7 @@ export async function handleAgentDelegationAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "agent-runtime",
       eventId: directEventId,
     },
   );
@@ -714,6 +729,7 @@ export async function handleAgentDelegationAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "agent-runtime",
       eventId: childEventId,
     },
   );
@@ -790,8 +806,13 @@ export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
     "content-type": "application/json",
   };
 
-  if (env.ETLAYER_INGEST_KEY) {
-    headers.authorization = `Bearer ${env.ETLAYER_INGEST_KEY}`;
+  const ingestKey = ingestKeyForProfile(
+    env,
+    options.ingestProfile,
+  );
+
+  if (ingestKey) {
+    headers.authorization = `Bearer ${ingestKey}`;
   }
 
   const request = new Request(env.ETLAYER_OTLP_ENDPOINT, {
@@ -832,6 +853,38 @@ export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
       eventName,
     },
   };
+}
+
+function ingestKeyForProfile(env, profile) {
+  if (profile === "browser") {
+    return (
+      env.ETLAYER_BROWSER_INGEST_KEY ||
+      env.ETLAYER_INGEST_KEY ||
+      null
+    );
+  }
+
+  if (profile === "agent-runtime") {
+    return (
+      env.ETLAYER_AGENT_INGEST_KEY ||
+      env.ETLAYER_INGEST_KEY ||
+      null
+    );
+  }
+
+  if (profile === "backend") {
+    return (
+      env.ETLAYER_BACKEND_INGEST_KEY ||
+      env.ETLAYER_INGEST_KEY ||
+      null
+    );
+  }
+
+  return (
+    env.ETLAYER_INGEST_KEY ||
+    env.ETLAYER_BACKEND_INGEST_KEY ||
+    null
+  );
 }
 
 function contextForLanding(request, url) {
