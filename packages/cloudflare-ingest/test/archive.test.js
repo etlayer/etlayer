@@ -67,7 +67,7 @@ function queueMessage(body) {
 test("builds a deterministic UTC archive key and encodes event ids", () => {
   assert.equal(
     archiveKey(event()),
-    "events/2026/09/21/16/evt%2F123.json",
+    "projects/etlayer-default/events/2026/09/21/16/evt%2F123.json",
   );
 });
 
@@ -80,6 +80,7 @@ test("stores a new event immutably with replay metadata", async () => {
 
   const stored = archive.objects.get(result.key);
   assert.equal(JSON.parse(stored.body).id, "evt/123");
+  assert.equal(stored.customMetadata.project_id, "etlayer-default");
   assert.equal(stored.customMetadata.event_id, "evt/123");
   assert.equal(stored.customMetadata.event_name, "account.created");
   assert.match(stored.customMetadata.sha256, /^[a-f0-9]{64}$/);
