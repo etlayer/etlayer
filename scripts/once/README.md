@@ -297,3 +297,27 @@ The helper emits one contract-valid browser credential spoof that remains author
 - revalidation remains contract-valid, authority-blocked, and unrouted.
 
 The helper rotates the protected revalidation operator secret and redeploys the current ingest Worker before the revalidation assertion.
+
+
+## VS8 project-scoped configuration and isolation acceptance
+
+Run:
+
+```bash
+./scripts/once/vs8-project-isolation.sh
+```
+
+The helper is self-contained for acceptance credentials. It rotates the default browser/backend credentials, the secondary backend credential, and both project operator credentials, then keeps the default fixture synchronized.
+
+It proves:
+
+- trusted project identity comes from the authenticated credential, not `etlayer.project.id` in the payload;
+- the same logical event ID can exist independently in `etlayer-default` and `etlayer-secondary`;
+- canonical, validation, authority, privacy, identity, decision, and delivery evidence is physically project-namespaced;
+- the default project routes to PostHog + Statsig;
+- the secondary project routes to PostHog only;
+- default project operator credentials cannot operate on the secondary project;
+- project-scoped source keys cannot be smuggled across revalidation boundaries;
+- the secondary project cannot replay Statsig.
+
+Existing VS3-VS7 helpers default to `ETLAYER_PROJECT_ID=etlayer-default` after VS8.
