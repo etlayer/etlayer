@@ -1,6 +1,6 @@
 # VS6: Trusted provenance and authority
 
-**Status: VS6.1 implemented and green; live trusted-authority acceptance pending.**
+**Status: VS6 complete; live trusted-authority acceptance passed on 2026-09-22.**
 
 ## Goal
 
@@ -242,15 +242,87 @@ Versioned events that claim privileged authority through a legacy credential are
 - `scripts/once/vs6-trusted-authority.sh` is executable and self-checking;
 - unit/integration CI is green.
 
-### VS6.2 — Live acceptance — pending
+### VS6.2 — Live acceptance — complete
 
-- deploy current VS6 Worker + fixture;
-- run ordinary three-event funnel to prove no regression;
-- run `./scripts/once/vs6-trusted-authority.sh`;
-- independently verify allowed events in PostHog;
-- independently verify spoof correlations/events are absent from PostHog;
-- record canonical provenance and authority evidence in this document;
-- close #27 and merge the VS6 PR.
+Live acceptance passed on 2026-09-22 against the deployed Cloudflare reference runtime.
+
+Ordinary funnel regression:
+
+```text
+correlation.id = acceptance-20260922T111637Z-faa1da61
+landing.hero.exposed = faaaa127-d901-4406-abe9-3f57a4631ead
+landing.hero.cta_clicked = e373c788-aa4f-45c2-988d-6e320474fc16
+account.created = 60444be2-c5d2-4421-ab0a-8145fc3a5eb0
+```
+
+Trusted-authority acceptance:
+
+```text
+correlation.id = vs6-authority-20260922T111659Z-27839859
+
+ALLOW
+browser / interaction
+  landing.hero.exposed
+  888017bc-1e0d-4560-bb18-51377ec4310f
+
+backend / business_state
+  identity.linked
+  2d402909-93cb-4af4-b149-8377c1e3797d
+
+backend / business_state
+  account.created
+  8f56df4c-8faf-44fe-874b-5929f5b0b133
+
+agent-runtime / agent_runtime
+  agent.tool.call
+  91736c36-de2f-42a8-829c-8c5857bbecfa
+
+agent-runtime / agent_runtime
+  agent.subagent.tool.call
+  a52c6a8d-8618-4ed9-ae45-4c62d885eec7
+
+BLOCK
+browser credential claiming backend / business_state
+  account.created
+  60e590c8-cae0-489a-a0b9-ff1e565c2da2
+
+agent-runtime credential claiming backend / business_state
+  account.created
+  8f7f28dd-b31d-4063-bcd8-cf42b88350bb
+```
+
+For both spoof events:
+
+- the canonical event was preserved;
+- contract validation remained `valid`;
+- trusted provenance preserved the authenticated profile instead of trusting the payload claim;
+- authority was `blocked` with `producer_kind_mismatch` and `authority_not_allowed`;
+- no PostHog delivery state existed;
+- no Statsig delivery state existed;
+- no credential material was persisted.
+
+The acceptance helper verifies destination suppression at ETLayer's durable dispatch boundary by asserting that neither `deliveries/posthog/<event-id>.json` nor `deliveries/statsig/<event-id>.json` exists for either blocked spoof.
+
+Canonical revalidation of the preserved browser spoof returned:
+
+```text
+validation = valid
+authority  = blocked
+deliveries = []
+```
+
+The revalidated event retained:
+
+```text
+profileId           = browser
+trustedProducerKind = browser
+claimed producer    = backend
+claimed authority   = business_state
+```
+
+This proves the VS6 invariant:
+
+> producer payload claims can describe an assertion, but authenticated provenance controls authority and payloads cannot self-elevate trust.
 
 ## Non-goals
 
