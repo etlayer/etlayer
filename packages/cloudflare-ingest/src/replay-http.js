@@ -1,3 +1,4 @@
+import { authenticateProjectOperator } from "./operator-auth.js";
 import {
   replayPostHogRange,
   replayStatsigRange,
@@ -12,11 +13,21 @@ const REPLAY_HANDLERS = {
 };
 
 export async function handlePostHogReplay(request, env, options = {}) {
-  return handleDestinationReplay(request, env, "posthog", options);
+  return handleDestinationReplay(
+    request,
+    env,
+    "posthog",
+    options,
+  );
 }
 
 export async function handleStatsigReplay(request, env, options = {}) {
-  return handleDestinationReplay(request, env, "statsig", options);
+  return handleDestinationReplay(
+    request,
+    env,
+    "statsig",
+    options,
+  );
 }
 
 export async function handleDestinationReplay(
@@ -25,17 +36,6 @@ export async function handleDestinationReplay(
   destination,
   options = {},
 ) {
-  if (!env.ETLAYER_REPLAY_KEY) {
-    return jsonResponse({ error: "replay key is not configured" }, 503);
-  }
-
-  if (
-    request.headers.get("authorization") !==
-    `Bearer ${env.ETLAYER_REPLAY_KEY}`
-  ) {
-    return jsonResponse({ error: "invalid replay credential" }, 401);
-  }
-
   if (!isJsonContentType(request.headers.get("content-type"))) {
     return jsonResponse(
       { error: "content-type must be application/json" },
@@ -47,7 +47,53 @@ export async function handleDestinationReplay(
   try {
     input = await request.json();
   } catch {
-    return jsonResponse({ error: "request body is not valid JSON" }, 400);
+    return jsonResponse(
+      { error: "request body is not valid JSON" },
+      400,
+    );
+  }
+
+  if (
+    typeof input?.projectId !== "string" ||
+    input.projectId.length === 0
+  ) {
+    return jsonResponse(
+      { error: "projectId is required" },
+      400,
+    );
+  }
+
+  const authenticate =
+    options.authenticateProjectOperator ||
+    authenticateProjectOperator;
+  const authentication = authenticate(
+    request,
+    env,
+    input.projectId,
+  );
+
+  if (!authentication.ok) {
+    if (
+      authentication.reason ===
+      "operator_credential_not_configured"
+    ) {
+      return jsonResponse(
+        { error: "operator credential is not configured for project" },
+        503,
+      );
+    }
+
+    if (authentication.reason === "unknown_project") {
+      return jsonResponse(
+        { error: "unknown project" },
+        400,
+      );
+    }
+
+    return jsonResponse(
+      { error: "invalid operator credential for project" },
+      401,
+    );
   }
 
   try {
@@ -57,7 +103,10 @@ export async function handleDestinationReplay(
 
     if (!replay) {
       return jsonResponse(
-        { error: `unsupported replay destination: ${destination}` },
+        {
+          error:
+            `unsupported replay destination: ${destination}`,
+        },
         404,
       );
     }
@@ -78,9 +127,13 @@ export async function handleDestinationReplay(
     }
 
     console.error("failed to replay ETLayer events", {
+      projectId: input?.projectId,
       destination,
       replayId: input?.replayId,
-      error: error instanceof Error ? error.message : String(error),
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
     });
 
     return jsonResponse(
