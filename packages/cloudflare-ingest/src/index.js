@@ -72,6 +72,18 @@ export default {
           deliveryPrivacyActions: processed.privacy.deliveryActions.length,
         });
 
+        console.info("resolved ETLayer identity", {
+          eventId: event.id,
+          eventName: event.eventName,
+          identityStatus: processed.identity.status,
+          subjectIdentityKind: processed.identity.subject.kind,
+          subjectIdentityId: processed.identity.subject.id,
+          identityTransition: processed.identity.transition?.kind || null,
+          actorType: processed.identity.actor?.type || null,
+          actorId: processed.identity.actor?.id || null,
+          delegationDepth: processed.identity.delegation.length,
+        });
+
         for (const delivery of processed.deliveries) {
           console.info("projected ETLayer event", {
             eventId: event.id,

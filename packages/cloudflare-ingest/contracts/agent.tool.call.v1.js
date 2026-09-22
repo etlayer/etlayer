@@ -1,0 +1,22 @@
+export default {
+  id: "agent.tool.call@1",
+  eventName: "agent.tool.call",
+  version: 1,
+  required: {
+    "actor.type": { type: "string", const: "agent" },
+    "actor.id": { type: "string" },
+    "user.id": { type: "string" },
+    "account.id": { type: "string" },
+    "session.id": { type: "string" },
+    "correlation.id": { type: "string" },
+    "causation.id": { type: "string" },
+    "delegation.0.relationship": { type: "string", const: "on_behalf_of" },
+    "delegation.0.principal.type": { type: "string", const: "user" },
+    "delegation.0.principal.id": { type: "string" },
+    "agent.turn.id": { type: "string" },
+    "agent.tool_call.id": { type: "string" },
+    "etlayer.producer.kind": { type: "string", const: "backend" },
+    "etlayer.authority.kind": { type: "string", const: "business_state" },
+  },
+  forbidden: [],
+};

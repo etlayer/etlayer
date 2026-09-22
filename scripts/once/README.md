@@ -155,3 +155,78 @@ The helper verifies:
 - both PostHog and Statsig delivery states are `exported`.
 
 The destination adapters receive the privacy-sanitized event. Live PostHog verification can additionally confirm that the dropped fields are absent from the stored destination properties.
+
+
+## VS5 identity continuity acceptance
+
+After deploying the current ETLayer Worker and fixture, this helper proves anonymous-to-user identity continuity without any producer-side PostHog or Statsig identify calls.
+
+Run:
+
+```bash
+./scripts/once/vs5-identity-continuity.sh
+```
+
+The helper creates an isolated session with:
+
+```text
+attribution.source   docs
+attribution.medium   acceptance
+attribution.campaign vs5
+```
+
+It then emits:
+
+```text
+landing.hero.exposed
+        ↓
+identity.linked@1
+        ↓
+account.created
+```
+
+and verifies:
+
+- the anonymous event resolves primary identity to `actor.anonymous.id`;
+- `identity.linked@1` resolves primary identity to `user.id`;
+- the link records an `anonymous_to_user` transition;
+- the subsequent account event keeps the same user/anonymous/session/account coordinates;
+- attribution is identical across the three events;
+- all three events are contract-valid;
+- PostHog delivery state is exported for all three;
+- Statsig delivery state is exported for all three.
+
+Independent PostHog verification should additionally confirm that `identity.linked` was projected as `$identify`, with `$anon_distinct_id`, and that pre/post-identification events resolve to the same PostHog person.
+
+
+## VS5 agent delegation acceptance
+
+After deploying the current ETLayer Worker and fixture, run:
+
+```bash
+./scripts/once/vs5-agent-delegation.sh
+```
+
+The helper creates one attributed product journey and emits:
+
+```text
+anonymous hero
+  -> identity.linked
+  -> account.created
+  -> agent.tool.call
+  -> agent.subagent.tool.call
+```
+
+It verifies:
+
+- the direct agent event has `subject=user` while `actor.type=agent`;
+- the direct delegation is `on_behalf_of -> user`;
+- the subagent event has `subject=user` while the immediate actor remains the child agent;
+- the subagent delegation chain is ordered as:
+  - `delegated_by -> parent agent`
+  - `on_behalf_of -> user`;
+- both agent events are contract-valid;
+- session/account/attribution continuity is preserved;
+- PostHog and Statsig delivery state is `exported` for both events.
+
+Independent PostHog verification should additionally confirm that both agent events use the same user `distinct_id` while preserving different `actor.id` properties.

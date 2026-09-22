@@ -96,6 +96,7 @@ test("queue preserves an invalid event before blocking destination routing", asy
     "events/2026/09/22/00/evt-blocked-1.json",
     "validation/evt-blocked-1.json",
     "privacy/evt-blocked-1.json",
+    "identity/evt-blocked-1.json",
   ]);
 
   const validation = JSON.parse(

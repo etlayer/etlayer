@@ -89,8 +89,10 @@ test("uses anonymous identity when user.id is absent", () => {
   });
 
   const payload = projectToStatsig(event);
-  assert.equal(payload.user.userID, "anon_456");
-  assert.equal(payload.user.customIDs, undefined);
+  assert.equal(payload.user.userID, undefined);
+  assert.deepEqual(payload.user.customIDs, {
+    anonymousID: "anon_456",
+  });
 });
 
 test("does not reinterpret a product exposure event as a Statsig exposure", () => {
@@ -170,4 +172,58 @@ test("can be deliberately disabled for destination outage acceptance", async () 
     status: "skipped",
     reason: "statsig_disabled",
   });
+});
+
+
+test("identified Statsig event carries all known IDs", () => {
+  const payload = projectToStatsig(
+    managedEvent({
+      eventName: "identity.linked",
+      logRecord: {
+        attributes: [
+          { key: "user.id", value: { stringValue: "user_123" } },
+          { key: "actor.anonymous.id", value: { stringValue: "anon_456" } },
+          { key: "session.id", value: { stringValue: "session_777" } },
+          { key: "account.id", value: { stringValue: "account_789" } },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(payload.user.userID, "user_123");
+  assert.deepEqual(payload.user.customIDs, {
+    anonymousID: "anon_456",
+    sessionID: "session_777",
+    accountID: "account_789",
+  });
+});
+
+
+test("agent actor is retained as Statsig custom identity while user remains subject", () => {
+  const payload = projectToStatsig(
+    managedEvent({
+      eventName: "agent.tool.call",
+      logRecord: {
+        attributes: [
+          { key: "actor.type", value: { stringValue: "agent" } },
+          { key: "actor.id", value: { stringValue: "agent_hanna" } },
+          { key: "user.id", value: { stringValue: "usr_42" } },
+          { key: "account.id", value: { stringValue: "account_1" } },
+          { key: "session.id", value: { stringValue: "session_1" } },
+          { key: "delegation.0.relationship", value: { stringValue: "on_behalf_of" } },
+          { key: "delegation.0.principal.type", value: { stringValue: "user" } },
+          { key: "delegation.0.principal.id", value: { stringValue: "usr_42" } },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(payload.user.userID, "usr_42");
+  assert.deepEqual(payload.user.customIDs, {
+    sessionID: "session_1",
+    accountID: "account_1",
+    agentID: "agent_hanna",
+  });
+  assert.equal(payload.metadata["actor.type"], "agent");
+  assert.equal(payload.metadata["actor.id"], "agent_hanna");
 });

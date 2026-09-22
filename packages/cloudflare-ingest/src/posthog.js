@@ -1,3 +1,5 @@
+import { resolveEventIdentity } from "./identity.js";
+
 export async function exportToPostHog(event, env, options = {}) {
   if (env.POSTHOG_EXPORT_DISABLED === "1") {
     return { status: "skipped", reason: "posthog_disabled" };
@@ -65,14 +67,26 @@ export async function projectToPostHog(event, options = {}) {
 
   addDeliveryMetadata(properties, options.delivery);
 
-  const identity = chooseDistinctId(properties, event.id);
-  if (!identity.processPersonProfile) {
+  const identity = resolveEventIdentity(event);
+  const isIdentityLink =
+    event.eventName === "identity.linked" &&
+    identity.userId &&
+    identity.anonymousId;
+
+  if (isIdentityLink) {
+    properties.$anon_distinct_id = identity.anonymousId;
+  } else if (
+    identity.subject.kind !== "user" &&
+    identity.subject.kind !== "anonymous"
+  ) {
     properties.$process_person_profile = false;
   }
 
   return {
-    event: event.eventName,
-    distinct_id: identity.distinctId,
+    event: isIdentityLink ? "$identify" : event.eventName,
+    distinct_id: isIdentityLink
+      ? identity.userId
+      : identity.subject.id.slice(0, 200),
     timestamp: eventTimestamp(event),
     uuid: await stablePostHogUuid(event.id, options.crypto || globalThis.crypto),
     properties,
@@ -117,28 +131,6 @@ function addDeliveryMetadata(properties, delivery) {
   if (typeof delivery.replayId === "string" && delivery.replayId.length > 0) {
     properties["etlayer.replay.id"] = delivery.replayId;
   }
-}
-
-function chooseDistinctId(properties, eventId) {
-  for (const key of [
-    "user.id",
-    "actor.anonymous.id",
-    "session.id",
-    "account.id",
-  ]) {
-    const value = properties[key];
-    if (typeof value === "string" && value.length > 0) {
-      return {
-        distinctId: value.slice(0, 200),
-        processPersonProfile: key === "user.id" || key === "actor.anonymous.id",
-      };
-    }
-  }
-
-  return {
-    distinctId: `etlayer:${eventId}`.slice(0, 200),
-    processPersonProfile: false,
-  };
 }
 
 function eventTimestamp(event) {

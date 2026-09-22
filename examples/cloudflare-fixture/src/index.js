@@ -5,6 +5,10 @@ const BROWSER_EVENTS = new Set([
 
 const ACTOR_COOKIE = "etel_actor_id";
 const FUNNEL_COOKIE = "etel_funnel_id";
+const SESSION_COOKIE = "etel_session_id";
+const ATTR_SOURCE_COOKIE = "etel_attr_source";
+const ATTR_MEDIUM_COOKIE = "etel_attr_medium";
+const ATTR_CAMPAIGN_COOKIE = "etel_attr_campaign";
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 
 export default {
@@ -53,6 +57,20 @@ export default {
       url.pathname === "/api/acceptance/privacy-account"
     ) {
       return handlePrivacyAccountAcceptance(request, env);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/acceptance/identity-flow"
+    ) {
+      return handleIdentityFlowAcceptance(request, env);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/acceptance/agent-flow"
+    ) {
+      return handleAgentDelegationAcceptance(request, env);
     }
 
     return new Response("Not found", { status: 404 });
@@ -124,7 +142,9 @@ export async function handleBrowserEvent(request, env, options = {}) {
   const attributes = {
     ...sanitizeAttributes(payload.attributes),
     "actor.anonymous.id": context.actorId,
+    "session.id": context.sessionId,
     "correlation.id": context.correlationId,
+    ...attributionAttributes(context.attribution),
     "etlayer.producer.kind": "browser",
     "etlayer.authority.kind": "interaction",
     "experiment.id": "hero.v1",
@@ -213,7 +233,9 @@ export async function handleAccountCreated(request, env, options = {}) {
   const attributes = {
     "actor.anonymous.id": context.actorId,
     "account.id": accountId,
+    "session.id": context.sessionId,
     "correlation.id": context.correlationId,
+    ...attributionAttributes(context.attribution),
     "etlayer.producer.kind": "backend",
     "etlayer.authority.kind": "business_state",
   };
@@ -377,6 +399,346 @@ export async function handlePrivacyAccountAcceptance(
   );
 }
 
+export async function handleIdentityFlowAcceptance(
+  request,
+  env,
+  options = {},
+) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse(
+      { ok: false, error: "missing_funnel_context" },
+      409,
+    );
+  }
+
+  if (!env.STATE || typeof env.STATE.put !== "function") {
+    return jsonResponse(
+      { ok: false, error: "missing_backend_state" },
+      503,
+    );
+  }
+
+  const payload = (await readJson(request)) || {};
+  const causationId =
+    safeIdentifier(payload.causationId) ||
+    "vs5_identity_acceptance_root";
+
+  const userId =
+    options.userId ||
+    `user_${crypto.randomUUID()}`;
+  const accountId =
+    options.accountId ||
+    `account_${crypto.randomUUID()}`;
+  const createdAt = new Date(
+    options.nowMs ?? Date.now(),
+  ).toISOString();
+
+  await env.STATE.put(
+    `users/${userId}.json`,
+    JSON.stringify({
+      id: userId,
+      createdAt,
+      actorAnonymousId: context.actorId,
+      sessionId: context.sessionId,
+      correlationId: context.correlationId,
+      acceptanceKind: "identity",
+    }),
+  );
+
+  await env.STATE.put(
+    `accounts/${accountId}.json`,
+    JSON.stringify({
+      id: accountId,
+      createdAt,
+      userId,
+      actorAnonymousId: context.actorId,
+      sessionId: context.sessionId,
+      correlationId: context.correlationId,
+      acceptanceKind: "identity",
+    }),
+  );
+
+  const common = {
+    "actor.anonymous.id": context.actorId,
+    "user.id": userId,
+    "account.id": accountId,
+    "session.id": context.sessionId,
+    "correlation.id": context.correlationId,
+    ...attributionAttributes(context.attribution),
+    "etlayer.producer.kind": "backend",
+    "etlayer.authority.kind": "business_state",
+  };
+
+  const {
+    linkEventId,
+    accountEventId,
+    userId: _userId,
+    accountId: _accountId,
+    ...emitOptions
+  } = options;
+
+  const linkResult = await emitOtlpEvent(
+    env,
+    "identity.linked",
+    {
+      ...common,
+      "causation.id": causationId,
+    },
+    {
+      ...emitOptions,
+      eventId: linkEventId,
+    },
+  );
+
+  if (
+    linkResult.status < 200 ||
+    linkResult.status >= 300 ||
+    !linkResult.body?.ok
+  ) {
+    return jsonResponse(
+      {
+        ...linkResult.body,
+        correlationId: context.correlationId,
+        stage: "identity.linked",
+      },
+      linkResult.status,
+    );
+  }
+
+  const accountResult = await emitOtlpEvent(
+    env,
+    "account.created",
+    {
+      ...common,
+      "causation.id": linkResult.body.eventId,
+    },
+    {
+      ...emitOptions,
+      eventId: accountEventId,
+    },
+  );
+
+  return jsonResponse(
+    {
+      ok: accountResult.body?.ok === true,
+      correlationId: context.correlationId,
+      anonymousId: context.actorId,
+      sessionId: context.sessionId,
+      userId,
+      accountId,
+      identityEventId: linkResult.body.eventId,
+      accountEventId: accountResult.body?.eventId || null,
+      attribution: context.attribution,
+    },
+    accountResult.status,
+  );
+}
+
+export async function handleAgentDelegationAcceptance(
+  request,
+  env,
+  options = {},
+) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse(
+      { ok: false, error: "missing_funnel_context" },
+      409,
+    );
+  }
+
+  if (!env.STATE || typeof env.STATE.put !== "function") {
+    return jsonResponse(
+      { ok: false, error: "missing_backend_state" },
+      503,
+    );
+  }
+
+  const payload = (await readJson(request)) || {};
+  const userId =
+    safeIdentifier(payload.userId) ||
+    safeIdentifier(options.userId);
+  const accountId =
+    safeIdentifier(payload.accountId) ||
+    safeIdentifier(options.accountId);
+  const causationId =
+    safeIdentifier(payload.causationId) ||
+    "vs5_agent_acceptance_root";
+
+  if (!userId || !accountId) {
+    return jsonResponse(
+      { ok: false, error: "missing_identity_context" },
+      400,
+    );
+  }
+
+  const directAgentId =
+    safeIdentifier(options.directAgentId) ||
+    `agent_direct_${crypto.randomUUID()}`;
+  const childAgentId =
+    safeIdentifier(options.childAgentId) ||
+    `agent_child_${crypto.randomUUID()}`;
+  const directTurnId =
+    safeIdentifier(options.directTurnId) ||
+    `turn_${crypto.randomUUID()}`;
+  const childTurnId =
+    safeIdentifier(options.childTurnId) ||
+    `turn_${crypto.randomUUID()}`;
+  const directToolCallId =
+    safeIdentifier(options.directToolCallId) ||
+    `call_${crypto.randomUUID()}`;
+  const childToolCallId =
+    safeIdentifier(options.childToolCallId) ||
+    `call_${crypto.randomUUID()}`;
+
+  const {
+    directEventId,
+    childEventId,
+    userId: _userId,
+    accountId: _accountId,
+    directAgentId: _directAgentId,
+    childAgentId: _childAgentId,
+    directTurnId: _directTurnId,
+    childTurnId: _childTurnId,
+    directToolCallId: _directToolCallId,
+    childToolCallId: _childToolCallId,
+    ...emitOptions
+  } = options;
+
+  const common = {
+    "user.id": userId,
+    "account.id": accountId,
+    "session.id": context.sessionId,
+    "correlation.id": context.correlationId,
+    ...attributionAttributes(context.attribution),
+    "etlayer.producer.kind": "backend",
+    "etlayer.authority.kind": "business_state",
+  };
+
+  await env.STATE.put(
+    `agent-actions/${directToolCallId}.json`,
+    JSON.stringify({
+      actorType: "agent",
+      actorId: directAgentId,
+      userId,
+      accountId,
+      sessionId: context.sessionId,
+      toolCallId: directToolCallId,
+      result: "succeeded",
+      delegation: [
+        {
+          relationship: "on_behalf_of",
+          principal: { type: "user", id: userId },
+        },
+      ],
+    }),
+  );
+
+  const directResult = await emitOtlpEvent(
+    env,
+    "agent.tool.call",
+    {
+      ...common,
+      "actor.type": "agent",
+      "actor.id": directAgentId,
+      "causation.id": causationId,
+      "delegation.0.relationship": "on_behalf_of",
+      "delegation.0.principal.type": "user",
+      "delegation.0.principal.id": userId,
+      "agent.turn.id": directTurnId,
+      "agent.tool_call.id": directToolCallId,
+      "tool.name": "update_file",
+    },
+    {
+      ...emitOptions,
+      eventId: directEventId,
+    },
+  );
+
+  if (
+    directResult.status < 200 ||
+    directResult.status >= 300 ||
+    !directResult.body?.ok
+  ) {
+    return jsonResponse(
+      {
+        ...directResult.body,
+        correlationId: context.correlationId,
+        stage: "agent.tool.call",
+      },
+      directResult.status,
+    );
+  }
+
+  await env.STATE.put(
+    `agent-actions/${childToolCallId}.json`,
+    JSON.stringify({
+      actorType: "agent",
+      actorId: childAgentId,
+      userId,
+      accountId,
+      sessionId: context.sessionId,
+      toolCallId: childToolCallId,
+      result: "succeeded",
+      delegation: [
+        {
+          relationship: "delegated_by",
+          principal: { type: "agent", id: directAgentId },
+        },
+        {
+          relationship: "on_behalf_of",
+          principal: { type: "user", id: userId },
+        },
+      ],
+    }),
+  );
+
+  const childResult = await emitOtlpEvent(
+    env,
+    "agent.subagent.tool.call",
+    {
+      ...common,
+      "actor.type": "agent",
+      "actor.id": childAgentId,
+      "causation.id": directResult.body.eventId,
+      "delegation.0.relationship": "delegated_by",
+      "delegation.0.principal.type": "agent",
+      "delegation.0.principal.id": directAgentId,
+      "delegation.1.relationship": "on_behalf_of",
+      "delegation.1.principal.type": "user",
+      "delegation.1.principal.id": userId,
+      "agent.turn.id": childTurnId,
+      "agent.tool_call.id": childToolCallId,
+      "tool.name": "update_file",
+    },
+    {
+      ...emitOptions,
+      eventId: childEventId,
+    },
+  );
+
+  return jsonResponse(
+    {
+      ok: childResult.body?.ok === true,
+      correlationId: context.correlationId,
+      sessionId: context.sessionId,
+      userId,
+      accountId,
+      directAgentId,
+      childAgentId,
+      directEventId: directResult.body?.eventId || null,
+      childEventId: childResult.body?.eventId || null,
+      directTurnId,
+      childTurnId,
+      directToolCallId,
+      childToolCallId,
+      attribution: context.attribution,
+    },
+    childResult.status,
+  );
+}
+
 export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
   if (!env.ETLAYER_OTLP_ENDPOINT) {
     return {
@@ -475,6 +837,7 @@ export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
 function contextForLanding(request, url) {
   const cookies = parseCookies(request.headers.get("cookie"));
   let actorId = safeIdentifier(cookies[ACTOR_COOKIE]);
+  let sessionId = safeIdentifier(cookies[SESSION_COOKIE]);
   const setCookies = [];
 
   if (!actorId) {
@@ -486,15 +849,48 @@ function contextForLanding(request, url) {
     );
   }
 
+  if (!sessionId) {
+    sessionId = `session_${crypto.randomUUID()}`;
+    setCookies.push(cookieHeader(SESSION_COOKIE, sessionId));
+  }
+
   const requestedRun = safeIdentifier(url.searchParams.get("run"));
   const correlationId =
     requestedRun || `funnel_${crypto.randomUUID()}`;
 
   setCookies.push(cookieHeader(FUNNEL_COOKIE, correlationId));
 
+  const attribution = {
+    source:
+      safeIdentifier(url.searchParams.get("utm_source")) ||
+      safeIdentifier(cookies[ATTR_SOURCE_COOKIE]),
+    medium:
+      safeIdentifier(url.searchParams.get("utm_medium")) ||
+      safeIdentifier(cookies[ATTR_MEDIUM_COOKIE]),
+    campaign:
+      safeIdentifier(url.searchParams.get("utm_campaign")) ||
+      safeIdentifier(cookies[ATTR_CAMPAIGN_COOKIE]),
+  };
+
+  for (const [cookie, value] of [
+    [ATTR_SOURCE_COOKIE, attribution.source],
+    [ATTR_MEDIUM_COOKIE, attribution.medium],
+    [ATTR_CAMPAIGN_COOKIE, attribution.campaign],
+  ]) {
+    if (value) {
+      setCookies.push(
+        cookieHeader(cookie, value, {
+          maxAge: COOKIE_MAX_AGE_SECONDS,
+        }),
+      );
+    }
+  }
+
   return {
     actorId,
+    sessionId,
     correlationId,
+    attribution,
     setCookies,
   };
 }
@@ -502,11 +898,33 @@ function contextForLanding(request, url) {
 function contextFromRequest(request) {
   const cookies = parseCookies(request.headers.get("cookie"));
   const actorId = safeIdentifier(cookies[ACTOR_COOKIE]);
+  const sessionId = safeIdentifier(cookies[SESSION_COOKIE]);
   const correlationId = safeIdentifier(cookies[FUNNEL_COOKIE]);
 
-  if (!actorId || !correlationId) return null;
+  if (!actorId || !sessionId || !correlationId) return null;
 
-  return { actorId, correlationId };
+  return {
+    actorId,
+    sessionId,
+    correlationId,
+    attribution: {
+      source: safeIdentifier(cookies[ATTR_SOURCE_COOKIE]),
+      medium: safeIdentifier(cookies[ATTR_MEDIUM_COOKIE]),
+      campaign: safeIdentifier(cookies[ATTR_CAMPAIGN_COOKIE]),
+    },
+  };
+}
+
+function attributionAttributes(attribution) {
+  if (!attribution) return {};
+
+  return Object.fromEntries(
+    [
+      ["attribution.source", attribution.source],
+      ["attribution.medium", attribution.medium],
+      ["attribution.campaign", attribution.campaign],
+    ].filter(([, value]) => typeof value === "string" && value.length > 0),
+  );
 }
 
 function safeIdentifier(value) {

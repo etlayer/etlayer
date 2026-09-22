@@ -1,3 +1,5 @@
+import { resolveEventIdentity } from "./identity.js";
+import { recordIdentityState } from "./identity-state.js";
 import { applyDeliveryPrivacy } from "./privacy.js";
 import { recordPrivacyState } from "./privacy-state.js";
 import { routeEventDestinations } from "./destinations.js";
@@ -16,6 +18,10 @@ export async function processPersistedEvent(
     options.applyDeliveryPrivacy || applyDeliveryPrivacy;
   const recordPrivacy =
     options.recordPrivacyState || recordPrivacyState;
+  const resolveIdentity =
+    options.resolveIdentity || resolveEventIdentity;
+  const recordIdentity =
+    options.recordIdentityState || recordIdentityState;
   const route = options.route || routeEventDestinations;
 
   const validation = validate(event, options.validation || {});
@@ -45,10 +51,26 @@ export async function processPersistedEvent(
     },
   );
 
+  const identity = resolveIdentity(
+    privacy.event,
+    options.identity || {},
+  );
+
+  const identityRecord = await recordIdentity(
+    env.ARCHIVE,
+    event,
+    identity,
+    {
+      now: options.now,
+      sourceKey: options.sourceKey,
+    },
+  );
+
   if (validation.status === "blocked") {
     return {
       validation,
       privacy: privacyRecord.state,
+      identity: identityRecord.state,
       deliveries: [],
     };
   }
@@ -62,6 +84,7 @@ export async function processPersistedEvent(
   return {
     validation,
     privacy: privacyRecord.state,
+    identity: identityRecord.state,
     deliveries,
   };
 }
