@@ -13,8 +13,9 @@ function request(token = "operator-key", body = {}) {
         "content-type": "application/json",
       },
       body: JSON.stringify({
+        projectId: "etlayer-default",
         sourceKey:
-          "events/2026/09/22/00/evt_1.json",
+          "projects/etlayer-default/events/2026/09/22/00/evt_1.json",
         ...body,
       }),
     },
@@ -69,4 +70,30 @@ test("returns a revalidation result from canonical storage", async () => {
   assert.equal(body.eventId, "evt_1");
   assert.equal(body.validation.status, "blocked");
   assert.deepEqual(body.deliveries, []);
+});
+
+
+test("default operator cannot revalidate a secondary project event", async () => {
+  let called = false;
+
+  const response = await handleRevalidate(
+    request("operator-key", {
+      projectId: "etlayer-secondary",
+      sourceKey:
+        "projects/etlayer-secondary/events/2026/09/22/00/evt_2.json",
+    }),
+    {
+      ETLAYER_REPLAY_KEY: "operator-key",
+      ETLAYER_SECONDARY_REPLAY_KEY: "secondary-key",
+    },
+    {
+      revalidate: async () => {
+        called = true;
+        return {};
+      },
+    },
+  );
+
+  assert.equal(response.status, 401);
+  assert.equal(called, false);
 });
