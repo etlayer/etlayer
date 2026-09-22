@@ -470,20 +470,20 @@ one row each, with the same anonymous person. The agent-aware identity model the
 
 ## Final acceptance
 
-All acceptance conditions passed:
+All VS5 acceptance conditions passed:
 
-1. both agent events are contract-valid;
+1. direct and subagent events are contract-valid;
 2. identity evidence version is 2;
-3. both events have `subject.kind=user`;
+3. both events have subject.kind=user;
 4. direct event actor remains the direct agent;
 5. subagent event actor remains the child agent;
 6. ordered delegation is preserved exactly;
-7. PostHog `distinct_id` remains the same user for both;
+7. PostHog distinct_id remains the same user;
 8. PostHog properties preserve both agent actor IDs;
-9. Statsig delivery is exported for both events using the shared identity projection;
-10. agent identity remains separate from the user subject;
-11. all events preserve session/account/attribution continuity;
-12. producer code contains no PostHog/Statsig identity calls.
+9. Statsig delivery is exported for both agent events;
+10. current agent identity is projected independently from the user subject;
+11. session/account/attribution continuity is preserved;
+12. producer code remains free of destination-specific identity APIs.
 
 ## Non-goals
 
