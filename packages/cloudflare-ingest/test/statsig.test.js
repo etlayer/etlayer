@@ -227,3 +227,36 @@ test("agent actor is retained as Statsig custom identity while user remains subj
   assert.equal(payload.metadata["actor.type"], "agent");
   assert.equal(payload.metadata["actor.id"], "agent_hanna");
 });
+
+
+test("trusted project provenance overrides a producer project claim in Statsig", () => {
+  const payload = projectToStatsig(
+    managedEvent({
+      provenance: {
+        version: 2,
+        projectId: "etlayer-secondary",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+      logRecord: {
+        attributes: [
+          {
+            key: "user.id",
+            value: { stringValue: "user_123" },
+          },
+          {
+            key: "etlayer.project.id",
+            value: { stringValue: "etlayer-default" },
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(
+    payload.metadata["etlayer.project.id"],
+    "etlayer-secondary",
+  );
+});
