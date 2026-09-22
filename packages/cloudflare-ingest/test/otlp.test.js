@@ -115,6 +115,10 @@ test("accepts valid OTLP JSON, enqueues it, and returns an OTLP success response
   assert.equal(batches[0].length, 1);
   assert.equal(batches[0][0].body.id, "evt-existing");
   assert.equal(batches[0][0].body.eventName, "landing.hero.exposed");
+  assert.equal(
+    batches[0][0].body.provenance.projectId,
+    "etlayer-default",
+  );
 });
 
 test("rejects a request with an invalid bearer token", async () => {
@@ -201,4 +205,86 @@ test("scrubs secret fields before enqueue while preserving direct identifiers", 
       action: "drop",
     },
   ]);
+});
+
+
+test("payload project claim cannot override trusted project provenance", async () => {
+  const { env, batches } = envWithQueue();
+  const payload = eventPayload({
+    attributes: [
+      {
+        key: "etlayer.event.id",
+        value: { stringValue: "evt-project-spoof" },
+      },
+      {
+        key: "etlayer.project.id",
+        value: { stringValue: "etlayer-secondary" },
+      },
+    ],
+  });
+
+  const response = await handleExportLogs(
+    requestFor(payload),
+    env,
+    {
+      receivedAt: "2026-09-22T12:30:00.000Z",
+      idFactory: () => "generated",
+    },
+  );
+
+  assert.equal(response.status, 200);
+
+  const queued = batches[0][0].body;
+  const attributes = Object.fromEntries(
+    queued.logRecord.attributes.map(({ key, value }) => [
+      key,
+      value?.stringValue,
+    ]),
+  );
+
+  assert.equal(
+    attributes["etlayer.project.id"],
+    "etlayer-secondary",
+  );
+  assert.equal(
+    queued.provenance.projectId,
+    "etlayer-default",
+  );
+});
+
+test("secondary ingest credential stamps secondary trusted project", async () => {
+  const batches = [];
+  const env = {
+    ETLAYER_SECONDARY_BACKEND_INGEST_KEY: "secondary-key",
+    EVENTS: {
+      async sendBatch(messages) {
+        batches.push(messages);
+      },
+    },
+  };
+
+  const response = await handleExportLogs(
+    new Request("https://events.test/v1/logs", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer secondary-key",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(eventPayload()),
+    }),
+    env,
+    {
+      receivedAt: "2026-09-22T12:31:00.000Z",
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    batches[0][0].body.provenance.projectId,
+    "etlayer-secondary",
+  );
+  assert.equal(
+    batches[0][0].body.provenance.producer.kind,
+    "backend",
+  );
 });
