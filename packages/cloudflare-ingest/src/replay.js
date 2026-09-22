@@ -1,6 +1,8 @@
 import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
+import { projectConfiguration, projectDestinations } from "./project-config.js";
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
 
 const DESTINATION_EXPORTERS = {
   posthog: exportToPostHog,
@@ -36,7 +38,18 @@ export async function replayDestinationRange(
   }
 
   const range = normalizeReplayRange(input);
-  const selected = await selectArchivedEvents(env.ARCHIVE, range, options);
+
+  if (!projectDestinations(range.projectId).includes(destination)) {
+    throw new ReplayValidationError(
+      `destination ${destination} is not enabled for project ${range.projectId}`,
+    );
+  }
+
+  const selected = await selectArchivedEvents(
+    env.ARCHIVE,
+    range,
+    options,
+  );
   const exporter = options.deliver
     ? (event, _env, exportOptions) =>
         options.deliver(event, exportOptions.delivery)
@@ -60,6 +73,7 @@ export async function replayDestinationRange(
       env.ARCHIVE,
       item.event.id,
       destination,
+      { projectId: range.projectId },
     );
 
     if (previous?.status === "exported") {
@@ -112,6 +126,7 @@ export async function replayDestinationRange(
   }
 
   return {
+    projectId: range.projectId,
     destination,
     replayId: range.replayId,
     from: range.from.toISOString(),
@@ -140,7 +155,11 @@ export async function selectArchivedEvents(archive, input, options = {}) {
   const maxEvents = normalizeMaxEvents(input.maxEvents);
   const selected = [];
 
-  for (const prefix of hourlyPrefixes(range.from, range.to)) {
+  for (const prefix of hourlyPrefixes(
+    range.from,
+    range.to,
+    range.projectId,
+  )) {
     let cursor;
 
     do {
@@ -156,7 +175,17 @@ export async function selectArchivedEvents(archive, input, options = {}) {
           throw new ReplayArchiveError(`archive object disappeared during replay: ${object.key}`);
         }
 
-        const event = await readArchivedEvent(archived, object.key);
+        const event = await readArchivedEvent(
+          archived,
+          object.key,
+        );
+
+        if (projectIdForEvent(event) !== range.projectId) {
+          throw new ReplayArchiveError(
+            `archive object project does not match requested project: ${object.key}`,
+          );
+        }
+
         const receivedAt = new Date(event.receivedAt);
 
         if (
@@ -190,6 +219,7 @@ export async function selectArchivedEvents(archive, input, options = {}) {
 }
 
 export function normalizeReplayRange(input = {}) {
+  const projectId = normalizeProjectId(input.projectId);
   const from = parseDate(input.from, "from");
   const to = parseDate(input.to, "to");
 
@@ -203,6 +233,7 @@ export function normalizeReplayRange(input = {}) {
       : crypto.randomUUID();
 
   return {
+    projectId,
     from,
     to,
     replayId,
@@ -223,6 +254,20 @@ function normalizeMaxEvents(value) {
   return parsed;
 }
 
+function normalizeProjectId(value) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    !projectConfiguration(value)
+  ) {
+    throw new ReplayValidationError(
+      "projectId must reference a configured project",
+    );
+  }
+
+  return value;
+}
+
 function parseDate(value, name) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new ReplayValidationError(`${name} must be an ISO timestamp string`);
@@ -236,7 +281,7 @@ function parseDate(value, name) {
   return date;
 }
 
-function* hourlyPrefixes(from, to) {
+function* hourlyPrefixes(from, to, projectId) {
   const cursor = new Date(from);
   cursor.setUTCMinutes(0, 0, 0);
 
@@ -249,7 +294,10 @@ function* hourlyPrefixes(from, to) {
     const dd = String(cursor.getUTCDate()).padStart(2, "0");
     const hh = String(cursor.getUTCHours()).padStart(2, "0");
 
-    yield `events/${yyyy}/${mm}/${dd}/${hh}/`;
+    yield scopedProjectKey(
+      projectId,
+      `events/${yyyy}/${mm}/${dd}/${hh}/`,
+    );
     cursor.setUTCHours(cursor.getUTCHours() + 1);
   }
 }
