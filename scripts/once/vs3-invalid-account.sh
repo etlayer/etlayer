@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
+PROJECT_PREFIX="projects/$PROJECT_ID"
 ETLAYER_URL="${ETLAYER_URL:-https://etlayer-ingest.sergii-ponomarov.workers.dev}"
 RUN_ID="${RUN_ID:-vs3-invalid-account-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs3-invalid-account-$$.txt"
@@ -69,7 +71,7 @@ printf 'correlation.id: %s\n' "$CORRELATION_ID"
 
 cd "$INGEST_DIR"
 
-VALIDATION_KEY="validation/$EVENT_ID.json"
+VALIDATION_KEY="$PROJECT_PREFIX/validation/$EVENT_ID.json"
 VALIDATION=""
 
 say "Waiting for durable validation evidence"
@@ -107,13 +109,15 @@ node -e '
     errors[0].code === "required_attribute_missing" &&
     errors[0].attribute === "account.id" &&
     typeof state.sourceKey === "string" &&
-    state.sourceKey.startsWith("events/");
+    state.sourceKey.startsWith(
+      `projects/${process.argv[2]}/events/`,
+    );
 
   if (!exact) {
     console.error("Unexpected validation state:", JSON.stringify(state, null, 2));
     process.exit(1);
   }
-' "$VALIDATION" || die "Validation result did not match the VS3 acceptance contract."
+' "$VALIDATION" "$PROJECT_ID" || die "Validation result did not match the VS3 acceptance contract."
 
 SOURCE_KEY="$(
   node -e '
@@ -151,7 +155,7 @@ node -e '
 
 say "Verifying destination routing was blocked"
 for destination in posthog statsig; do
-  DELIVERY_KEY="deliveries/$destination/$EVENT_ID.json"
+  DELIVERY_KEY="$PROJECT_PREFIX/deliveries/$destination/$EVENT_ID.json"
 
   if npx wrangler r2 object get \
     "$ARCHIVE_BUCKET/$DELIVERY_KEY" \
@@ -189,9 +193,9 @@ done
 
 REVALIDATE_BODY="$(
   node -e '
-    const sourceKey = process.argv[1];
-    process.stdout.write(JSON.stringify({ sourceKey }));
-  ' "$SOURCE_KEY"
+    const [projectId, sourceKey] = process.argv.slice(1);
+    process.stdout.write(JSON.stringify({ projectId, sourceKey }));
+  ' "$PROJECT_ID" "$SOURCE_KEY"
 )"
 
 REVALIDATE_RESPONSE="$(
