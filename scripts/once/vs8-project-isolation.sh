@@ -81,7 +81,9 @@ get_r2_json() {
   for attempt in $(seq 1 35); do
     if value="$(
       cd "$INGEST_DIR"
-      npx wrangler r2 object get         "$ARCHIVE_BUCKET/$key"         --remote --pipe 2>/dev/null
+      npx wrangler r2 object get \
+        "$ARCHIVE_BUCKET/$key" \
+        --remote --pipe "${WRANGLER_ENV_ARGS[@]}" 2>/dev/null
     )"; then
       printf '%s' "$value"
       return 0
@@ -97,7 +99,9 @@ assert_r2_absent() {
 
   if (
     cd "$INGEST_DIR"
-    npx wrangler r2 object get       "$ARCHIVE_BUCKET/$key"       --remote --pipe >/dev/null 2>&1
+    npx wrangler r2 object get \
+      "$ARCHIVE_BUCKET/$key" \
+      --remote --pipe "${WRANGLER_ENV_ARGS[@]}" >/dev/null 2>&1
   ); then
     die "Unexpected R2 object exists: $key"
   fi
