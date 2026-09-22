@@ -1,6 +1,6 @@
 # VS6: Trusted provenance and authority
 
-**Status: In progress.**
+**Status: VS6.1 implemented and green; live trusted-authority acceptance pending.**
 
 ## Goal
 
@@ -224,6 +224,33 @@ The old `ETLAYER_INGEST_KEY` may be recognized as a legacy profile during the sl
 Legacy provenance grants no privileged authority.
 
 Versioned events that claim privileged authority through a legacy credential are blocked by authority policy.
+## Implementation status
+
+### VS6.1 — Trusted provenance and authority core — complete
+
+- ingest authentication now resolves explicit trusted profiles;
+- trusted provenance is stamped by ETLayer before Queue enqueue;
+- no secret or credential-derived value is stored in provenance;
+- browser/backend/agent-runtime profiles have separate authority scopes;
+- durable authority evidence is stored under `authority/<event-id>.json`;
+- routing is blocked when contract validation or authority validation is blocked;
+- revalidation reuses immutable canonical trusted provenance;
+- agent contracts now use `agent_runtime` producer/authority semantics;
+- fixture routes browser, backend, and agent events through separate credentials;
+- deploy helper rotates all three credentials;
+- acceptance endpoint can intentionally send valid backend/business-state claims through browser or agent-runtime credentials;
+- `scripts/once/vs6-trusted-authority.sh` is executable and self-checking;
+- unit/integration CI is green.
+
+### VS6.2 — Live acceptance — pending
+
+- deploy current VS6 Worker + fixture;
+- run ordinary three-event funnel to prove no regression;
+- run `./scripts/once/vs6-trusted-authority.sh`;
+- independently verify allowed events in PostHog;
+- independently verify spoof correlations/events are absent from PostHog;
+- record canonical provenance and authority evidence in this document;
+- close #27 and merge the VS6 PR.
 
 ## Non-goals
 
