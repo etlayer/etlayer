@@ -321,3 +321,47 @@ It proves:
 - the secondary project cannot replay Statsig.
 
 Existing VS3-VS7 helpers default to `ETLAYER_PROJECT_ID=etlayer-default` after VS8.
+
+
+## One-time Cloudflare CI bootstrap
+
+VS8 live acceptance has a dedicated Cloudflare environment. It does not deploy branch code to the default ETLayer Workers.
+
+The CI resources are:
+
+```text
+Worker: etlayer-ingest-ci
+Worker: etlayer-cloudflare-fixture-ci
+Queue:  etlayer-events-ci
+DLQ:    etlayer-events-ci-dlq
+R2:     etlayer-events-archive-ci
+R2:     etlayer-fixture-state-ci
+```
+
+Bootstrap them once using the local Wrangler OAuth session:
+
+```bash
+git switch feat/vs8-project-isolation
+git pull --ff-only
+./scripts/once/bootstrap-cloudflare-ci.sh
+```
+
+The script will securely prompt for:
+
+```text
+ETLayer PostHog project token
+ETLayer Statsig server secret
+```
+
+Those values are written directly to `etlayer-ingest-ci` as Cloudflare Worker secrets. They are not written to the repository or GitHub Actions.
+
+After bootstrap, create a dedicated Cloudflare API token for GitHub and add only these repository secrets:
+
+```text
+CLOUDFLARE_API_TOKEN
+CLOUDFLARE_ACCOUNT_ID
+```
+
+The GitHub token only needs to deploy the two existing CI Workers and read the CI archive bucket. It does not need to create Workers, Queues, R2 buckets, zones, routes, DNS records, or domains.
+
+Live acceptance runs on same-repository pull requests carrying the `live-acceptance` label. A manual `workflow_dispatch` entry point is also available.
