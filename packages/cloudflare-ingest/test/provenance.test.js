@@ -26,7 +26,8 @@ test("authenticates browser backend and agent-runtime profiles", () => {
     {
       ok: true,
       provenance: {
-        version: 1,
+        version: 2,
+        projectId: "etlayer-default",
         profileId: "browser",
         authentication: "bearer_profile",
         producer: { kind: "browser" },
@@ -45,6 +46,27 @@ test("authenticates browser backend and agent-runtime profiles", () => {
     authenticateIngest(request("agent-key"), env)
       .provenance.allowedAuthorityKinds,
     ["agent_runtime"],
+  );
+});
+
+test("secondary project credential resolves a different trusted project", () => {
+  const result = authenticateIngest(
+    request("secondary-key"),
+    {
+      ETLAYER_SECONDARY_BACKEND_INGEST_KEY:
+        "secondary-key",
+    },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.provenance.projectId,
+    "etlayer-secondary",
+  );
+  assert.equal(result.provenance.profileId, "backend");
+  assert.equal(
+    result.provenance.producer.kind,
+    "backend",
   );
 });
 
@@ -86,13 +108,18 @@ test("stamps provenance without credential material", () => {
   };
 
   const stamped = stampTrustedProvenance(event, {
-    version: 1,
+    version: 2,
+    projectId: "etlayer-default",
     profileId: "backend",
     authentication: "bearer_profile",
     producer: { kind: "backend" },
     allowedAuthorityKinds: ["business_state"],
   });
 
+  assert.equal(
+    stamped.provenance.projectId,
+    "etlayer-default",
+  );
   assert.equal(stamped.provenance.profileId, "backend");
   assert.equal(
     JSON.stringify(stamped).includes("backend-key"),
