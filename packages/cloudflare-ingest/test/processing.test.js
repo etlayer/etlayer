@@ -3,6 +3,32 @@ import test from "node:test";
 
 import { processPersistedEvent } from "../src/processing.js";
 
+function authorityResult(status = "allowed") {
+  return {
+    status,
+    profileId: "test",
+    trustedProducerKind: "backend",
+    claim: {
+      producerKind: "backend",
+      authorityKind: "business_state",
+    },
+    errors: [],
+  };
+}
+
+function authorityState(authority) {
+  return {
+    state: {
+      version: 1,
+      eventId: "evt",
+      eventName: "example",
+      ...authority,
+      sourceKey: null,
+      updatedAt: "2026-09-22T01:00:00.000Z",
+    },
+  };
+}
+
 function privacyResult(event, deliveryActions = []) {
   return {
     event,
@@ -101,6 +127,14 @@ test("blocked validation records validation, privacy, and identity evidence but 
       async recordValidationState() {
         calls.push("record-validation");
       },
+      evaluateAuthority() {
+        calls.push("authority");
+        return authorityResult();
+      },
+      async recordAuthorityState(_archive, _event, authority) {
+        calls.push("record-authority");
+        return authorityState(authority);
+      },
       applyDeliveryPrivacy(receivedEvent) {
         calls.push("privacy");
         return privacyResult(receivedEvent);
@@ -127,6 +161,8 @@ test("blocked validation records validation, privacy, and identity evidence but 
   assert.deepEqual(calls, [
     "validate",
     "record-validation",
+    "authority",
+    "record-authority",
     "privacy",
     "record-privacy",
     "identity",
@@ -188,6 +224,14 @@ test("valid events route only the privacy-sanitized copy after identity evidence
       async recordValidationState() {
         calls.push("record-validation");
       },
+      evaluateAuthority() {
+        calls.push("authority");
+        return authorityResult();
+      },
+      async recordAuthorityState(_archive, _event, authority) {
+        calls.push("record-authority");
+        return authorityState(authority);
+      },
       applyDeliveryPrivacy(receivedEvent) {
         calls.push("privacy");
         assert.equal(receivedEvent, canonical);
@@ -224,6 +268,8 @@ test("valid events route only the privacy-sanitized copy after identity evidence
   assert.deepEqual(calls, [
     "validate",
     "record-validation",
+    "authority",
+    "record-authority",
     "privacy",
     "record-privacy",
     "identity",
@@ -255,6 +301,12 @@ test("identity evidence persistence failure remains retryable before routing", a
           };
         },
         async recordValidationState() {},
+        evaluateAuthority() {
+          return authorityResult();
+        },
+        async recordAuthorityState(_archive, _event, authority) {
+          return authorityState(authority);
+        },
         applyDeliveryPrivacy(event) {
           return privacyResult(event);
         },
