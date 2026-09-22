@@ -1,13 +1,21 @@
+import { DEFAULT_PROJECT_ID } from "./project-config.js";
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+
 export async function readDeliveryState(
   archive,
   eventId,
   destination,
+  options = {},
 ) {
   if (!archive || typeof archive.get !== "function") {
     return null;
   }
 
-  const key = deliveryStateKey(destination, eventId);
+  const key = deliveryStateKey(
+    destination,
+    eventId,
+    options.projectId || DEFAULT_PROJECT_ID,
+  );
   const object = await archive.get(key);
   if (!object) return null;
 
@@ -72,8 +80,10 @@ export async function recordDeliveryState(
     );
   }
 
+  const projectId = projectIdForEvent(event);
   const state = {
-    version: 1,
+    version: 2,
+    projectId,
     eventId: event.id,
     eventName: event.eventName,
     destination,
@@ -101,13 +111,18 @@ export async function recordDeliveryState(
     state.replayId = options.delivery.replayId;
   }
 
-  const key = deliveryStateKey(destination, event.id);
+  const key = deliveryStateKey(
+    destination,
+    event.id,
+    projectId,
+  );
 
   await archive.put(key, JSON.stringify(state), {
     httpMetadata: {
       contentType: "application/json; charset=utf-8",
     },
     customMetadata: {
+      project_id: projectId,
       event_id: event.id,
       event_name: event.eventName,
       destination,
@@ -119,7 +134,11 @@ export async function recordDeliveryState(
   return { key, state };
 }
 
-export function deliveryStateKey(destination, eventId) {
+export function deliveryStateKey(
+  destination,
+  eventId,
+  projectId = DEFAULT_PROJECT_ID,
+) {
   validateDestination(destination);
 
   if (typeof eventId !== "string" || eventId.trim() === "") {
@@ -128,7 +147,10 @@ export function deliveryStateKey(destination, eventId) {
     );
   }
 
-  return `deliveries/${encodeURIComponent(destination)}/${encodeURIComponent(eventId)}.json`;
+  return scopedProjectKey(
+    projectId,
+    `deliveries/${encodeURIComponent(destination)}/${encodeURIComponent(eventId)}.json`,
+  );
 }
 
 function normalizeStatus(status) {
