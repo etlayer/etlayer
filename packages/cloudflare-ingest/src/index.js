@@ -63,6 +63,21 @@ export default {
           validationErrors: processed.validation.errors.length,
         });
 
+        console.info("evaluated ETLayer authority", {
+          eventId: event.id,
+          eventName: event.eventName,
+          authorityStatus: processed.authority.status,
+          trustedProfileId: processed.authority.profileId,
+          trustedProducerKind:
+            processed.authority.trustedProducerKind,
+          claimedProducerKind:
+            processed.authority.claim.producerKind,
+          claimedAuthorityKind:
+            processed.authority.claim.authorityKind,
+          authorityErrors:
+            processed.authority.errors.length,
+        });
+
         console.info("applied ETLayer privacy policy", {
           eventId: event.id,
           eventName: event.eventName,
