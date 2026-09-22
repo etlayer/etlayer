@@ -8,9 +8,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
       - run: npm test
       - run: bash -n scripts/once/*.sh
+      - name: Validate ingest CI Wrangler config
+        working-directory: packages/cloudflare-ingest
+        run: npx wrangler@4.135.0 deploy --dry-run --env ci
+      - name: Validate fixture CI Wrangler config
+        working-directory: examples/cloudflare-fixture
+        run: npx wrangler@4.135.0 deploy --dry-run --env ci
