@@ -36,6 +36,7 @@ test("records durable authority evidence without secrets", async () => {
     },
     {
       status: "blocked",
+      policyVersion: 1,
       profileId: "agent-runtime",
       trustedProducerKind: "agent_runtime",
       claim: {
