@@ -195,3 +195,71 @@ test("already exported destination is not sent again", async () => {
     },
   ]);
 });
+
+
+test("secondary project routes only to its configured destination set", async () => {
+  const stateProjects = [];
+
+  const results = await routeEventDestinations(
+    {
+      id: "evt_secondary",
+      eventName: "account.created",
+      provenance: {
+        version: 2,
+        projectId: "etlayer-secondary",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+    },
+    {},
+    {
+      async readState(
+        _archive,
+        _eventId,
+        _destination,
+        options,
+      ) {
+        stateProjects.push(options.projectId);
+        return null;
+      },
+      async recordState() {},
+    },
+  );
+
+  assert.deepEqual(
+    results.map(({ destination }) => destination),
+    ["posthog"],
+  );
+  assert.deepEqual(stateProjects, ["etlayer-secondary"]);
+});
+
+test("default project keeps PostHog and Statsig routing", async () => {
+  const results = await routeEventDestinations(
+    {
+      id: "evt_default",
+      eventName: "account.created",
+      provenance: {
+        version: 2,
+        projectId: "etlayer-default",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+    },
+    {},
+    {
+      async readState() {
+        return null;
+      },
+      async recordState() {},
+    },
+  );
+
+  assert.deepEqual(
+    results.map(({ destination }) => destination),
+    ["posthog", "statsig"],
+  );
+});
