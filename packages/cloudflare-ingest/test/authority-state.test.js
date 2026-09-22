@@ -52,14 +52,14 @@ test("records durable authority evidence without secrets", async () => {
     },
     {
       sourceKey:
-        "events/2026/09/22/01/evt_authority_1.json",
+        "projects/etlayer-default/events/2026/09/22/01/evt_authority_1.json",
       now: new Date("2026-09-22T01:00:00.000Z"),
     },
   );
 
   assert.equal(
     result.key,
-    "authority/evt_authority_1.json",
+    "projects/etlayer-default/authority/evt_authority_1.json",
   );
   assert.equal(result.state.status, "blocked");
   assert.equal(result.state.profileId, "agent-runtime");
