@@ -1,3 +1,5 @@
+import { evaluateEventAuthority } from "./authority.js";
+import { recordAuthorityState } from "./authority-state.js";
 import { resolveEventIdentity } from "./identity.js";
 import { recordIdentityState } from "./identity-state.js";
 import { applyDeliveryPrivacy } from "./privacy.js";
@@ -14,6 +16,10 @@ export async function processPersistedEvent(
   const validate = options.validate || validateEventContract;
   const recordState =
     options.recordValidationState || recordValidationState;
+  const evaluateAuthority =
+    options.evaluateAuthority || evaluateEventAuthority;
+  const recordAuthority =
+    options.recordAuthorityState || recordAuthorityState;
   const applyPrivacy =
     options.applyDeliveryPrivacy || applyDeliveryPrivacy;
   const recordPrivacy =
@@ -30,6 +36,21 @@ export async function processPersistedEvent(
     env.ARCHIVE,
     event,
     validation,
+    {
+      now: options.now,
+      sourceKey: options.sourceKey,
+    },
+  );
+
+  const authority = evaluateAuthority(
+    event,
+    options.authority || {},
+  );
+
+  const authorityRecord = await recordAuthority(
+    env.ARCHIVE,
+    event,
+    authority,
     {
       now: options.now,
       sourceKey: options.sourceKey,
@@ -66,9 +87,13 @@ export async function processPersistedEvent(
     },
   );
 
-  if (validation.status === "blocked") {
+  if (
+    validation.status === "blocked" ||
+    authority.status === "blocked"
+  ) {
     return {
       validation,
+      authority: authorityRecord.state,
       privacy: privacyRecord.state,
       identity: identityRecord.state,
       deliveries: [],
@@ -83,6 +108,7 @@ export async function processPersistedEvent(
 
   return {
     validation,
+    authority: authorityRecord.state,
     privacy: privacyRecord.state,
     identity: identityRecord.state,
     deliveries,
