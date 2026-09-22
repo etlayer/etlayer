@@ -1,3 +1,4 @@
+import { authenticateProjectOperator } from "./operator-auth.js";
 import {
   revalidateArchivedEvent,
   RevalidationArchiveError,
@@ -11,23 +12,6 @@ export async function handleRevalidate(
   env,
   options = {},
 ) {
-  if (!env.ETLAYER_REPLAY_KEY) {
-    return jsonResponse(
-      { error: "operator key is not configured" },
-      503,
-    );
-  }
-
-  if (
-    request.headers.get("authorization") !==
-    `Bearer ${env.ETLAYER_REPLAY_KEY}`
-  ) {
-    return jsonResponse(
-      { error: "invalid operator credential" },
-      401,
-    );
-  }
-
   if (!isJsonContentType(request.headers.get("content-type"))) {
     return jsonResponse(
       { error: "content-type must be application/json" },
@@ -42,6 +26,49 @@ export async function handleRevalidate(
     return jsonResponse(
       { error: "request body is not valid JSON" },
       400,
+    );
+  }
+
+  if (
+    typeof input?.projectId !== "string" ||
+    input.projectId.length === 0
+  ) {
+    return jsonResponse(
+      { error: "projectId is required" },
+      400,
+    );
+  }
+
+  const authenticate =
+    options.authenticateProjectOperator ||
+    authenticateProjectOperator;
+  const authentication = authenticate(
+    request,
+    env,
+    input.projectId,
+  );
+
+  if (!authentication.ok) {
+    if (
+      authentication.reason ===
+      "operator_credential_not_configured"
+    ) {
+      return jsonResponse(
+        { error: "operator credential is not configured for project" },
+        503,
+      );
+    }
+
+    if (authentication.reason === "unknown_project") {
+      return jsonResponse(
+        { error: "unknown project" },
+        400,
+      );
+    }
+
+    return jsonResponse(
+      { error: "invalid operator credential for project" },
+      401,
     );
   }
 
@@ -68,6 +95,7 @@ export async function handleRevalidate(
     }
 
     console.error("failed to revalidate ETLayer event", {
+      projectId: input?.projectId,
       sourceKey: input?.sourceKey,
       error:
         error instanceof Error
