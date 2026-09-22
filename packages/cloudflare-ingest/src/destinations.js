@@ -1,6 +1,8 @@
 import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
+import { projectDestinations } from "./project-config.js";
+import { projectIdForEvent } from "./project-scope.js";
 
 const DEFAULT_DESTINATIONS = [
   {
@@ -14,7 +16,10 @@ const DEFAULT_DESTINATIONS = [
 ];
 
 export async function routeEventDestinations(event, env, options = {}) {
-  const destinations = options.destinations || DEFAULT_DESTINATIONS;
+  const projectId = projectIdForEvent(event);
+  const destinations =
+    options.destinations ||
+    configuredDestinationsForProject(projectId);
   const readState = options.readState || readDeliveryState;
   const recordState = options.recordState || recordDeliveryState;
   const results = [];
@@ -27,6 +32,7 @@ export async function routeEventDestinations(event, env, options = {}) {
       env.ARCHIVE,
       event.id,
       destination.name,
+      { projectId },
     );
 
     if (previous?.status === "exported") {
@@ -87,3 +93,12 @@ function validateDestination(destination) {
 }
 
 export class DestinationRouterConfigurationError extends Error {}
+
+
+function configuredDestinationsForProject(projectId) {
+  const names = new Set(projectDestinations(projectId));
+
+  return DEFAULT_DESTINATIONS.filter(({ name }) =>
+    names.has(name),
+  );
+}
