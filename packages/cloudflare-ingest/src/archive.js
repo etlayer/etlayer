@@ -1,3 +1,5 @@
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+
 export async function consumeEventBatch(batch, env, options = {}) {
   const logger = options.logger || console;
   const afterPersist = options.afterPersist || (async () => {});
@@ -28,6 +30,7 @@ export async function persistManagedEvent(archive, event, options = {}) {
 
   validateManagedEvent(event);
 
+  const projectId = projectIdForEvent(event);
   const key = archiveKey(event);
   const serialized = JSON.stringify(event);
   const sha256 = await digestHex(serialized, options.crypto || globalThis.crypto);
@@ -36,6 +39,7 @@ export async function persistManagedEvent(archive, event, options = {}) {
     onlyIf: { etagDoesNotMatch: "*" },
     httpMetadata: { contentType: "application/json; charset=utf-8" },
     customMetadata: {
+      project_id: projectId,
       event_id: event.id,
       event_name: event.eventName,
       received_at: event.receivedAt,
@@ -71,7 +75,10 @@ export function archiveKey(event) {
   const hh = String(receivedAt.getUTCHours()).padStart(2, "0");
   const encodedId = encodeURIComponent(event.id);
 
-  return `events/${yyyy}/${mm}/${dd}/${hh}/${encodedId}.json`;
+  return scopedProjectKey(
+    projectIdForEvent(event),
+    `events/${yyyy}/${mm}/${dd}/${hh}/${encodedId}.json`,
+  );
 }
 
 function validateManagedEvent(event) {
