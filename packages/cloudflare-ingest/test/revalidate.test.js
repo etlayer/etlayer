@@ -125,6 +125,7 @@ test("a corrected policy can route the preserved event", async () => {
       validate() {
         return {
           status: "valid",
+          validatorVersion: 1,
           schemaVersion: 1,
           contractId: "account.created@1",
           errors: [],
@@ -179,6 +180,7 @@ test("revalidation reapplies delivery privacy before routing the canonical event
       validate() {
         return {
           status: "valid",
+          validatorVersion: 1,
           schemaVersion: 1,
           contractId: "account.created@1",
           errors: [],
