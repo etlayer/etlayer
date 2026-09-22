@@ -15,8 +15,8 @@ export default {
     "delegation.0.principal.id": { type: "string" },
     "agent.turn.id": { type: "string" },
     "agent.tool_call.id": { type: "string" },
-    "etlayer.producer.kind": { type: "string", const: "backend" },
-    "etlayer.authority.kind": { type: "string", const: "business_state" },
+    "etlayer.producer.kind": { type: "string", const: "agent_runtime" },
+    "etlayer.authority.kind": { type: "string", const: "agent_runtime" },
   },
   forbidden: [],
 };
