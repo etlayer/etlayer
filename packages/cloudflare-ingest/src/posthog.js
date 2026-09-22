@@ -1,3 +1,4 @@
+import { projectIdForEvent } from "./project-scope.js";
 import { resolveEventIdentity } from "./identity.js";
 
 export async function exportToPostHog(event, env, options = {}) {
@@ -58,6 +59,7 @@ export async function projectToPostHog(event, options = {}) {
     ...eventAttributes,
     "etlayer.event.id": event.id,
     "etlayer.received_at": event.receivedAt,
+    "etlayer.project.id": projectIdForEvent(event),
   };
 
   if (event.scope?.name) properties["otel.scope.name"] = event.scope.name;
