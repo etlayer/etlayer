@@ -87,7 +87,7 @@ test("records append-only decision evidence and advances only the latest pointer
     {
       decisionId: "decision-1",
       evaluationKind: "processing",
-      sourceKey: "events/2026/09/22/11/evt.json",
+      sourceKey: "projects/etlayer-default/events/2026/09/22/11/evt.json",
       now: new Date("2026-09-22T11:00:00.000Z"),
     },
   );
@@ -99,18 +99,18 @@ test("records append-only decision evidence and advances only the latest pointer
     {
       decisionId: "decision-2",
       evaluationKind: "revalidation",
-      sourceKey: "events/2026/09/22/11/evt.json",
+      sourceKey: "projects/etlayer-default/events/2026/09/22/11/evt.json",
       now: new Date("2026-09-22T12:00:00.000Z"),
     },
   );
 
   assert.equal(
     first.key,
-    "decisions/evt%2Fdecision/decision-1.json",
+    "projects/etlayer-default/decisions/evt%2Fdecision/decision-1.json",
   );
   assert.equal(
     second.key,
-    "decisions/evt%2Fdecision/decision-2.json",
+    "projects/etlayer-default/decisions/evt%2Fdecision/decision-2.json",
   );
 
   const original = await readDecisionHistory(
@@ -141,13 +141,13 @@ test("records append-only decision evidence and advances only the latest pointer
 
   assert.equal(
     store.objects.has(
-      "decisions/evt%2Fdecision/decision-1.json",
+      "projects/etlayer-default/decisions/evt%2Fdecision/decision-1.json",
     ),
     true,
   );
   assert.equal(
     store.objects.has(
-      "decisions/evt%2Fdecision/decision-2.json",
+      "projects/etlayer-default/decisions/evt%2Fdecision/decision-2.json",
     ),
     true,
   );
@@ -193,10 +193,10 @@ test("decision evidence contains policy lineage but no credential material", asy
 test("decision keys are deterministic for explicit ids", () => {
   assert.equal(
     decisionHistoryKey("event 1", "decision 1"),
-    "decisions/event%201/decision%201.json",
+    "projects/etlayer-default/decisions/event%201/decision%201.json",
   );
   assert.equal(
     latestDecisionKey("event 1"),
-    "decision-latest/event%201.json",
+    "projects/etlayer-default/decision-latest/event%201.json",
   );
 });
