@@ -81,6 +81,7 @@ test("selects archived events by received-at range in deterministic order", asyn
   const selected = await selectArchivedEvents(
     fakeArchive([later, outside, earlier]),
     {
+      projectId: "etlayer-default",
       from: "2026-09-21T18:35:00.000Z",
       to: "2026-09-21T18:45:00.000Z",
       replayId: "replay-1",
@@ -104,6 +105,7 @@ test("replays canonical events with original identity and occurrence time", asyn
       POSTHOG_PROJECT_TOKEN: "phc_test",
     },
     {
+      projectId: "etlayer-default",
       from: "2026-09-21T18:35:00.000Z",
       to: "2026-09-21T18:40:00.000Z",
       replayId: "replay-proof",
@@ -151,6 +153,7 @@ test("retrying the same replay keeps the same PostHog UUID", async () => {
   };
 
   const input = {
+    projectId: "etlayer-default",
     from: "2026-09-21T18:35:00.000Z",
     to: "2026-09-21T18:40:00.000Z",
     replayId: "replay-retry",
@@ -174,6 +177,7 @@ test("fails instead of silently truncating a replay range", async () => {
   await assert.rejects(
     () =>
       selectArchivedEvents(archive, {
+        projectId: "etlayer-default",
         from: "2026-09-21T18:35:00.000Z",
         to: "2026-09-21T18:40:00.000Z",
         maxEvents: 1,
@@ -195,6 +199,7 @@ test("Statsig-targeted replay calls Statsig only", async () => {
       STATSIG_HOST: "https://api.statsig.test",
     },
     {
+      projectId: "etlayer-default",
       from: "2026-09-21T18:35:00.000Z",
       to: "2026-09-21T18:40:00.000Z",
       replayId: "replay-statsig-only",
@@ -264,6 +269,7 @@ test("repeating a Statsig replay does not send an already exported event again",
     STATSIG_HOST: "https://api.statsig.test",
   };
   const input = {
+    projectId: "etlayer-default",
     from: "2026-09-21T18:35:00.000Z",
     to: "2026-09-21T18:40:00.000Z",
     replayId: "replay-statsig-idempotent",
