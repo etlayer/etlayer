@@ -1,3 +1,6 @@
+import { DEFAULT_PROJECT_ID } from "./project-config.js";
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+
 export async function recordPrivacyState(
   archive,
   event,
@@ -31,8 +34,10 @@ export async function recordPrivacyState(
       ? "applied"
       : "clean";
 
+  const projectId = projectIdForEvent(event);
   const state = {
-    version: 1,
+    version: 2,
+    projectId,
     eventId: event.id,
     eventName: event.eventName,
     policyVersion: privacy.policyVersion,
@@ -47,13 +52,14 @@ export async function recordPrivacyState(
     updatedAt: now.toISOString(),
   };
 
-  const key = privacyStateKey(event.id);
+  const key = privacyStateKey(event.id, projectId);
 
   await archive.put(key, JSON.stringify(state), {
     httpMetadata: {
       contentType: "application/json; charset=utf-8",
     },
     customMetadata: {
+      project_id: projectId,
       event_id: event.id,
       event_name: event.eventName,
       policy_version: String(privacy.policyVersion),
@@ -66,10 +72,17 @@ export async function recordPrivacyState(
   return { key, state };
 }
 
-export async function readPrivacyState(archive, eventId) {
+export async function readPrivacyState(
+  archive,
+  eventId,
+  options = {},
+) {
   if (!archive || typeof archive.get !== "function") return null;
 
-  const key = privacyStateKey(eventId);
+  const key = privacyStateKey(
+    eventId,
+    options.projectId || DEFAULT_PROJECT_ID,
+  );
   const object = await archive.get(key);
   if (!object) return null;
 
@@ -95,14 +108,20 @@ export async function readPrivacyState(archive, eventId) {
   }
 }
 
-export function privacyStateKey(eventId) {
+export function privacyStateKey(
+  eventId,
+  projectId = DEFAULT_PROJECT_ID,
+) {
   if (typeof eventId !== "string" || eventId.trim() === "") {
     throw new PrivacyStateConfigurationError(
       "event id must be a non-empty string",
     );
   }
 
-  return `privacy/${encodeURIComponent(eventId)}.json`;
+  return scopedProjectKey(
+    projectId,
+    `privacy/${encodeURIComponent(eventId)}.json`,
+  );
 }
 
 function validateEvent(event) {
