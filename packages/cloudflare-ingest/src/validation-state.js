@@ -1,3 +1,6 @@
+import { DEFAULT_PROJECT_ID } from "./project-config.js";
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+
 export async function recordValidationState(
   archive,
   event,
@@ -24,8 +27,10 @@ export async function recordValidationState(
     );
   }
 
+  const projectId = projectIdForEvent(event);
   const state = {
-    version: 1,
+    version: 2,
+    projectId,
     eventId: event.id,
     eventName: event.eventName,
     validatorVersion: validation.validatorVersion,
@@ -40,13 +45,14 @@ export async function recordValidationState(
     updatedAt: now.toISOString(),
   };
 
-  const key = validationStateKey(event.id);
+  const key = validationStateKey(event.id, projectId);
 
   await archive.put(key, JSON.stringify(state), {
     httpMetadata: {
       contentType: "application/json; charset=utf-8",
     },
     customMetadata: {
+      project_id: projectId,
       event_id: event.id,
       event_name: event.eventName,
       status: validation.status,
@@ -64,10 +70,17 @@ export async function recordValidationState(
   return { key, state };
 }
 
-export async function readValidationState(archive, eventId) {
+export async function readValidationState(
+  archive,
+  eventId,
+  options = {},
+) {
   if (!archive || typeof archive.get !== "function") return null;
 
-  const key = validationStateKey(eventId);
+  const key = validationStateKey(
+    eventId,
+    options.projectId || DEFAULT_PROJECT_ID,
+  );
   const object = await archive.get(key);
   if (!object) return null;
 
@@ -91,14 +104,20 @@ export async function readValidationState(archive, eventId) {
   }
 }
 
-export function validationStateKey(eventId) {
+export function validationStateKey(
+  eventId,
+  projectId = DEFAULT_PROJECT_ID,
+) {
   if (typeof eventId !== "string" || eventId.trim() === "") {
     throw new ValidationStateConfigurationError(
       "event id must be a non-empty string",
     );
   }
 
-  return `validation/${encodeURIComponent(eventId)}.json`;
+  return scopedProjectKey(
+    projectId,
+    `validation/${encodeURIComponent(eventId)}.json`,
+  );
 }
 
 function validateEvent(event) {
