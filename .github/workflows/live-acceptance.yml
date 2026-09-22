@@ -1,0 +1,76 @@
+name: Live Acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - labeled
+      - synchronize
+      - reopened
+
+concurrency:
+  group: etlayer-live-acceptance
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  vs8:
+    name: VS8 Cloudflare acceptance
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'live-acceptance')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "1"
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ETLAYER_WRANGLER_ENV: ci
+      ETLAYER_INGEST_URL: https://etlayer-ingest-ci.sergii-ponomarov.workers.dev
+      ETLAYER_ARCHIVE_BUCKET: etlayer-events-archive-ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Verify GitHub repository secrets
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+
+      - name: Install pinned Wrangler
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run VS8 live acceptance
+        shell: bash
+        run: |
+          set -o pipefail
+          ./scripts/once/vs8-project-isolation.sh |
+            tee "$RUNNER_TEMP/vs8-live-acceptance.log"
+
+      - name: Upload acceptance log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vs8-live-acceptance-${{ github.run_id }}
+          path: ${{ runner.temp }}/vs8-live-acceptance.log
+          if-no-files-found: ignore
+          retention-days: 7
