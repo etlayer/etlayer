@@ -27,7 +27,7 @@ Statsig is intentionally not bootstrapped by this script. VS2 live activation us
 
 ## deploy-fixture.sh
 
-Deploys the browser + backend acceptance fixture, configures the shared ingest credential, verifies the ETLayer Service Binding, and runs direct plus fixture-mediated OTLP preflights before printing a funnel URL.
+Deploys the browser + backend + agent acceptance fixture, configures the trusted browser/backend/agent-runtime ingest credentials, verifies the ETLayer Service Binding, and runs direct plus fixture-mediated OTLP preflights before printing a funnel URL.
 
 ```bash
 ./scripts/once/deploy-fixture.sh
@@ -267,5 +267,33 @@ The helper proves:
 - blocked spoof events never reach PostHog or Statsig;
 - canonical provenance contains no credential material;
 - canonical revalidation remains blocked without producer re-emission.
+
+The helper rotates the protected revalidation operator secret and redeploys the current ingest Worker before the revalidation assertion.
+
+
+## VS7 append-only decision lineage acceptance
+
+Deploy the current branch and fixture first:
+
+```bash
+./scripts/once/deploy-fixture.sh
+```
+
+Then run:
+
+```bash
+./scripts/once/vs7-decision-lineage.sh
+```
+
+The helper emits one contract-valid browser credential spoof that remains authority-blocked and verifies:
+
+- initial processing creates `decisions/<event-id>/<decision-id>.json`;
+- the decision records contract validator, authority policy, and privacy policy versions;
+- `decision-latest/<event-id>.json` points at the initial processing decision;
+- the blocked event has no PostHog or Statsig delivery state;
+- canonical revalidation creates a distinct decision with `evaluationKind=revalidation`;
+- the latest pointer advances to the revalidation decision;
+- the original decision record remains present and byte-for-byte unchanged;
+- revalidation remains contract-valid, authority-blocked, and unrouted.
 
 The helper rotates the protected revalidation operator secret and redeploys the current ingest Worker before the revalidation assertion.
