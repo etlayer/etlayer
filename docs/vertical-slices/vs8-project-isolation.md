@@ -164,6 +164,37 @@ Replay:
 - rejects destinations not enabled for the project;
 - reads/writes project-scoped delivery state.
 
+## Isolated Cloudflare CI environment
+
+Automated live acceptance uses a separate named Wrangler environment:
+
+```text
+env.ci
+```
+
+Wrangler named environments create separate Worker scripts while bindings and variables are declared explicitly per environment.
+
+The reference CI resources are:
+
+```text
+etlayer-ingest-ci
+etlayer-cloudflare-fixture-ci
+etlayer-events-ci
+etlayer-events-ci-dlq
+etlayer-events-archive-ci
+etlayer-fixture-state-ci
+```
+
+This keeps branch deployment, rotating acceptance credentials, queue traffic, fixture state, and canonical R2 evidence separate from the default ETLayer runtime.
+
+Bootstrap is intentionally local and one-time:
+
+```bash
+./scripts/once/bootstrap-cloudflare-ci.sh
+```
+
+Persistent destination credentials stay in Cloudflare Worker secrets. GitHub Actions receives only the Cloudflare deployment credential and account ID.
+
 ## Live acceptance
 
 Run after checking out the VS8 branch and ensuring the existing Cloudflare resources and destination secrets are present:
