@@ -1,6 +1,6 @@
 # VS7: Append-only decision history and policy lineage
 
-**Status: code complete and CI green; live Cloudflare acceptance pending.**
+**Status: VS7 complete; live Cloudflare and PostHog acceptance passed on 2026-09-22.**
 
 ## Goal
 
@@ -226,10 +226,71 @@ It then proves:
 - unit and integration tests cover append-only history;
 - PR CI is green.
 
-### VS7.2 - Live acceptance - pending
+### VS7.2 - Live acceptance - complete
 
-- deploy current Worker + fixture;
-- run `./scripts/once/vs7-decision-lineage.sh`;
-- record live R2 decision keys and IDs;
-- independently verify blocked event absence in ETLayer PostHog EU Project 117513;
-- close #29 and merge PR #30.
+Live acceptance passed on 2026-09-22.
+
+The isolated VS7 run used:
+
+```text
+correlation.id = vs7-decision-lineage-20260922T121917Z-57b34b55
+event.id       = 3df0c73a-5421-4b80-bfba-ccde2ebc96ff
+sourceKey      = events/2026/09/22/12/3df0c73a-5421-4b80-bfba-ccde2ebc96ff.json
+```
+
+Initial processing decision:
+
+```text
+decision.id  = 29b3a2ba-ac36-4350-a12c-0380dda8198a
+decision.key = decisions/3df0c73a-5421-4b80-bfba-ccde2ebc96ff/29b3a2ba-ac36-4350-a12c-0380dda8198a.json
+
+evaluationKind = processing
+validation     = valid
+authority      = blocked
+routeEligible  = false
+```
+
+Canonical revalidation created a distinct second decision:
+
+```text
+decision.id  = b1639065-7154-4983-9a8f-1f6ae5a860f8
+decision.key = decisions/3df0c73a-5421-4b80-bfba-ccde2ebc96ff/b1639065-7154-4983-9a8f-1f6ae5a860f8.json
+
+evaluationKind = revalidation
+validation     = valid
+authority      = blocked
+routeEligible  = false
+deliveries     = []
+```
+
+The live helper proved:
+
+- the latest pointer advanced to the revalidation decision;
+- the initial decision record remained present;
+- the initial decision record remained byte-for-byte unchanged;
+- both decisions referenced the same canonical source event;
+- trusted provenance remained browser/browser;
+- validator version remained `1`;
+- authority policy version remained `1`;
+- privacy policy version remained `1`;
+- PostHog delivery state remained absent;
+- Statsig delivery state remained absent.
+
+Independent destination verification was then run directly against ETLayer PostHog EU Project `117513` across the full day of 2026-09-22:
+
+```text
+event 3df0c73a-5421-4b80-bfba-ccde2ebc96ff
+PostHog rows = 0
+```
+
+This provides end-to-end evidence that the authority-blocked event was preserved canonically and revalidated twice, while neither evaluation produced destination delivery.
+
+An accidental normal UI funnel during the same deployment also served as a regression check. Its three event IDs were each present exactly once in PostHog:
+
+```text
+88361bd9-2d36-4134-9c9d-19c2b6ec2b8a  landing.hero.exposed
+8ce356ad-1406-498d-ad4a-d5306733d475  landing.hero.cta_clicked
+88371b8d-0e14-458b-8e1a-942d7b44e547  account.created
+```
+
+This confirms the VS7 decision-history changes did not suppress ordinary allowed traffic.
