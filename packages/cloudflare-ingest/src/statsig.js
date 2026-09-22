@@ -1,3 +1,4 @@
+import { projectIdForEvent } from "./project-scope.js";
 import {
   identityCustomIds,
   resolveEventIdentity,
@@ -101,6 +102,9 @@ function buildMetadata(event, properties, delivery) {
     if (value == null) continue;
     metadata[key] = metadataValue(value);
   }
+
+  // Trusted provenance wins over any producer-supplied project claim.
+  metadata["etlayer.project.id"] = projectIdForEvent(event);
 
   if (delivery?.mode) {
     metadata["etlayer.delivery.mode"] = delivery.mode;
