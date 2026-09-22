@@ -4,8 +4,20 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_DIR="$ROOT_DIR/examples/cloudflare-fixture"
-INGEST_URL="${ETLAYER_INGEST_URL:-https://etlayer-ingest.sergii-ponomarov.workers.dev}"
-ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+WRANGLER_ENV="${ETLAYER_WRANGLER_ENV:-}"
+WRANGLER_ENV_ARGS=()
+
+if [ -n "$WRANGLER_ENV" ]; then
+  WRANGLER_ENV_ARGS=(--env "$WRANGLER_ENV")
+  DEFAULT_INGEST_URL="https://etlayer-ingest-$WRANGLER_ENV.sergii-ponomarov.workers.dev"
+  DEFAULT_ARCHIVE_BUCKET="etlayer-events-archive-$WRANGLER_ENV"
+else
+  DEFAULT_INGEST_URL="https://etlayer-ingest.sergii-ponomarov.workers.dev"
+  DEFAULT_ARCHIVE_BUCKET="etlayer-events-archive"
+fi
+
+INGEST_URL="${ETLAYER_INGEST_URL:-$DEFAULT_INGEST_URL}"
+ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-$DEFAULT_ARCHIVE_BUCKET}"
 DEFAULT_PROJECT_ID="etlayer-default"
 SECONDARY_PROJECT_ID="etlayer-secondary"
 RUN_ID="${RUN_ID:-vs8-project-isolation-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
@@ -58,7 +70,7 @@ put_secret() {
   (
     cd "$directory"
     printf '%s' "$value" |
-      npx wrangler secret put "$name" >/dev/null
+      npx wrangler secret put "$name" "${WRANGLER_ENV_ARGS[@]}" >/dev/null
   )
 }
 
@@ -228,6 +240,11 @@ DEFAULT_OPERATOR_KEY="$(generate_key)"
 SECONDARY_OPERATOR_KEY="$(generate_key)"
 
 say "Rotating project-scoped ingest and operator credentials"
+if [ -n "$WRANGLER_ENV" ]; then
+  printf 'Wrangler environment: %s\n' "$WRANGLER_ENV"
+fi
+printf 'Ingest URL: %s\n' "$INGEST_URL"
+printf 'Archive bucket: %s\n' "$ARCHIVE_BUCKET"
 put_secret "$INGEST_DIR" ETLAYER_BROWSER_INGEST_KEY "$DEFAULT_BROWSER_KEY"
 put_secret "$INGEST_DIR" ETLAYER_BACKEND_INGEST_KEY "$DEFAULT_BACKEND_KEY"
 put_secret "$INGEST_DIR" ETLAYER_SECONDARY_BACKEND_INGEST_KEY "$SECONDARY_BACKEND_KEY"
@@ -237,7 +254,7 @@ put_secret "$INGEST_DIR" ETLAYER_SECONDARY_REPLAY_KEY "$SECONDARY_OPERATOR_KEY"
 say "Deploying project-aware ETLayer Worker"
 (
   cd "$INGEST_DIR"
-  npx wrangler deploy
+  npx wrangler deploy "${WRANGLER_ENV_ARGS[@]}"
 )
 
 say "Keeping the default fixture synchronized with rotated default credentials"
@@ -245,7 +262,7 @@ put_secret "$FIXTURE_DIR" ETLAYER_BROWSER_INGEST_KEY "$DEFAULT_BROWSER_KEY"
 put_secret "$FIXTURE_DIR" ETLAYER_BACKEND_INGEST_KEY "$DEFAULT_BACKEND_KEY"
 (
   cd "$FIXTURE_DIR"
-  npx wrangler deploy >/dev/null
+  npx wrangler deploy "${WRANGLER_ENV_ARGS[@]}" >/dev/null
 )
 
 SHARED_EVENT_ID="$(uuid)"
