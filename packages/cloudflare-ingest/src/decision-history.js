@@ -1,3 +1,6 @@
+import { DEFAULT_PROJECT_ID } from "./project-config.js";
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+
 export const DECISION_HISTORY_VERSION = 1;
 
 export async function recordDecisionHistory(
@@ -49,8 +52,10 @@ export async function recordDecisionHistory(
   const authority = evaluation.authority;
   const privacy = evaluation.privacy;
 
+  const projectId = projectIdForEvent(event);
   const state = {
-    version: DECISION_HISTORY_VERSION,
+    version: DECISION_HISTORY_VERSION + 1,
+    projectId,
     decisionId,
     eventId: event.id,
     eventName: event.eventName,
@@ -59,6 +64,7 @@ export async function recordDecisionHistory(
     evaluatedAt: now.toISOString(),
     provenance: {
       version: event.provenance?.version || null,
+      projectId,
       profileId: event.provenance?.profileId || null,
       producerKind: event.provenance?.producer?.kind || null,
     },
@@ -88,13 +94,18 @@ export async function recordDecisionHistory(
       authority.status !== "blocked",
   };
 
-  const key = decisionHistoryKey(event.id, decisionId);
+  const key = decisionHistoryKey(
+    event.id,
+    decisionId,
+    projectId,
+  );
 
   await archive.put(key, JSON.stringify(state), {
     httpMetadata: {
       contentType: "application/json; charset=utf-8",
     },
     customMetadata: {
+      project_id: projectId,
       event_id: event.id,
       event_name: event.eventName,
       decision_id: decisionId,
@@ -108,9 +119,10 @@ export async function recordDecisionHistory(
   });
 
   await archive.put(
-    latestDecisionKey(event.id),
+    latestDecisionKey(event.id, projectId),
     JSON.stringify({
-      version: 1,
+      version: 2,
+      projectId,
       eventId: event.id,
       decisionId,
       key,
@@ -138,35 +150,60 @@ export async function readDecisionHistory(
   archive,
   eventId,
   decisionId,
+  options = {},
 ) {
   if (!archive || typeof archive.get !== "function") return null;
 
   return readJsonObject(
     archive,
-    decisionHistoryKey(eventId, decisionId),
+    decisionHistoryKey(
+      eventId,
+      decisionId,
+      options.projectId || DEFAULT_PROJECT_ID,
+    ),
   );
 }
 
 export async function readLatestDecisionPointer(
   archive,
   eventId,
+  options = {},
 ) {
   if (!archive || typeof archive.get !== "function") return null;
 
-  return readJsonObject(archive, latestDecisionKey(eventId));
+  return readJsonObject(
+    archive,
+    latestDecisionKey(
+      eventId,
+      options.projectId || DEFAULT_PROJECT_ID,
+    ),
+  );
 }
 
-export function decisionHistoryKey(eventId, decisionId) {
+export function decisionHistoryKey(
+  eventId,
+  decisionId,
+  projectId = DEFAULT_PROJECT_ID,
+) {
   validateIdentifier(eventId, "event id");
   validateIdentifier(decisionId, "decision id");
 
-  return `decisions/${encodeURIComponent(eventId)}/${encodeURIComponent(decisionId)}.json`;
+  return scopedProjectKey(
+    projectId,
+    `decisions/${encodeURIComponent(eventId)}/${encodeURIComponent(decisionId)}.json`,
+  );
 }
 
-export function latestDecisionKey(eventId) {
+export function latestDecisionKey(
+  eventId,
+  projectId = DEFAULT_PROJECT_ID,
+) {
   validateIdentifier(eventId, "event id");
 
-  return `decision-latest/${encodeURIComponent(eventId)}.json`;
+  return scopedProjectKey(
+    projectId,
+    `decision-latest/${encodeURIComponent(eventId)}.json`,
+  );
 }
 
 async function readJsonObject(archive, key) {
