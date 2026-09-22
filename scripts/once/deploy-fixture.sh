@@ -44,19 +44,31 @@ else
   CI=1 npx wrangler r2 bucket create "$STATE_BUCKET"
 fi
 
-INGEST_KEY="$(generate_key)"
+BROWSER_INGEST_KEY="$(generate_key)"
+BACKEND_INGEST_KEY="$(generate_key)"
+AGENT_INGEST_KEY="$(generate_key)"
 
-say "Rotating shared ETLayer fixture ingest credential"
+say "Rotating trusted ETLayer ingest profile credentials"
 cd "$ETLAYER_DIR"
-printf '%s' "$INGEST_KEY" | npx wrangler secret put ETLAYER_INGEST_KEY
+printf '%s' "$BROWSER_INGEST_KEY" |
+  npx wrangler secret put ETLAYER_BROWSER_INGEST_KEY
+printf '%s' "$BACKEND_INGEST_KEY" |
+  npx wrangler secret put ETLAYER_BACKEND_INGEST_KEY
+printf '%s' "$AGENT_INGEST_KEY" |
+  npx wrangler secret put ETLAYER_AGENT_INGEST_KEY
 
 say "Deploying current ETLayer Worker"
 npx wrangler deploy >/tmp/etlayer-fixture-etlayer-deploy.txt
 cat /tmp/etlayer-fixture-etlayer-deploy.txt
 
-say "Configuring fixture ingest credential"
+say "Configuring fixture trusted ingest credentials"
 cd "$FIXTURE_DIR"
-printf '%s' "$INGEST_KEY" | npx wrangler secret put ETLAYER_INGEST_KEY
+printf '%s' "$BROWSER_INGEST_KEY" |
+  npx wrangler secret put ETLAYER_BROWSER_INGEST_KEY
+printf '%s' "$BACKEND_INGEST_KEY" |
+  npx wrangler secret put ETLAYER_BACKEND_INGEST_KEY
+printf '%s' "$AGENT_INGEST_KEY" |
+  npx wrangler secret put ETLAYER_AGENT_INGEST_KEY
 
 say "Deploying producer fixture"
 npx wrangler deploy | tee /tmp/etlayer-fixture-deploy.txt
@@ -134,7 +146,7 @@ PREFLIGHT_BODY="$(
 )"
 
 PREFLIGHT_RESPONSE="$(
-  curl --fail-with-body --silent --show-error     -X POST "$ETLAYER_OTLP_ENDPOINT"     -H "authorization: Bearer $INGEST_KEY"     -H "content-type: application/json"     --data "$PREFLIGHT_BODY"
+  curl --fail-with-body --silent --show-error     -X POST "$ETLAYER_OTLP_ENDPOINT"     -H "authorization: Bearer $BACKEND_INGEST_KEY"     -H "content-type: application/json"     --data "$PREFLIGHT_BODY"
 )" || die "Authenticated OTLP preflight failed: $ETLAYER_OTLP_ENDPOINT"
 
 printf 'OTLP endpoint: %s\n' "$ETLAYER_OTLP_ENDPOINT"
@@ -164,7 +176,9 @@ trap - EXIT
 RUN_ID="acceptance-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)"
 RUN_URL="$FIXTURE_URL/?run=$RUN_ID"
 
-unset INGEST_KEY
+unset BROWSER_INGEST_KEY
+unset BACKEND_INGEST_KEY
+unset AGENT_INGEST_KEY
 
 say "Fixture ready"
 printf 'correlation.id: %s\n' "$RUN_ID"
