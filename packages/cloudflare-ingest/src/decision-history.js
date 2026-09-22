@@ -1,7 +1,7 @@
 import { DEFAULT_PROJECT_ID } from "./project-config.js";
 import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
 
-export const DECISION_HISTORY_VERSION = 1;
+export const DECISION_HISTORY_VERSION = 2;
 
 export async function recordDecisionHistory(
   archive,
@@ -54,7 +54,7 @@ export async function recordDecisionHistory(
 
   const projectId = projectIdForEvent(event);
   const state = {
-    version: DECISION_HISTORY_VERSION + 1,
+    version: DECISION_HISTORY_VERSION,
     projectId,
     decisionId,
     eventId: event.id,
@@ -134,6 +134,7 @@ export async function recordDecisionHistory(
         contentType: "application/json; charset=utf-8",
       },
       customMetadata: {
+        project_id: projectId,
         event_id: event.id,
         decision_id: decisionId,
         decision_key: key,
