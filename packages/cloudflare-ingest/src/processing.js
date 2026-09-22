@@ -4,6 +4,7 @@ import { resolveEventIdentity } from "./identity.js";
 import { recordIdentityState } from "./identity-state.js";
 import { applyDeliveryPrivacy } from "./privacy.js";
 import { recordPrivacyState } from "./privacy-state.js";
+import { recordDecisionHistory } from "./decision-history.js";
 import { routeEventDestinations } from "./destinations.js";
 import { validateEventContract } from "./event-contracts.js";
 import { recordValidationState } from "./validation-state.js";
@@ -28,6 +29,8 @@ export async function processPersistedEvent(
     options.resolveIdentity || resolveEventIdentity;
   const recordIdentity =
     options.recordIdentityState || recordIdentityState;
+  const recordDecision =
+    options.recordDecisionHistory || recordDecisionHistory;
   const route = options.route || routeEventDestinations;
 
   const validation = validate(event, options.validation || {});
@@ -87,6 +90,22 @@ export async function processPersistedEvent(
     },
   );
 
+  const decisionRecord = await recordDecision(
+    env.ARCHIVE,
+    event,
+    {
+      validation,
+      authority: authorityRecord.state,
+      privacy: privacyRecord.state,
+    },
+    {
+      now: options.now,
+      sourceKey: options.sourceKey,
+      decisionId: options.decisionId,
+      evaluationKind: options.evaluationKind,
+    },
+  );
+
   if (
     validation.status === "blocked" ||
     authority.status === "blocked"
@@ -96,6 +115,7 @@ export async function processPersistedEvent(
       authority: authorityRecord.state,
       privacy: privacyRecord.state,
       identity: identityRecord.state,
+      decision: decisionRecord.state,
       deliveries: [],
     };
   }
@@ -111,6 +131,7 @@ export async function processPersistedEvent(
     authority: authorityRecord.state,
     privacy: privacyRecord.state,
     identity: identityRecord.state,
+    decision: decisionRecord.state,
     deliveries,
   };
 }
