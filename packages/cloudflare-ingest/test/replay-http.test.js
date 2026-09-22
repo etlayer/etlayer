@@ -127,25 +127,3 @@ test("default project operator cannot authorize secondary replay", async () => {
   assert.equal(called, false);
 });
 
-test("secondary project cannot replay a destination it does not enable", async () => {
-  const response = await handleStatsigReplay(
-    request("secondary-key", {
-      projectId: "etlayer-secondary",
-    }),
-    {
-      ETLAYER_SECONDARY_REPLAY_KEY: "secondary-key",
-    },
-    {
-      replay: async () => {
-        throw new Error("replay should be rejected by core");
-      },
-      authenticateProjectOperator() {
-        return { ok: true, projectId: "etlayer-secondary" };
-      },
-    },
-  );
-
-  // The endpoint delegates destination policy to replay core. A focused core
-  // test below proves Statsig is not enabled for the secondary project.
-  assert.equal(response.status, 500);
-});
