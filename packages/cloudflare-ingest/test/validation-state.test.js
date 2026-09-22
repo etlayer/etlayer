@@ -54,13 +54,13 @@ test("records blocked validation evidence durably", async () => {
     },
     {
       now: new Date("2026-09-22T00:10:00.000Z"),
-      sourceKey: "events/2026/09/22/00/evt%2Fblocked.json",
+      sourceKey: "projects/etlayer-default/events/2026/09/22/00/evt%2Fblocked.json",
     },
   );
 
   assert.equal(
     result.key,
-    "validation/evt%2Fblocked.json",
+    "projects/etlayer-default/validation/evt%2Fblocked.json",
   );
 
   const state = JSON.parse(
@@ -68,7 +68,8 @@ test("records blocked validation evidence durably", async () => {
   );
 
   assert.deepEqual(state, {
-    version: 1,
+    version: 2,
+    projectId: "etlayer-default",
     eventId: "evt/blocked",
     eventName: "account.created",
     validatorVersion: 1,
@@ -81,7 +82,7 @@ test("records blocked validation evidence durably", async () => {
         attribute: "account.id",
       },
     ],
-    sourceKey: "events/2026/09/22/00/evt%2Fblocked.json",
+    sourceKey: "projects/etlayer-default/events/2026/09/22/00/evt%2Fblocked.json",
     updatedAt: "2026-09-22T00:10:00.000Z",
   });
 });
@@ -116,6 +117,6 @@ test("reads validation state for later diagnosis or reprocessing", async () => {
 test("validation state key is deterministic", () => {
   assert.equal(
     validationStateKey("event 1"),
-    "validation/event%201.json",
+    "projects/etlayer-default/validation/event%201.json",
   );
 });
