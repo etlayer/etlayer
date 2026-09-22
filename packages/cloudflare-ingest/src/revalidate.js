@@ -1,4 +1,6 @@
 import { processPersistedEvent } from "./processing.js";
+import { projectConfiguration } from "./project-config.js";
+import { projectIdForEvent, requireProjectSourceKey } from "./project-scope.js";
 
 export async function revalidateArchivedEvent(
   env,
@@ -11,7 +13,11 @@ export async function revalidateArchivedEvent(
     );
   }
 
-  const sourceKey = normalizeSourceKey(input?.sourceKey);
+  const projectId = normalizeProjectId(input?.projectId);
+  const sourceKey = normalizeSourceKey(
+    projectId,
+    input?.sourceKey,
+  );
   const object = await env.ARCHIVE.get(sourceKey);
 
   if (!object) {
@@ -21,6 +27,13 @@ export async function revalidateArchivedEvent(
   }
 
   const event = await readArchivedEvent(object, sourceKey);
+
+  if (projectIdForEvent(event) !== projectId) {
+    throw new RevalidationArchiveError(
+      `canonical event project does not match requested project: ${sourceKey}`,
+    );
+  }
+
   const process = options.process || processPersistedEvent;
 
   const result = await process(
@@ -50,6 +63,7 @@ export async function revalidateArchivedEvent(
   );
 
   return {
+    projectId,
     sourceKey,
     eventId: event.id,
     eventName: event.eventName,
@@ -65,18 +79,28 @@ export async function revalidateArchivedEvent(
   };
 }
 
-function normalizeSourceKey(value) {
+function normalizeProjectId(value) {
   if (
     typeof value !== "string" ||
-    !value.startsWith("events/") ||
-    value.includes("..")
+    value.length === 0 ||
+    !projectConfiguration(value)
   ) {
     throw new RevalidationValidationError(
-      "sourceKey must reference a canonical events/ object",
+      "projectId must reference a configured project",
     );
   }
 
   return value;
+}
+
+function normalizeSourceKey(projectId, value) {
+  try {
+    return requireProjectSourceKey(projectId, value);
+  } catch {
+    throw new RevalidationValidationError(
+      "sourceKey must reference a canonical event in the requested project",
+    );
+  }
 }
 
 async function readArchivedEvent(object, sourceKey) {
