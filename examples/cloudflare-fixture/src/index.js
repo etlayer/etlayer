@@ -73,6 +73,13 @@ export default {
       return handleAgentDelegationAcceptance(request, env);
     }
 
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/acceptance/authority-spoof"
+    ) {
+      return handleAuthoritySpoofAcceptance(request, env);
+    }
+
     return new Response("Not found", { status: 404 });
   },
 };
@@ -158,7 +165,10 @@ export async function handleBrowserEvent(request, env, options = {}) {
     env,
     payload.eventName,
     attributes,
-    options,
+    {
+      ...options,
+      ingestProfile: "browser",
+    },
   );
 
   const responseBody = {
@@ -247,7 +257,10 @@ export async function handleAccountCreated(request, env, options = {}) {
     env,
     "account.created",
     attributes,
-    options,
+    {
+      ...options,
+      ingestProfile: "backend",
+    },
   );
 
   const responseBody = {
@@ -298,7 +311,10 @@ export async function handleInvalidAccountAcceptance(
       "etlayer.producer.kind": "backend",
       "etlayer.authority.kind": "business_state",
     },
-    options,
+    {
+      ...options,
+      ingestProfile: "backend",
+    },
   );
 
   return jsonResponse(
@@ -381,7 +397,10 @@ export async function handlePrivacyAccountAcceptance(
       "user.email": "acceptance@example.test",
       "auth.token": "acceptance-secret-do-not-store",
     },
-    options,
+    {
+      ...options,
+      ingestProfile: "backend",
+    },
   );
 
   return jsonResponse(
@@ -487,6 +506,7 @@ export async function handleIdentityFlowAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "backend",
       eventId: linkEventId,
     },
   );
@@ -515,6 +535,7 @@ export async function handleIdentityFlowAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "backend",
       eventId: accountEventId,
     },
   );
@@ -612,8 +633,8 @@ export async function handleAgentDelegationAcceptance(
     "session.id": context.sessionId,
     "correlation.id": context.correlationId,
     ...attributionAttributes(context.attribution),
-    "etlayer.producer.kind": "backend",
-    "etlayer.authority.kind": "business_state",
+    "etlayer.producer.kind": "agent_runtime",
+    "etlayer.authority.kind": "agent_runtime",
   };
 
   await env.STATE.put(
@@ -652,6 +673,7 @@ export async function handleAgentDelegationAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "agent-runtime",
       eventId: directEventId,
     },
   );
@@ -714,6 +736,7 @@ export async function handleAgentDelegationAcceptance(
     },
     {
       ...emitOptions,
+      ingestProfile: "agent-runtime",
       eventId: childEventId,
     },
   );
@@ -736,6 +759,69 @@ export async function handleAgentDelegationAcceptance(
       attribution: context.attribution,
     },
     childResult.status,
+  );
+}
+
+export async function handleAuthoritySpoofAcceptance(
+  request,
+  env,
+  options = {},
+) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse(
+      { ok: false, error: "missing_funnel_context" },
+      409,
+    );
+  }
+
+  const payload = (await readJson(request)) || {};
+  const profile = safeIdentifier(payload.profile);
+
+  if (!["browser", "agent-runtime"].includes(profile)) {
+    return jsonResponse(
+      { ok: false, error: "invalid_spoof_profile" },
+      400,
+    );
+  }
+
+  const accountId =
+    safeIdentifier(payload.accountId) ||
+    `spoof_account_${crypto.randomUUID()}`;
+  const causationId =
+    safeIdentifier(payload.causationId) ||
+    "vs6_spoof_acceptance_root";
+
+  const result = await emitOtlpEvent(
+    env,
+    "account.created",
+    {
+      "actor.anonymous.id": context.actorId,
+      "account.id": accountId,
+      "session.id": context.sessionId,
+      "correlation.id": context.correlationId,
+      "causation.id": causationId,
+      ...attributionAttributes(context.attribution),
+      "etlayer.producer.kind": "backend",
+      "etlayer.authority.kind": "business_state",
+    },
+    {
+      ...options,
+      ingestProfile: profile,
+    },
+  );
+
+  return jsonResponse(
+    {
+      ...result.body,
+      correlationId: context.correlationId,
+      accountId,
+      spoofProfile: profile,
+      claimedProducerKind: "backend",
+      claimedAuthorityKind: "business_state",
+      expectedAuthority: "blocked",
+    },
+    result.status,
   );
 }
 
@@ -790,8 +876,13 @@ export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
     "content-type": "application/json",
   };
 
-  if (env.ETLAYER_INGEST_KEY) {
-    headers.authorization = `Bearer ${env.ETLAYER_INGEST_KEY}`;
+  const ingestKey = ingestKeyForProfile(
+    env,
+    options.ingestProfile,
+  );
+
+  if (ingestKey) {
+    headers.authorization = `Bearer ${ingestKey}`;
   }
 
   const request = new Request(env.ETLAYER_OTLP_ENDPOINT, {
@@ -832,6 +923,38 @@ export async function emitOtlpEvent(env, eventName, attributes, options = {}) {
       eventName,
     },
   };
+}
+
+function ingestKeyForProfile(env, profile) {
+  if (profile === "browser") {
+    return (
+      env.ETLAYER_BROWSER_INGEST_KEY ||
+      env.ETLAYER_INGEST_KEY ||
+      null
+    );
+  }
+
+  if (profile === "agent-runtime") {
+    return (
+      env.ETLAYER_AGENT_INGEST_KEY ||
+      env.ETLAYER_INGEST_KEY ||
+      null
+    );
+  }
+
+  if (profile === "backend") {
+    return (
+      env.ETLAYER_BACKEND_INGEST_KEY ||
+      env.ETLAYER_INGEST_KEY ||
+      null
+    );
+  }
+
+  return (
+    env.ETLAYER_INGEST_KEY ||
+    env.ETLAYER_BACKEND_INGEST_KEY ||
+    null
+  );
 }
 
 function contextForLanding(request, url) {

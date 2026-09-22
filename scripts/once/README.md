@@ -230,3 +230,42 @@ It verifies:
 - PostHog and Statsig delivery state is `exported` for both events.
 
 Independent PostHog verification should additionally confirm that both agent events use the same user `distinct_id` while preserving different `actor.id` properties.
+
+
+## VS6 trusted provenance and authority acceptance
+
+Deploy the current branch and fixture first:
+
+```bash
+./scripts/once/deploy-fixture.sh
+```
+
+The deploy helper rotates three independent ingest credentials:
+
+```text
+browser       -> interaction
+backend       -> business_state
+agent-runtime -> agent_runtime
+```
+
+Then run:
+
+```bash
+./scripts/once/vs6-trusted-authority.sh
+```
+
+The helper proves:
+
+- browser interaction claims are allowed under trusted browser provenance;
+- backend identity/account facts are allowed under trusted backend provenance;
+- agent/subagent facts are allowed under trusted agent-runtime provenance;
+- browser credentials cannot forge backend/business-state authority;
+- agent-runtime credentials cannot forge backend/business-state authority;
+- spoof events are still canonically preserved;
+- spoof events remain contract-valid so the proof isolates authority enforcement rather than schema failure;
+- durable `authority/<event-id>.json` evidence contains exact block reasons;
+- blocked spoof events never reach PostHog or Statsig;
+- canonical provenance contains no credential material;
+- canonical revalidation remains blocked without producer re-emission.
+
+The helper rotates the protected revalidation operator secret and redeploys the current ingest Worker before the revalidation assertion.

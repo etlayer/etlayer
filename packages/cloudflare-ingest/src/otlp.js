@@ -1,11 +1,38 @@
 import { applyIngestPrivacy } from "./privacy.js";
+import {
+  authenticateIngest,
+  stampTrustedProvenance,
+} from "./provenance.js";
 
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
 const QUEUE_BATCH_SIZE = 100;
 
 export async function handleExportLogs(request, env, options = {}) {
-  const authError = validateAuthorization(request, env);
-  if (authError) return authError;
+  const authenticate =
+    options.authenticateIngest || authenticateIngest;
+  const stampProvenance =
+    options.stampTrustedProvenance ||
+    stampTrustedProvenance;
+  const authentication = authenticate(request, env);
+
+  if (!authentication.ok) {
+    if (
+      authentication.reason ===
+      "ingest_credentials_not_configured"
+    ) {
+      return otlpError(
+        503,
+        14,
+        "ingest credentials are not configured",
+      );
+    }
+
+    return otlpError(
+      401,
+      16,
+      "invalid ingest credential",
+    );
+  }
 
   if (!isJsonContentType(request.headers.get("content-type"))) {
     return otlpError(415, 3, "content-type must be application/json");
@@ -45,9 +72,13 @@ export async function handleExportLogs(request, env, options = {}) {
   const applyPrivacy =
     options.applyIngestPrivacy || applyIngestPrivacy;
 
-  events = events.map(
-    (event) => applyPrivacy(event).event,
-  );
+  events = events.map((event) => {
+    const trusted = stampProvenance(
+      event,
+      authentication.provenance,
+    );
+    return applyPrivacy(trusted).event;
+  });
 
   if (!env.EVENTS || typeof env.EVENTS.sendBatch !== "function") {
     return otlpError(503, 14, "event queue is not configured");
@@ -126,19 +157,6 @@ export function normalizeExportLogsRequest(payload, { receivedAt, idFactory }) {
   }
 
   return events;
-}
-
-function validateAuthorization(request, env) {
-  if (!env.ETLAYER_INGEST_KEY) {
-    return otlpError(503, 14, "ingest key is not configured");
-  }
-
-  const expected = `Bearer ${env.ETLAYER_INGEST_KEY}`;
-  if (request.headers.get("authorization") !== expected) {
-    return otlpError(401, 16, "invalid ingest credential");
-  }
-
-  return null;
 }
 
 function isJsonContentType(contentType) {

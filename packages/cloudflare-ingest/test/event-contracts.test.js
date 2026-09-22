@@ -223,8 +223,8 @@ test("validates agent.tool.call@1 with explicit agent actor and user delegation"
       "delegation.0.principal.id": "usr_42",
       "agent.turn.id": "turn_17",
       "agent.tool_call.id": "call_abc",
-      "etlayer.producer.kind": "backend",
-      "etlayer.authority.kind": "business_state",
+      "etlayer.producer.kind": "agent_runtime",
+      "etlayer.authority.kind": "agent_runtime",
     }),
   );
 
@@ -255,8 +255,8 @@ test("validates subagent delegation chain explicitly", () => {
       "delegation.1.principal.id": "usr_42",
       "agent.turn.id": "turn_18",
       "agent.tool_call.id": "call_child",
-      "etlayer.producer.kind": "backend",
-      "etlayer.authority.kind": "business_state",
+      "etlayer.producer.kind": "agent_runtime",
+      "etlayer.authority.kind": "agent_runtime",
     }),
   );
 
