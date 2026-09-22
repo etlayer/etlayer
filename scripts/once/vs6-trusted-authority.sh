@@ -6,6 +6,8 @@ INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
 INGEST_URL="${ETLAYER_INGEST_URL:-https://etlayer-ingest.sergii-ponomarov.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
+PROJECT_PREFIX="projects/$PROJECT_ID"
 RUN_ID="${RUN_ID:-vs6-authority-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs6-authority-$$.txt"
 
@@ -147,7 +149,7 @@ get_r2_json() {
 assert_delivery_absent() {
   local destination="$1"
   local event_id="$2"
-  local key="deliveries/$destination/$event_id.json"
+  local key="$PROJECT_PREFIX/deliveries/$destination/$event_id.json"
 
   if npx wrangler r2 object get \
     "$ARCHIVE_BUCKET/$key" \
@@ -163,7 +165,7 @@ assert_allowed() {
   local expected_authority="$4"
 
   local state
-  state="$(get_r2_json "authority/$event_id.json")" ||
+  state="$(get_r2_json "$PROJECT_PREFIX/authority/$event_id.json")" ||
     die "Authority state missing for $event_id"
 
   node -e '
@@ -193,11 +195,11 @@ assert_blocked_spoof() {
 
   local validation authority identity source_key canonical
 
-  validation="$(get_r2_json "validation/$event_id.json")" ||
+  validation="$(get_r2_json "$PROJECT_PREFIX/validation/$event_id.json")" ||
     die "Validation state missing for spoof $event_id"
-  authority="$(get_r2_json "authority/$event_id.json")" ||
+  authority="$(get_r2_json "$PROJECT_PREFIX/authority/$event_id.json")" ||
     die "Authority state missing for spoof $event_id"
-  identity="$(get_r2_json "identity/$event_id.json")" ||
+  identity="$(get_r2_json "$PROJECT_PREFIX/identity/$event_id.json")" ||
     die "Identity state missing for spoof $event_id"
 
   node -e '
@@ -262,7 +264,8 @@ assert_blocked_spoof() {
     const serialized = JSON.stringify(event);
 
     const ok =
-      event.provenance?.version === 1 &&
+      event.provenance?.version === 2 &&
+      event.provenance?.projectId === process.argv[4] &&
       event.provenance?.profileId === profile &&
       event.provenance?.producer?.kind === trusted &&
       attrs["etlayer.producer.kind"] === "backend" &&
@@ -276,7 +279,7 @@ assert_blocked_spoof() {
       console.error(JSON.stringify(event, null, 2));
       process.exit(1);
     }
-  ' "$canonical" "$expected_profile" "$trusted_producer" ||
+  ' "$canonical" "$expected_profile" "$trusted_producer" "$PROJECT_ID" ||
     die "Canonical trusted provenance invariant failed."
 
   sleep 2
@@ -316,7 +319,7 @@ REVALIDATION="$(
     -X POST "$INGEST_URL/_ops/revalidate" \
     -H "authorization: Bearer $OPERATOR_KEY" \
     -H "content-type: application/json" \
-    --data "$(jq -nc --arg sourceKey "$BROWSER_SOURCE_KEY" '{sourceKey:$sourceKey}')"
+    --data "$(jq -nc --arg projectId "$PROJECT_ID" --arg sourceKey "$BROWSER_SOURCE_KEY" '{projectId:$projectId,sourceKey:$sourceKey}')"
 )"
 printf '%s\n' "$REVALIDATION"
 
