@@ -73,6 +73,13 @@ export default {
       return handleAgentDelegationAcceptance(request, env);
     }
 
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/acceptance/authority-spoof"
+    ) {
+      return handleAuthoritySpoofAcceptance(request, env);
+    }
+
     return new Response("Not found", { status: 404 });
   },
 };
@@ -752,6 +759,69 @@ export async function handleAgentDelegationAcceptance(
       attribution: context.attribution,
     },
     childResult.status,
+  );
+}
+
+export async function handleAuthoritySpoofAcceptance(
+  request,
+  env,
+  options = {},
+) {
+  const context = contextFromRequest(request);
+  if (!context) {
+    return jsonResponse(
+      { ok: false, error: "missing_funnel_context" },
+      409,
+    );
+  }
+
+  const payload = (await readJson(request)) || {};
+  const profile = safeIdentifier(payload.profile);
+
+  if (!["browser", "agent-runtime"].includes(profile)) {
+    return jsonResponse(
+      { ok: false, error: "invalid_spoof_profile" },
+      400,
+    );
+  }
+
+  const accountId =
+    safeIdentifier(payload.accountId) ||
+    `spoof_account_${crypto.randomUUID()}`;
+  const causationId =
+    safeIdentifier(payload.causationId) ||
+    "vs6_spoof_acceptance_root";
+
+  const result = await emitOtlpEvent(
+    env,
+    "account.created",
+    {
+      "actor.anonymous.id": context.actorId,
+      "account.id": accountId,
+      "session.id": context.sessionId,
+      "correlation.id": context.correlationId,
+      "causation.id": causationId,
+      ...attributionAttributes(context.attribution),
+      "etlayer.producer.kind": "backend",
+      "etlayer.authority.kind": "business_state",
+    },
+    {
+      ...options,
+      ingestProfile: profile,
+    },
+  );
+
+  return jsonResponse(
+    {
+      ...result.body,
+      correlationId: context.correlationId,
+      accountId,
+      spoofProfile: profile,
+      claimedProducerKind: "backend",
+      claimedAuthorityKind: "business_state",
+      expectedAuthority: "blocked",
+    },
+    result.status,
   );
 }
 
