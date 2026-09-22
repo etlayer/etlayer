@@ -42,6 +42,7 @@ test("records blocked validation evidence durably", async () => {
     event,
     {
       status: "blocked",
+      validatorVersion: 1,
       schemaVersion: 1,
       contractId: "account.created@1",
       errors: [
@@ -70,6 +71,7 @@ test("records blocked validation evidence durably", async () => {
     version: 1,
     eventId: "evt/blocked",
     eventName: "account.created",
+    validatorVersion: 1,
     schemaVersion: 1,
     status: "blocked",
     contractId: "account.created@1",
@@ -96,6 +98,7 @@ test("reads validation state for later diagnosis or reprocessing", async () => {
     event,
     {
       status: "valid",
+      validatorVersion: 1,
       schemaVersion: 1,
       contractId: "landing.hero.exposed@1",
       errors: [],
