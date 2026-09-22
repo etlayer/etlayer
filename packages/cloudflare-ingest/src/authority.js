@@ -1,5 +1,7 @@
 import { decodeEventAttributes } from "./event-contracts.js";
 
+export const AUTHORITY_POLICY_VERSION = 1;
+
 export function evaluateEventAuthority(event) {
   validateManagedEvent(event);
 
@@ -14,6 +16,7 @@ export function evaluateEventAuthority(event) {
   if (!producerKind && !authorityKind) {
     return {
       status: "not_applicable",
+      policyVersion: AUTHORITY_POLICY_VERSION,
       profileId: event.provenance?.profileId || null,
       trustedProducerKind:
         event.provenance?.producer?.kind || null,
@@ -63,6 +66,7 @@ export function evaluateEventAuthority(event) {
 
   return {
     status: errors.length === 0 ? "allowed" : "blocked",
+    policyVersion: AUTHORITY_POLICY_VERSION,
     profileId: provenance?.profileId || null,
     trustedProducerKind:
       provenance?.producer?.kind || null,

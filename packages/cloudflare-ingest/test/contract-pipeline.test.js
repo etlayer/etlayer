@@ -92,13 +92,33 @@ test("queue preserves an invalid event before blocking destination routing", asy
   assert.equal(message.ackCount, 1);
   assert.equal(message.retryCount, 0);
 
-  assert.deepEqual(archive.writes, [
+  assert.deepEqual(archive.writes.slice(0, 5), [
     "events/2026/09/22/00/evt-blocked-1.json",
     "validation/evt-blocked-1.json",
     "authority/evt-blocked-1.json",
     "privacy/evt-blocked-1.json",
     "identity/evt-blocked-1.json",
   ]);
+
+  const decisionKey = archive.writes.find((key) =>
+    key.startsWith("decisions/evt-blocked-1/"),
+  );
+
+  assert.ok(decisionKey);
+  assert.equal(
+    archive.writes.includes("decision-latest/evt-blocked-1.json"),
+    true,
+  );
+
+  const decision = JSON.parse(
+    archive.objects.get(decisionKey).body,
+  );
+
+  assert.equal(decision.validation.status, "blocked");
+  assert.equal(decision.validation.validatorVersion, 1);
+  assert.equal(decision.authority.policyVersion, 1);
+  assert.equal(decision.privacy.policyVersion, 1);
+  assert.equal(decision.routeEligible, false);
 
   const validation = JSON.parse(
     archive.objects.get("validation/evt-blocked-1.json").body,

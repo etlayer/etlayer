@@ -6,6 +6,7 @@ import { processPersistedEvent } from "../src/processing.js";
 function authorityResult(status = "allowed") {
   return {
     status,
+    policyVersion: 1,
     profileId: "test",
     trustedProducerKind: "backend",
     claim: {
@@ -98,6 +99,22 @@ function identityState(identity) {
   };
 }
 
+function decisionState(overrides = {}) {
+  return {
+    state: {
+      version: 1,
+      decisionId: "decision-test",
+      eventId: "evt",
+      eventName: "example",
+      evaluationKind: "processing",
+      sourceKey: null,
+      evaluatedAt: "2026-09-22T01:00:00.000Z",
+      routeEligible: true,
+      ...overrides,
+    },
+  };
+}
+
 test("blocked validation records validation, privacy, and identity evidence but never routes", async () => {
   const calls = [];
   const event = {
@@ -114,6 +131,7 @@ test("blocked validation records validation, privacy, and identity evidence but 
         calls.push("validate");
         return {
           status: "blocked",
+          validatorVersion: 1,
           schemaVersion: 1,
           contractId: "account.created@1",
           errors: [
@@ -151,6 +169,10 @@ test("blocked validation records validation, privacy, and identity evidence but 
         calls.push("record-identity");
         return identityState(identity);
       },
+      async recordDecisionHistory() {
+        calls.push("record-decision");
+        return decisionState({ routeEligible: false });
+      },
       async route() {
         calls.push("route");
         return [];
@@ -167,6 +189,7 @@ test("blocked validation records validation, privacy, and identity evidence but 
     "record-privacy",
     "identity",
     "record-identity",
+    "record-decision",
   ]);
   assert.equal(result.validation.status, "blocked");
   assert.equal(result.identity.subject.id, "anon_1");
@@ -216,6 +239,7 @@ test("valid events route only the privacy-sanitized copy after identity evidence
         calls.push("validate");
         return {
           status: "valid",
+          validatorVersion: 1,
           schemaVersion: 1,
           contractId: "account.created@1",
           errors: [],
@@ -257,6 +281,10 @@ test("valid events route only the privacy-sanitized copy after identity evidence
         calls.push("record-identity");
         return identityState(identity);
       },
+      async recordDecisionHistory() {
+        calls.push("record-decision");
+        return decisionState();
+      },
       async route(receivedEvent) {
         calls.push("route");
         assert.equal(receivedEvent, sanitized);
@@ -274,6 +302,7 @@ test("valid events route only the privacy-sanitized copy after identity evidence
     "record-privacy",
     "identity",
     "record-identity",
+    "record-decision",
     "route",
   ]);
   assert.equal(result.identity.subject.id, "user_1");
@@ -295,6 +324,7 @@ test("identity evidence persistence failure remains retryable before routing", a
         validate() {
           return {
             status: "unmanaged",
+            validatorVersion: 1,
             schemaVersion: null,
             contractId: null,
             errors: [],

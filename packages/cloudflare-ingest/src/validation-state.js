@@ -28,6 +28,7 @@ export async function recordValidationState(
     version: 1,
     eventId: event.id,
     eventName: event.eventName,
+    validatorVersion: validation.validatorVersion,
     schemaVersion: validation.schemaVersion,
     status: validation.status,
     contractId: validation.contractId,
@@ -49,6 +50,7 @@ export async function recordValidationState(
       event_id: event.id,
       event_name: event.eventName,
       status: validation.status,
+      validator_version: String(validation.validatorVersion),
       schema_version:
         validation.schemaVersion == null
           ? ""
@@ -116,6 +118,8 @@ function validateEvent(event) {
 function validateResult(validation) {
   if (
     !validation ||
+    !Number.isSafeInteger(validation.validatorVersion) ||
+    validation.validatorVersion < 1 ||
     !["valid", "blocked", "unmanaged"].includes(validation.status)
   ) {
     throw new ValidationStateConfigurationError(
