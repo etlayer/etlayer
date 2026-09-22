@@ -217,3 +217,30 @@ test("revalidation reapplies delivery privacy before routing the canonical event
   assert.equal(keys.includes("account.id"), true);
   assert.equal(result.validation.status, "valid");
 });
+
+
+test("rejects a canonical source key belonging to another project before archive read", async () => {
+  let reads = 0;
+
+  await assert.rejects(
+    () =>
+      revalidateArchivedEvent(
+        {
+          ARCHIVE: {
+            async get() {
+              reads += 1;
+              return null;
+            },
+          },
+        },
+        {
+          projectId: "etlayer-default",
+          sourceKey:
+            "projects/etlayer-secondary/events/2026/09/22/00/evt.json",
+        },
+      ),
+    RevalidationValidationError,
+  );
+
+  assert.equal(reads, 0);
+});
