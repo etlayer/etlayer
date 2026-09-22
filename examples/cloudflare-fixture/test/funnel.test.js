@@ -8,6 +8,7 @@ import worker, {
   handlePrivacyAccountAcceptance,
   handleIdentityFlowAcceptance,
   handleAgentDelegationAcceptance,
+  handleAuthoritySpoofAcceptance,
 } from "../src/index.js";
 
 function cookieHeader() {
@@ -693,4 +694,103 @@ test("VS5 agent acceptance preserves immediate actors and ordered delegation", a
     body.childEventId,
     "99999999-9999-4999-8999-999999999999",
   );
+});
+
+
+test("VS6 browser events prefer the browser ingest credential over legacy", async () => {
+  const calls = [];
+
+  const response = await handleBrowserEvent(
+    new Request("https://fixture.test/api/browser-event", {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        eventName: "landing.hero.exposed",
+      }),
+    }),
+    {
+      ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
+      ETLAYER_BROWSER_INGEST_KEY: "browser-key",
+      ETLAYER_INGEST_KEY: "legacy-key",
+      ETLAYER: {
+        async fetch(request) {
+          calls.push({
+            authorization: request.headers.get("authorization"),
+          });
+          return new Response("{}", { status: 200 });
+        },
+      },
+    },
+  );
+
+  assert.equal(response.status, 202);
+  assert.equal(calls[0].authorization, "Bearer browser-key");
+});
+
+test("VS6 authority spoof uses the requested low-trust credential while claiming backend authority", async () => {
+  for (const [profile, expectedAuthorization] of [
+    ["browser", "Bearer browser-key"],
+    ["agent-runtime", "Bearer agent-key"],
+  ]) {
+    const calls = [];
+
+    const response = await handleAuthoritySpoofAcceptance(
+      new Request(
+        "https://fixture.test/api/acceptance/authority-spoof",
+        {
+          method: "POST",
+          headers: {
+            cookie: cookieHeader(),
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ profile }),
+        },
+      ),
+      {
+        ETLAYER_OTLP_ENDPOINT: "https://events.test/v1/logs",
+        ETLAYER_BROWSER_INGEST_KEY: "browser-key",
+        ETLAYER_AGENT_INGEST_KEY: "agent-key",
+        ETLAYER: {
+          async fetch(request) {
+            calls.push({
+              authorization:
+                request.headers.get("authorization"),
+              body: JSON.parse(
+                await request.clone().text(),
+              ),
+            });
+            return new Response("{}", { status: 200 });
+          },
+        },
+      },
+      {
+        eventId:
+          profile === "browser"
+            ? "88888888-8888-4888-8888-888888888888"
+            : "99999999-9999-4999-8999-999999999999",
+      },
+    );
+
+    assert.equal(response.status, 202);
+    assert.equal(
+      calls[0].authorization,
+      expectedAuthorization,
+    );
+
+    const attributes = decodeAttributes(
+      recordFrom(calls[0].body).attributes,
+    );
+
+    assert.equal(
+      attributes["etlayer.producer.kind"],
+      "backend",
+    );
+    assert.equal(
+      attributes["etlayer.authority.kind"],
+      "business_state",
+    );
+  }
 });
