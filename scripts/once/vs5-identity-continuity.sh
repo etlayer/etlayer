@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
+PROJECT_PREFIX="projects/$PROJECT_ID"
 RUN_ID="${RUN_ID:-vs5-identity-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs5-identity-$$.txt"
 
@@ -111,11 +113,11 @@ get_r2_json() {
 }
 
 say "Reading durable identity evidence"
-HERO_IDENTITY="$(get_r2_json "identity/$HERO_EVENT_ID.json")" ||
+HERO_IDENTITY="$(get_r2_json "$PROJECT_PREFIX/identity/$HERO_EVENT_ID.json")" ||
   die "Hero identity state did not appear."
-LINK_IDENTITY="$(get_r2_json "identity/$IDENTITY_EVENT_ID.json")" ||
+LINK_IDENTITY="$(get_r2_json "$PROJECT_PREFIX/identity/$IDENTITY_EVENT_ID.json")" ||
   die "Identity-link state did not appear."
-ACCOUNT_IDENTITY="$(get_r2_json "identity/$ACCOUNT_EVENT_ID.json")" ||
+ACCOUNT_IDENTITY="$(get_r2_json "$PROJECT_PREFIX/identity/$ACCOUNT_EVENT_ID.json")" ||
   die "Account identity state did not appear."
 
 if command -v jq >/dev/null 2>&1; then
@@ -187,7 +189,7 @@ node -e '
 
 say "Verifying contract validation"
 for id in "$HERO_EVENT_ID" "$IDENTITY_EVENT_ID" "$ACCOUNT_EVENT_ID"; do
-  VALIDATION="$(get_r2_json "validation/$id.json")" ||
+  VALIDATION="$(get_r2_json "$PROJECT_PREFIX/validation/$id.json")" ||
     die "Validation state missing for $id."
 
   node -e '
@@ -202,7 +204,7 @@ done
 say "Verifying PostHog and Statsig deliveries"
 for id in "$HERO_EVENT_ID" "$IDENTITY_EVENT_ID" "$ACCOUNT_EVENT_ID"; do
   for destination in posthog statsig; do
-    DELIVERY="$(get_r2_json "deliveries/$destination/$id.json")" ||
+    DELIVERY="$(get_r2_json "$PROJECT_PREFIX/deliveries/$destination/$id.json")" ||
       die "$destination delivery missing for $id."
 
     node -e '
