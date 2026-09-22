@@ -168,3 +168,51 @@ test("retries queue messages when the archive binding is missing", async () => {
   assert.equal(message.ackCount, 0);
   assert.equal(message.retryCount, 1);
 });
+
+
+test("the same event id can exist independently in two projects", async () => {
+  const archive = fakeArchive();
+  const shared = {
+    id: "evt-shared",
+    eventName: "account.created",
+    receivedAt: "2026-09-21T16:20:30.000Z",
+    resource: {},
+    scope: {},
+    logRecord: { eventName: "account.created" },
+  };
+
+  const first = await persistManagedEvent(
+    archive,
+    {
+      ...shared,
+      provenance: {
+        version: 2,
+        projectId: "etlayer-default",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+    },
+  );
+
+  const second = await persistManagedEvent(
+    archive,
+    {
+      ...shared,
+      provenance: {
+        version: 2,
+        projectId: "etlayer-secondary",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+    },
+  );
+
+  assert.notEqual(first.key, second.key);
+  assert.match(first.key, /^projects\/etlayer-default\/events\//);
+  assert.match(second.key, /^projects\/etlayer-secondary\/events\//);
+  assert.equal(archive.writes, 2);
+});
