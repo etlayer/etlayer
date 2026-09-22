@@ -234,8 +234,14 @@ operator_request_status() {
 }
 
 cd "$ROOT_DIR"
-npx wrangler whoami >/dev/null 2>&1 ||
-  die "Wrangler is not authenticated. Run: npx wrangler login"
+
+if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] &&
+   [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+  say "Using non-interactive Cloudflare API token"
+else
+  npx wrangler whoami >/dev/null 2>&1 ||
+    die "Wrangler is not authenticated. Run: npx wrangler login"
+fi
 
 DEFAULT_BROWSER_KEY="$(generate_key)"
 DEFAULT_BACKEND_KEY="$(generate_key)"
