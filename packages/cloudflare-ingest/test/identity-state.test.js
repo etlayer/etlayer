@@ -67,19 +67,20 @@ test("records subject actor and delegation without building a graph", async () =
       },
     },
     {
-      sourceKey: "events/2026/09/22/02/evt_identity_1.json",
+      sourceKey: "projects/etlayer-default/events/2026/09/22/02/evt_identity_1.json",
       now: new Date("2026-09-22T02:01:00.000Z"),
     },
   );
 
-  assert.equal(result.key, "identity/evt_identity_1.json");
-  assert.equal(result.state.version, 2);
+  assert.equal(result.key, "projects/etlayer-default/identity/evt_identity_1.json");
+  assert.equal(result.state.version, 3);
+  assert.equal(result.state.projectId, "etlayer-default");
   assert.equal(result.state.subject.id, "usr_42");
   assert.equal(result.state.actor.id, "agent_hanna");
   assert.equal(result.state.delegation.length, 1);
   assert.equal(
     result.state.sourceKey,
-    "events/2026/09/22/02/evt_identity_1.json",
+    "projects/etlayer-default/events/2026/09/22/02/evt_identity_1.json",
   );
 
   const read = await readIdentityState(store, "evt_identity_1");
