@@ -1,7 +1,8 @@
 import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
-import { resolveProjectDestinations, validateProjectId } from "./project-config.js";
+import { projectConfiguration, resolveProjectDestinations, validateProjectId } from "./project-config.js";
+import { resolveDestinationCredential } from "./destination-credentials.js";
 import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
 
 const DESTINATION_EXPORTERS = {
@@ -63,6 +64,17 @@ export async function replayDestinationRange(
 
   const readState = options.readState || readDeliveryState;
   const recordState = options.recordState || recordDeliveryState;
+  const credential =
+    !options.deliver &&
+    !projectConfiguration(range.projectId)
+      ? await resolveDestinationCredential(
+          env.ARCHIVE,
+          env,
+          range.projectId,
+          destination,
+          { crypto: options.crypto },
+        )
+      : null;
   const deliveries = [];
   let exported = 0;
   let skipped = 0;
@@ -95,11 +107,22 @@ export async function replayDestinationRange(
       continue;
     }
 
-    const result = await exporter(item.event, env, {
+    const exportOptions = {
       fetch: options.fetch,
       crypto: options.crypto,
       delivery,
-    });
+      ...(
+        credential
+          ? { credential: credential.secret }
+          : {}
+      ),
+    };
+
+    const result = await exporter(
+      item.event,
+      env,
+      exportOptions,
+    );
 
     if (!result || result.status !== "exported") {
       throw new ReplayConfigurationError(
