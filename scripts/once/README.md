@@ -467,7 +467,7 @@ Important: rotating `ETLAYER_DESTINATION_SECRET_KEY_V1` is acceptable only in th
 Run:
 
 ```bash
-./scripts/once/vs12-external-integration-contract.sh
+bash ./scripts/once/vs12-external-integration-contract.sh
 ```
 
 The helper performs privileged CI setup first, then hands only the public consumer inputs to `examples/external-consumer/run.mjs`:
