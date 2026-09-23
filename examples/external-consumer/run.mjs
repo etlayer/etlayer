@@ -289,11 +289,15 @@ assert(
   "public event status must not expose sourceKey",
 );
 
+const idempotencyKeyFingerprint =
+  await sha256Hex(idempotencyKey);
+
 process.stdout.write(
   JSON.stringify(
     {
       projectId,
       eventId: emitted.eventId,
+      idempotencyKeyFingerprint,
       idempotencyReplay: true,
       sameCredentialReplayed:
         replay.body.credential === firstBody.credential,
@@ -381,6 +385,18 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 function requiredEnv(name) {
