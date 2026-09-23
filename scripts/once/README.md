@@ -460,3 +460,51 @@ The helper proves the destination-secret boundary end-to-end:
 - leaves exact event IDs for independent PostHog verification.
 
 Important: rotating `ETLAYER_DESTINATION_SECRET_KEY_V1` is acceptable only in the disposable CI acceptance environment. Do not overwrite the production `v1` master key while any `v1` encrypted destination credentials must remain decryptable.
+
+
+## VS12 external integration contract acceptance
+
+Run:
+
+```bash
+./scripts/once/vs12-external-integration-contract.sh
+```
+
+The helper performs privileged CI setup first, then hands only the public consumer inputs to `examples/external-consumer/run.mjs`:
+
+```text
+ETLAYER_BASE_URL
+ETLAYER_PROJECT_ID
+ETLAYER_OPERATOR_CREDENTIAL
+```
+
+The external consumer is statically checked so it cannot depend on:
+
+```text
+/_mgmt/*
+/_ops/*
+Wrangler
+Cloudflare API/account credentials
+ETLAYER_MANAGEMENT_KEY
+R2/registry paths
+packages/cloudflare-ingest imports
+```
+
+It then proves:
+
+- `POST /api/v1/projects/:projectId/onboarding`;
+- required `Idempotency-Key`;
+- same-key/same-request replay returns the same producer credential without duplicate mutation;
+- same-key/different-request returns `409 idempotency_key_reused`;
+- stable error codes for missing idempotency, malformed JSON, media type, and invalid operator authentication;
+- the returned quickstart executes exactly as delivered;
+- standard `POST /v1/logs` ingestion remains the event transport;
+- `GET /api/v1/projects/:projectId/events/:eventId` reaches `complete`;
+- validation, authority, route eligibility, and PostHog delivery are visible through the public status contract;
+- public event status does not expose `sourceKey`;
+- cross-project public event inspection returns HTTP 401 with `invalid_operator_credential`;
+- the durable idempotency replay capsule is AES-256-GCM encrypted and contains no plaintext `etl_prod_` credential.
+
+The live workflow runs VS8 through VS12 serially so the new product boundary cannot weaken the existing isolation/security foundation.
+
+The helper rotates `ETLAYER_IDEMPOTENCY_SECRET_KEY_V1` only in the disposable CI environment. Do not overwrite an in-use persistent key version while unexpired replay capsules depend on it.
