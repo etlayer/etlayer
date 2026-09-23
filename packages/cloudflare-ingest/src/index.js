@@ -4,6 +4,7 @@ import { processPersistedEvent } from "./processing.js";
 import { handlePostHogReplay, handleStatsigReplay } from "./replay-http.js";
 import { handleRevalidate } from "./revalidate-http.js";
 import { handleEvidenceRead } from "./evidence-http.js";
+import { handleEventInspect } from "./inspect-http.js";
 import { handleManagementRequest } from "./management-http.js";
 
 export default {
@@ -44,6 +45,13 @@ export default {
       url.pathname === "/_ops/evidence"
     ) {
       return handleEvidenceRead(request, env);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/_ops/inspect"
+    ) {
+      return handleEventInspect(request, env);
     }
 
     if (url.pathname.startsWith("/_mgmt/")) {
