@@ -1,7 +1,8 @@
 import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
-import { resolveProjectDestinations } from "./project-config.js";
+import { projectConfiguration, resolveProjectDestinations } from "./project-config.js";
+import { resolveDestinationCredential } from "./destination-credentials.js";
 import { projectIdForEvent } from "./project-scope.js";
 
 const DEFAULT_DESTINATIONS = [
@@ -17,6 +18,7 @@ const DEFAULT_DESTINATIONS = [
 
 export async function routeEventDestinations(event, env, options = {}) {
   const projectId = projectIdForEvent(event);
+  const usesProjectConfiguration = !options.destinations;
   const destinations =
     options.destinations ||
     await configuredDestinationsForProject(
@@ -30,7 +32,9 @@ export async function routeEventDestinations(event, env, options = {}) {
   for (const destination of destinations) {
     validateDestination(destination);
 
-    const destinationOptions = options[destination.name] || {};
+    let destinationOptions = {
+      ...(options[destination.name] || {}),
+    };
     const previous = await readState(
       env.ARCHIVE,
       event.id,
@@ -50,6 +54,29 @@ export async function routeEventDestinations(event, env, options = {}) {
     let result;
 
     try {
+      if (
+        usesProjectConfiguration &&
+        !projectConfiguration(projectId)
+      ) {
+        const credential =
+          await resolveDestinationCredential(
+            env.ARCHIVE,
+            env,
+            projectId,
+            destination.name,
+            {
+              crypto:
+                destinationOptions.crypto ||
+                options.crypto,
+            },
+          );
+
+        destinationOptions = {
+          ...destinationOptions,
+          credential: credential.secret,
+        };
+      }
+
       result = await destination.exportEvent(
         event,
         env,
