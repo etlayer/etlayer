@@ -119,10 +119,10 @@ VS9  Dynamic Management                       complete
 VS10 External Onboarding                      complete
 VS11 Project-scoped Destination Credentials   complete
 
-VS12 External Integration Contract            design selected
+VS12 External Integration Contract            complete
 ~~~
 
-The current live acceptance suite re-proves VS8 -> VS11 serially in an isolated Cloudflare CI environment.
+The current live acceptance suite re-proves VS8 -> VS12 serially in an isolated Cloudflare CI environment.
 
 See:
 
@@ -145,11 +145,11 @@ See:
 - Project isolation applies to storage, policy, operations, routing, and credentials
 - Cloudflare is the first runtime, not a core semantic dependency
 
-## Next phase
+## Product contract
 
-Phase 2 has selected its first slice: **VS12 - External Integration Contract**.
+**VS12 - External Integration Contract is complete.**
 
-The goal is to prove that a clean external application can integrate with ETLayer using only:
+A clean external application can now integrate using:
 
 ~~~text
 documented /api/v1 product endpoints
@@ -160,7 +160,7 @@ public event status
 
 without knowledge of R2 paths, Wrangler, registry internals, /_mgmt or /_ops diagnostic surfaces, or ETLayer implementation modules.
 
-VS12 also makes secret-bearing onboarding explicitly retry-safe through idempotency and a bounded encrypted response replay contract.
+Secret-bearing onboarding is retry-safe through required idempotency and a bounded encrypted response replay contract. The full VS8 -> VS12 live suite and independent PostHog provider verification passed.
 
 ## Stability
 
