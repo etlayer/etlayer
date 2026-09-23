@@ -77,7 +77,7 @@ jobs:
           ./scripts/once/vs11-project-destination-credentials.sh |
             tee "$RUNNER_TEMP/vs11-live-acceptance.log"
 
-          ./scripts/once/vs12-external-integration-contract.sh |
+          bash ./scripts/once/vs12-external-integration-contract.sh |
             tee "$RUNNER_TEMP/vs12-live-acceptance.log"
 
       - name: Upload acceptance logs
