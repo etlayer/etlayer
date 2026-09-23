@@ -125,7 +125,7 @@ ETLAYER_DESTINATION_SECRET_KEY_V2
 
 then explicitly re-encrypt/migrate active records before retiring `v1`.
 
-The CI acceptance environment is different: each acceptance run creates disposable dynamic projects, so its helper may rotate an ephemeral `v1` key between runs.
+The CI acceptance environment also keeps `ETLAYER_DESTINATION_SECRET_KEY_V1` stable across runs. Dynamic projects are disposable, but the Worker encryption root is not treated as an acceptance credential. Rotating the same key version across Cloudflare edge/queue propagation can make newly written ciphertext temporarily or permanently unreadable by another active Worker version. Future rotation must introduce a new key version and migrate deliberately.
 
 ## Management API
 
