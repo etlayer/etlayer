@@ -434,3 +434,27 @@ The helper exercises the product-facing onboarding path instead of constructing 
 - proves another project operator receives HTTP 401 when attempting to inspect the event.
 
 The GitHub `Live Acceptance` workflow runs VS8, VS9, and VS10 serially so onboarding changes cannot regress project isolation or dynamic credential management.
+
+
+## VS11 project-scoped destination credential acceptance
+
+Run:
+
+```bash
+./scripts/once/vs11-project-destination-credentials.sh
+```
+
+The helper proves the destination-secret boundary end-to-end:
+
+- rotates an ephemeral CI-only `ETLAYER_DESTINATION_SECRET_KEY_V1`;
+- creates two dynamic projects;
+- writes the same known plaintext canary to both projects;
+- proves the plaintext literal is absent from exact registry evidence;
+- proves the two AES-GCM ciphertexts and IVs differ;
+- bootstraps the existing CI PostHog Worker token into each project without returning plaintext;
+- proves both projects export with their own encrypted project credential;
+- rotates project A's provider credential and proves delivery still succeeds;
+- disables project B's provider credential and proves the next valid event is not exported;
+- leaves exact event IDs for independent PostHog verification.
+
+Important: rotating `ETLAYER_DESTINATION_SECRET_KEY_V1` is acceptable only in the disposable CI acceptance environment. Do not overwrite the production `v1` master key while any `v1` encrypted destination credentials must remain decryptable.
