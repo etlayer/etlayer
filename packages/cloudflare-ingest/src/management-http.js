@@ -281,6 +281,16 @@ async function provisionOnboarding(
   );
   if (auth.response) return auth.response;
 
+  if (projectConfiguration(projectId)) {
+    return jsonResponse(
+      {
+        error:
+          "external onboarding requires a dynamic project",
+      },
+      400,
+    );
+  }
+
   const input = await readJsonBody(request);
   if (input.response) return input.response;
 
