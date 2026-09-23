@@ -74,28 +74,87 @@ put_secret() {
   )
 }
 
+r2_api_url() {
+  local key="$1"
+  printf 'https://api.cloudflare.com/client/v4/accounts/%s/r2/buckets/%s/objects/%s' \
+    "$CLOUDFLARE_ACCOUNT_ID" \
+    "$ARCHIVE_BUCKET" \
+    "$key"
+}
+
 get_r2_json() {
   local key="$1"
   local value=""
+  local status=""
+  local body_file="$TMP_PREFIX.r2-body"
+  local error_file="$TMP_PREFIX.r2-error"
 
   for attempt in $(seq 1 35); do
-    if value="$(
-      cd "$INGEST_DIR"
-      npx wrangler r2 object get \
-        "$ARCHIVE_BUCKET/$key" \
-        --remote --pipe "${WRANGLER_ENV_ARGS[@]}" 2>/dev/null
-    )"; then
-      printf '%s' "$value"
-      return 0
+    if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] &&
+       [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+      status="$(
+        curl --silent --show-error \
+          -o "$body_file" \
+          -w '%{http_code}' \
+          -H "authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+          "$(r2_api_url "$key")" \
+          2>"$error_file" || true
+      )"
+
+      if [ "$status" = "200" ]; then
+        cat "$body_file"
+        return 0
+      fi
+    else
+      if value="$(
+        cd "$INGEST_DIR"
+        npx wrangler r2 object get \
+          "$ARCHIVE_BUCKET/$key" \
+          --remote --pipe "${WRANGLER_ENV_ARGS[@]}" 2>"$error_file"
+      )"; then
+        printf '%s' "$value"
+        return 0
+      fi
     fi
+
     sleep 1
   done
+
+  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+    printf 'R2 read failed for %s with HTTP %s\n' "$key" "${status:-unknown}" >&2
+    if [ -s "$body_file" ]; then
+      head -c 1000 "$body_file" >&2
+      printf '\n' >&2
+    fi
+  elif [ -s "$error_file" ]; then
+    cat "$error_file" >&2
+  fi
 
   return 1
 }
 
 assert_r2_absent() {
   local key="$1"
+
+  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] &&
+     [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+    local status
+    status="$(
+      curl --silent --show-error \
+        -o "$TMP_PREFIX.absent-body" \
+        -w '%{http_code}' \
+        -H "authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "$(r2_api_url "$key")" || true
+    )"
+
+    case "$status" in
+      404) return 0 ;;
+      200) die "Unexpected R2 object exists: $key" ;;
+      *)
+        die "Unable to verify R2 absence for $key: HTTP $status"
+        ;;
+    esac
+  fi
 
   if (
     cd "$INGEST_DIR"
