@@ -1,5 +1,5 @@
 import { processPersistedEvent } from "./processing.js";
-import { projectConfiguration } from "./project-config.js";
+import { validateProjectId } from "./project-config.js";
 import { projectIdForEvent, requireProjectSourceKey } from "./project-scope.js";
 
 export async function revalidateArchivedEvent(
@@ -80,17 +80,13 @@ export async function revalidateArchivedEvent(
 }
 
 function normalizeProjectId(value) {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    !projectConfiguration(value)
-  ) {
+  try {
+    return validateProjectId(value);
+  } catch {
     throw new RevalidationValidationError(
-      "projectId must reference a configured project",
+      "projectId must be a valid project slug",
     );
   }
-
-  return value;
 }
 
 function normalizeSourceKey(projectId, value) {

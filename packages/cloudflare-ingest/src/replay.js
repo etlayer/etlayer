@@ -1,7 +1,7 @@
 import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
-import { projectConfiguration, projectDestinations } from "./project-config.js";
+import { resolveProjectDestinations, validateProjectId } from "./project-config.js";
 import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
 
 const DESTINATION_EXPORTERS = {
@@ -39,7 +39,13 @@ export async function replayDestinationRange(
 
   const range = normalizeReplayRange(input);
 
-  if (!projectDestinations(range.projectId).includes(destination)) {
+  const enabledDestinations =
+    await resolveProjectDestinations(
+      env.ARCHIVE,
+      range.projectId,
+    );
+
+  if (!enabledDestinations.includes(destination)) {
     throw new ReplayValidationError(
       `destination ${destination} is not enabled for project ${range.projectId}`,
     );
@@ -255,17 +261,13 @@ function normalizeMaxEvents(value) {
 }
 
 function normalizeProjectId(value) {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    !projectConfiguration(value)
-  ) {
+  try {
+    return validateProjectId(value);
+  } catch {
     throw new ReplayValidationError(
-      "projectId must reference a configured project",
+      "projectId must be a valid project slug",
     );
   }
-
-  return value;
 }
 
 function parseDate(value, name) {

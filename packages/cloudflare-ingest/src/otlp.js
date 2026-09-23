@@ -13,7 +13,9 @@ export async function handleExportLogs(request, env, options = {}) {
   const stampProvenance =
     options.stampTrustedProvenance ||
     stampTrustedProvenance;
-  const authentication = authenticate(request, env);
+  const authentication = await authenticate(request, env, {
+    crypto: options.crypto,
+  });
 
   if (!authentication.ok) {
     if (

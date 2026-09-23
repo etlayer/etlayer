@@ -4,6 +4,7 @@ import { processPersistedEvent } from "./processing.js";
 import { handlePostHogReplay, handleStatsigReplay } from "./replay-http.js";
 import { handleRevalidate } from "./revalidate-http.js";
 import { handleEvidenceRead } from "./evidence-http.js";
+import { handleManagementRequest } from "./management-http.js";
 
 export default {
   async fetch(request, env) {
@@ -43,6 +44,14 @@ export default {
       url.pathname === "/_ops/evidence"
     ) {
       return handleEvidenceRead(request, env);
+    }
+
+    if (url.pathname.startsWith("/_mgmt/")) {
+      return handleManagementRequest(
+        request,
+        env,
+        url,
+      );
     }
 
     return new Response("Not found", { status: 404 });
