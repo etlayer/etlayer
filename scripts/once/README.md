@@ -410,3 +410,27 @@ The helper runs against the selected Wrangler environment (normally `ci`) and:
 - disables the producer and proves the current credential returns 401.
 
 The GitHub `Live Acceptance` workflow runs VS8 first and VS9 second so dynamic management changes cannot silently regress the project-isolation proof.
+
+
+## VS10 first external onboarding acceptance
+
+Run:
+
+```bash
+./scripts/once/vs10-first-external-onboarding.sh
+```
+
+The helper exercises the product-facing onboarding path instead of constructing internal evidence keys:
+
+- rotates an ephemeral management credential;
+- creates two unique dynamic projects;
+- provisions project A through `POST /_mgmt/projects/:projectId/onboarding`;
+- validates the returned OTLP endpoint, headers, inspect endpoint, and generated Node quickstart;
+- proves an unknown event returns `pending_or_unknown`;
+- writes the generated quickstart to a temporary `.mjs` file and executes it exactly as returned;
+- captures the generated event ID from the quickstart output;
+- polls `POST /_ops/inspect` using only `projectId + eventId`;
+- waits for complete validation, authority, decision, identity, privacy, and PostHog delivery evidence;
+- proves another project operator receives HTTP 401 when attempting to inspect the event.
+
+The GitHub `Live Acceptance` workflow runs VS8, VS9, and VS10 serially so onboarding changes cannot regress project isolation or dynamic credential management.

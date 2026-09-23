@@ -71,6 +71,9 @@ jobs:
           ./scripts/once/vs9-dynamic-management.sh |
             tee "$RUNNER_TEMP/vs9-live-acceptance.log"
 
+          ./scripts/once/vs10-first-external-onboarding.sh |
+            tee "$RUNNER_TEMP/vs10-live-acceptance.log"
+
       - name: Upload acceptance logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,5 +82,6 @@ jobs:
           path: |
             ${{ runner.temp }}/vs8-live-acceptance.log
             ${{ runner.temp }}/vs9-live-acceptance.log
+            ${{ runner.temp }}/vs10-live-acceptance.log
           if-no-files-found: ignore
           retention-days: 7
