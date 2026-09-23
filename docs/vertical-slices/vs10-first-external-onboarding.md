@@ -57,6 +57,8 @@ Input:
 
 VS10 intentionally provisions the canonical backend profile because the first-event example is the managed `account.created@1` business event.
 
+The onboarding endpoint is restricted to dynamic registry projects. The internal static reference projects (`etlayer-default` and `etlayer-secondary`) continue to use their VS8/VS9 configuration paths and cannot accidentally create partial onboarding registry state.
+
 Other producer profiles remain available through the lower-level VS9 producer API.
 
 The response is one-shot and contains:
