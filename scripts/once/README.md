@@ -385,3 +385,28 @@ Direct R2 object permission is not required. The live acceptance reads exact evi
 The token does not need to create Workers, R2 buckets, zones, routes, DNS records, or domains.
 
 Live acceptance runs on same-repository pull requests carrying the `live-acceptance` label. A manual `workflow_dispatch` entry point is also available.
+
+
+## VS9 dynamic management acceptance
+
+Run:
+
+```bash
+./scripts/once/vs9-dynamic-management.sh
+```
+
+The helper runs against the selected Wrangler environment (normally `ci`) and:
+
+- rotates an ephemeral `ETLAYER_MANAGEMENT_KEY`;
+- creates two unique dynamic projects;
+- proves cross-project operator denial;
+- enables PostHog dynamically for project A;
+- creates a backend producer and receives its credential once;
+- proves registry records contain credential fingerprints rather than plaintext credentials;
+- sends an allowed dynamic-project event;
+- proves PostHog-only routing;
+- rotates the producer credential and proves the old credential returns 401;
+- proves the rotated credential succeeds;
+- disables the producer and proves the current credential returns 401.
+
+The GitHub `Live Acceptance` workflow runs VS8 first and VS9 second so dynamic management changes cannot silently regress the project-isolation proof.
