@@ -4,6 +4,11 @@ import test from "node:test";
 import { handleManagementRequest } from "../src/management-http.js";
 import { authenticateIngest } from "../src/provenance.js";
 import { routeEventDestinations } from "../src/destinations.js";
+import {
+  credentialFingerprint,
+  operatorCredentialKey,
+  producerCredentialKey,
+} from "../src/registry.js";
 
 function fakeArchive() {
   const objects = new Map();
@@ -258,6 +263,54 @@ test("dynamic project lifecycle creates one-time credentials and enforces rotate
   );
   assert.equal(
     persisted.includes(rotatedCredential),
+    false,
+  );
+
+  const operatorFingerprint =
+    await credentialFingerprint(operatorCredential);
+  const rotatedFingerprint =
+    await credentialFingerprint(rotatedCredential);
+
+  const operatorEvidence = await manage(
+    env,
+    "POST",
+    "/_mgmt/evidence",
+    "management-key",
+    {
+      key: operatorCredentialKey(operatorFingerprint),
+    },
+  );
+  assert.equal(operatorEvidence.status, 200);
+  const operatorRecord = await operatorEvidence.json();
+  assert.equal(operatorRecord.projectId, "customer-a");
+  assert.equal(operatorRecord.fingerprint, operatorFingerprint);
+  assert.equal(
+    JSON.stringify(operatorRecord).includes(
+      operatorCredential,
+    ),
+    false,
+  );
+
+  const producerEvidence = await manage(
+    env,
+    "POST",
+    "/_mgmt/evidence",
+    "management-key",
+    {
+      key: producerCredentialKey(rotatedFingerprint),
+    },
+  );
+  assert.equal(producerEvidence.status, 200);
+  const producerRecord = await producerEvidence.json();
+  assert.equal(producerRecord.projectId, "customer-a");
+  assert.equal(
+    producerRecord.fingerprint,
+    rotatedFingerprint,
+  );
+  assert.equal(
+    JSON.stringify(producerRecord).includes(
+      rotatedCredential,
+    ),
     false,
   );
 });
