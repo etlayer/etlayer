@@ -4,7 +4,9 @@ These scripts reproduce and diagnose ETLayer's Cloudflare vertical slices.
 
 They are intentionally **not** the long-term ETLayer CLI. Keep them while they remain useful as executable acceptance evidence; replace them with durable provisioning or CLI commands when those interfaces stabilize.
 
-All deployment commands use local Wrangler OAuth. No `CLOUDFLARE_API_TOKEN` is required.
+Local/manual deployment helpers use the local Wrangler OAuth session unless a helper explicitly documents a non-interactive CI path.
+
+GitHub `Live Acceptance` is different: it runs non-interactively in the dedicated `ci` environment and requires `CLOUDFLARE_API_TOKEN` plus `CLOUDFLARE_ACCOUNT_ID`. Destination provider secrets remain Cloudflare Worker secrets and are not stored in GitHub.
 
 ## bootstrap-cloudflare.sh
 
