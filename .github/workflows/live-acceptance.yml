@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   vs8:
-    name: VS8 Cloudflare acceptance
+    name: Cloudflare acceptance suite
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (
@@ -60,18 +60,24 @@ jobs:
       - name: Install pinned Wrangler
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Run VS8 live acceptance
+      - name: Run live acceptance suite
         shell: bash
         run: |
           set -o pipefail
+
           ./scripts/once/vs8-project-isolation.sh |
             tee "$RUNNER_TEMP/vs8-live-acceptance.log"
 
-      - name: Upload acceptance log
+          ./scripts/once/vs9-dynamic-management.sh |
+            tee "$RUNNER_TEMP/vs9-live-acceptance.log"
+
+      - name: Upload acceptance logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vs8-live-acceptance-${{ github.run_id }}
-          path: ${{ runner.temp }}/vs8-live-acceptance.log
+          name: live-acceptance-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/vs8-live-acceptance.log
+            ${{ runner.temp }}/vs9-live-acceptance.log
           if-no-files-found: ignore
           retention-days: 7
