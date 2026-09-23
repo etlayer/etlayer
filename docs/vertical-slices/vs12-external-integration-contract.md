@@ -1,6 +1,6 @@
 # VS12: External Integration Contract
 
-**Status: design selected; implementation not started.**
+**Status: implementation in progress; unit/CI contract is green and final live proof is being hardened.**
 
 Tracks issue #40.
 
