@@ -120,6 +120,8 @@ etlayer.schema.version
 etlayer.event.id
 ```
 
+The quickstart deliberately does **not** send `etlayer.project.id`. Trusted project attribution comes only from the authenticated producer credential and is stamped by ETLayer.
+
 The script prints:
 
 ```json
