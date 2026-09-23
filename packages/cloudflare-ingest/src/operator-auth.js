@@ -1,37 +1,99 @@
 import {
   operatorSecretEnv,
   projectConfiguration,
+  validateProjectId,
 } from "./project-config.js";
+import {
+  credentialFingerprint,
+  readOperatorCredential,
+  readRegistryProject,
+} from "./registry.js";
 
-export function authenticateProjectOperator(
+export async function authenticateProjectOperator(
   request,
   env,
   projectId,
+  options = {},
 ) {
-  if (
-    typeof projectId !== "string" ||
-    projectId.length === 0 ||
-    !projectConfiguration(projectId)
-  ) {
+  try {
+    validateProjectId(projectId);
+  } catch {
     return {
       ok: false,
       reason: "unknown_project",
     };
   }
 
-  const secretEnv = operatorSecretEnv(projectId);
-  const secret = env[secretEnv];
+  const token = bearerToken(
+    request.headers.get("authorization"),
+  );
 
-  if (!secret) {
+  if (!token) {
+    return {
+      ok: false,
+      reason: "invalid_operator_credential",
+    };
+  }
+
+  const staticProject = projectConfiguration(projectId);
+  if (staticProject) {
+    const secretEnv = operatorSecretEnv(projectId);
+    const secret = secretEnv ? env[secretEnv] : null;
+
+    if (!secret) {
+      return {
+        ok: false,
+        reason: "operator_credential_not_configured",
+      };
+    }
+
+    if (token !== secret) {
+      return {
+        ok: false,
+        reason: "invalid_operator_credential",
+      };
+    }
+
+    return {
+      ok: true,
+      projectId,
+      source: "static",
+    };
+  }
+
+  if (!env.ARCHIVE || typeof env.ARCHIVE.get !== "function") {
     return {
       ok: false,
       reason: "operator_credential_not_configured",
     };
   }
 
+  const project = await readRegistryProject(
+    env.ARCHIVE,
+    projectId,
+  );
+
+  if (!project || project.status !== "active") {
+    return {
+      ok: false,
+      reason: "unknown_project",
+    };
+  }
+
+  const fingerprint = await credentialFingerprint(
+    token,
+    options.crypto || globalThis.crypto,
+  );
+  const credential = await readOperatorCredential(
+    env.ARCHIVE,
+    fingerprint,
+  );
+
   if (
-    request.headers.get("authorization") !==
-    `Bearer ${secret}`
+    !credential ||
+    credential.status !== "active" ||
+    credential.projectId !== projectId ||
+    project.operatorFingerprint !== fingerprint
   ) {
     return {
       ok: false,
@@ -42,5 +104,12 @@ export function authenticateProjectOperator(
   return {
     ok: true,
     projectId,
+    source: "registry",
   };
+}
+
+function bearerToken(value) {
+  if (typeof value !== "string") return null;
+  const match = value.match(/^Bearer (.+)$/);
+  return match?.[1] || null;
 }
