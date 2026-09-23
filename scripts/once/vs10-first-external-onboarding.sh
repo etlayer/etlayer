@@ -190,9 +190,11 @@ else
 fi
 
 MANAGEMENT_KEY="$(generate_key)"
+DESTINATION_SECRET_KEY="$(generate_key)"
 
 say "Rotating VS10 management credential"
 put_secret ETLAYER_MANAGEMENT_KEY "$MANAGEMENT_KEY"
+put_secret ETLAYER_DESTINATION_SECRET_KEY_V1 "$DESTINATION_SECRET_KEY"
 
 say "Deploying current onboarding-capable Worker"
 (
@@ -286,6 +288,25 @@ case "$PRODUCER_CREDENTIAL" in
   etl_prod_*) ;;
   *) die "Unexpected producer credential shape." ;;
 esac
+
+say "Binding CI PostHog token into encrypted project credential storage"
+DESTINATION_CREDENTIAL_RESPONSE="$(
+  management_json     POST     "/_mgmt/projects/$PROJECT_ID/destinations/posthog/credential/bootstrap-runtime-default"     "$MANAGEMENT_KEY"     '{}'
+)" || die "Failed to bootstrap project PostHog credential."
+
+node -e '
+  const value = JSON.parse(process.argv[1]);
+  if (
+    value.source !== "runtime_default" ||
+    value.credential?.configured !== true ||
+    value.credential?.status !== "active" ||
+    value.credential?.keyVersion !== "v1"
+  ) {
+    console.error(JSON.stringify(value, null, 2));
+    process.exit(1);
+  }
+' "$DESTINATION_CREDENTIAL_RESPONSE" ||
+  die "Project PostHog credential bootstrap is incorrect."
 
 say "Checking inspect state before event exists"
 PENDING_EVENT_ID="$(uuid)"
@@ -381,6 +402,8 @@ CROSS_INSPECT_STATUS="$(
   die "Cross-project inspect was not rejected: HTTP $CROSS_INSPECT_STATUS"
 
 unset MANAGEMENT_KEY
+unset DESTINATION_SECRET_KEY
+unset DESTINATION_CREDENTIAL_RESPONSE
 unset OPERATOR_KEY
 unset SECOND_OPERATOR_KEY
 unset PRODUCER_CREDENTIAL
