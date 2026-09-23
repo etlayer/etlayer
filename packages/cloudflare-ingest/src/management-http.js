@@ -7,6 +7,17 @@ import {
 import { authenticateProjectOperator } from "./operator-auth.js";
 import { buildOnboardingBundle } from "./onboarding.js";
 import {
+  DestinationCredentialConflictError,
+  DestinationCredentialConfigurationError,
+  DestinationCredentialDecryptionError,
+  DestinationCredentialNotFoundError,
+  DestinationCredentialValidationError,
+  disableDestinationCredential,
+  readDestinationCredentialStatus,
+  runtimeDefaultDestinationSecret,
+  writeDestinationCredential,
+} from "./destination-credentials.js";
+import {
   RegistryConflictError,
   RegistryNotFoundError,
   RegistryStateError,
@@ -95,6 +106,72 @@ export async function handleManagementRequest(
       env,
       projectId,
       producerId,
+      options,
+    );
+  }
+
+  const destinationCredential = url.pathname.match(
+    /^\/_mgmt\/projects\/([^/]+)\/destinations\/([^/]+)\/credential$/,
+  );
+  if (destinationCredential) {
+    const projectId = decodeURIComponent(
+      destinationCredential[1],
+    );
+    const destination = decodeURIComponent(
+      destinationCredential[2],
+    );
+
+    if (request.method === "PUT") {
+      return configureDestinationCredential(
+        request,
+        env,
+        projectId,
+        destination,
+        options,
+      );
+    }
+
+    if (request.method === "GET") {
+      return getDestinationCredential(
+        request,
+        env,
+        projectId,
+        destination,
+        options,
+      );
+    }
+  }
+
+  const destinationCredentialAction = url.pathname.match(
+    /^\/_mgmt\/projects\/([^/]+)\/destinations\/([^/]+)\/credential\/(disable|bootstrap-runtime-default)$/,
+  );
+  if (
+    request.method === "POST" &&
+    destinationCredentialAction
+  ) {
+    const projectId = decodeURIComponent(
+      destinationCredentialAction[1],
+    );
+    const destination = decodeURIComponent(
+      destinationCredentialAction[2],
+    );
+    const action = destinationCredentialAction[3];
+
+    if (action === "disable") {
+      return disableProjectDestinationCredential(
+        request,
+        env,
+        projectId,
+        destination,
+        options,
+      );
+    }
+
+    return bootstrapRuntimeDestinationCredential(
+      request,
+      env,
+      projectId,
+      destination,
       options,
     );
   }
@@ -547,6 +624,265 @@ async function disableProducer(
   }
 }
 
+async function configureDestinationCredential(
+  request,
+  env,
+  projectId,
+  destination,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const dynamicError = dynamicProjectOnly(projectId);
+  if (dynamicError) return dynamicError;
+
+  if (!isSupportedDestination(destination)) {
+    return jsonResponse(
+      {
+        error:
+          `unsupported destination: ${destination}`,
+      },
+      400,
+    );
+  }
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  if (
+    typeof input.value?.secret !== "string" ||
+    input.value.secret.length === 0
+  ) {
+    return jsonResponse(
+      { error: "secret must be a non-empty string" },
+      400,
+    );
+  }
+
+  try {
+    await writeDestinationCredential(
+      env.ARCHIVE,
+      env,
+      {
+        projectId,
+        destination,
+        secret: input.value.secret,
+        now: options.now || new Date(),
+        crypto: options.crypto || globalThis.crypto,
+      },
+    );
+
+    return jsonResponse(
+      {
+        credential:
+          await readDestinationCredentialStatus(
+            env.ARCHIVE,
+            projectId,
+            destination,
+          ),
+      },
+      200,
+    );
+  } catch (error) {
+    return destinationCredentialErrorResponse(error);
+  }
+}
+
+async function getDestinationCredential(
+  request,
+  env,
+  projectId,
+  destination,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const dynamicError = dynamicProjectOnly(projectId);
+  if (dynamicError) return dynamicError;
+
+  if (!isSupportedDestination(destination)) {
+    return jsonResponse(
+      {
+        error:
+          `unsupported destination: ${destination}`,
+      },
+      400,
+    );
+  }
+
+  try {
+    return jsonResponse(
+      {
+        credential:
+          await readDestinationCredentialStatus(
+            env.ARCHIVE,
+            projectId,
+            destination,
+          ),
+      },
+      200,
+    );
+  } catch (error) {
+    return destinationCredentialErrorResponse(error);
+  }
+}
+
+async function disableProjectDestinationCredential(
+  request,
+  env,
+  projectId,
+  destination,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const dynamicError = dynamicProjectOnly(projectId);
+  if (dynamicError) return dynamicError;
+
+  try {
+    await disableDestinationCredential(
+      env.ARCHIVE,
+      {
+        projectId,
+        destination,
+        now: options.now || new Date(),
+      },
+    );
+
+    return jsonResponse(
+      {
+        credential:
+          await readDestinationCredentialStatus(
+            env.ARCHIVE,
+            projectId,
+            destination,
+          ),
+      },
+      200,
+    );
+  } catch (error) {
+    return destinationCredentialErrorResponse(error);
+  }
+}
+
+async function bootstrapRuntimeDestinationCredential(
+  request,
+  env,
+  projectId,
+  destination,
+  options,
+) {
+  const management = authenticateManagement(
+    request,
+    env,
+  );
+
+  if (!management.ok) {
+    return management.reason === "not_configured"
+      ? jsonResponse(
+          {
+            error:
+              "management credential is not configured",
+          },
+          503,
+        )
+      : jsonResponse(
+          { error: "invalid management credential" },
+          401,
+        );
+  }
+
+  try {
+    validateProjectId(projectId);
+  } catch (error) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  const dynamicError = dynamicProjectOnly(projectId);
+  if (dynamicError) return dynamicError;
+
+  const project = await readRegistryProject(
+    env.ARCHIVE,
+    projectId,
+  );
+  if (!project) {
+    return jsonResponse(
+      { error: "unknown project" },
+      404,
+    );
+  }
+
+  let runtime;
+  try {
+    runtime = runtimeDefaultDestinationSecret(
+      env,
+      destination,
+    );
+  } catch (error) {
+    return destinationCredentialErrorResponse(error);
+  }
+
+  if (!runtime.secret) {
+    return jsonResponse(
+      {
+        error:
+          `${runtime.envName || "runtime destination secret"} is not configured`,
+      },
+      503,
+    );
+  }
+
+  try {
+    await writeDestinationCredential(
+      env.ARCHIVE,
+      env,
+      {
+        projectId,
+        destination,
+        secret: runtime.secret,
+        now: options.now || new Date(),
+        crypto: options.crypto || globalThis.crypto,
+      },
+    );
+
+    return jsonResponse(
+      {
+        source: "runtime_default",
+        credential:
+          await readDestinationCredentialStatus(
+            env.ARCHIVE,
+            projectId,
+            destination,
+          ),
+      },
+      200,
+    );
+  } catch (error) {
+    return destinationCredentialErrorResponse(error);
+  }
+}
+
 async function configureDestination(
   request,
   env,
@@ -757,6 +1093,74 @@ function validateProducerId(value) {
   }
 
   return value;
+}
+
+function dynamicProjectOnly(projectId) {
+  if (projectConfiguration(projectId)) {
+    return jsonResponse(
+      {
+        error:
+          "project-scoped destination credentials require a dynamic project",
+      },
+      400,
+    );
+  }
+
+  return null;
+}
+
+function destinationCredentialErrorResponse(error) {
+  if (
+    error instanceof
+      DestinationCredentialValidationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  if (
+    error instanceof
+      DestinationCredentialConflictError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      409,
+    );
+  }
+
+  if (
+    error instanceof
+      DestinationCredentialNotFoundError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      404,
+    );
+  }
+
+  if (
+    error instanceof
+      DestinationCredentialConfigurationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      503,
+    );
+  }
+
+  if (
+    error instanceof
+      DestinationCredentialDecryptionError
+  ) {
+    return jsonResponse(
+      { error: "destination credential is unreadable" },
+      500,
+    );
+  }
+
+  throw error;
 }
 
 function registryErrorResponse(error) {

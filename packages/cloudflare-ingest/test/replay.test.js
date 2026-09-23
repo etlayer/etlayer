@@ -4,8 +4,15 @@ import test from "node:test";
 import { archiveKey } from "../src/archive.js";
 import { projectToPostHog } from "../src/posthog.js";
 import {
+  createRegistryProject,
+  credentialFingerprint,
+  setRegistryDestination,
+} from "../src/registry.js";
+import { writeDestinationCredential } from "../src/destination-credentials.js";
+import {
   replayPostHogRange,
   replayStatsigRange,
+  ReplayConfigurationError,
   ReplayLimitError,
   ReplayValidationError,
   selectArchivedEvents,
@@ -326,4 +333,186 @@ test("secondary project cannot replay Statsig because it is not enabled", async 
   );
 
   assert.equal(archiveRead, false);
+});
+
+
+function mutableArchive(events = []) {
+  const objects = new Map(
+    events.map((managedEvent) => [
+      archiveKey(managedEvent),
+      JSON.stringify(managedEvent),
+    ]),
+  );
+
+  return {
+    objects,
+    async list({ prefix }) {
+      return {
+        objects: [...objects.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .sort()
+          .map((key) => ({ key })),
+        truncated: false,
+      };
+    },
+    async get(key) {
+      const body = objects.get(key);
+      if (body == null) return null;
+      return {
+        async text() {
+          return body;
+        },
+      };
+    },
+    async put(key, body, options = {}) {
+      if (
+        options.onlyIf?.etagDoesNotMatch === "*" &&
+        objects.has(key)
+      ) {
+        return null;
+      }
+
+      objects.set(key, body);
+      return { key };
+    },
+  };
+}
+
+async function configureDynamicReplayProject(
+  archive,
+  projectId,
+  secret,
+) {
+  await createRegistryProject(archive, {
+    projectId,
+    operatorFingerprint:
+      await credentialFingerprint(
+        "operator-" + projectId,
+      ),
+    now: new Date("2026-09-23T12:00:00.000Z"),
+  });
+
+  await setRegistryDestination(archive, {
+    projectId,
+    destination: "posthog",
+    enabled: true,
+    now: new Date("2026-09-23T12:00:01.000Z"),
+  });
+
+  if (secret) {
+    await writeDestinationCredential(
+      archive,
+      {
+        ETLAYER_DESTINATION_SECRET_KEY_V1:
+          "77".repeat(32),
+      },
+      {
+        projectId,
+        destination: "posthog",
+        secret,
+        credentialId: "replay-secret-1",
+      },
+    );
+  }
+}
+
+test("dynamic project replay uses encrypted project credential instead of Worker-global token", async () => {
+  const projectId = "replay-project";
+  const managedEvent = event({
+    id: "77777777-7777-4777-8777-777777777777",
+    provenance: {
+      version: 2,
+      projectId,
+      profileId: "backend",
+      authentication: "bearer_profile",
+      producer: { kind: "backend" },
+      allowedAuthorityKinds: ["business_state"],
+    },
+  });
+  const archive = mutableArchive([managedEvent]);
+
+  await configureDynamicReplayProject(
+    archive,
+    projectId,
+    "phc_project_replay",
+  );
+
+  const seen = [];
+
+  const result = await replayPostHogRange(
+    {
+      ARCHIVE: archive,
+      ETLAYER_DESTINATION_SECRET_KEY_V1:
+        "77".repeat(32),
+      POSTHOG_PROJECT_TOKEN:
+        "global-must-not-be-used",
+      POSTHOG_HOST: "https://eu.i.posthog.com",
+    },
+    {
+      projectId,
+      from: "2026-09-21T18:35:00.000Z",
+      to: "2026-09-21T18:40:00.000Z",
+      replayId: "dynamic-replay",
+    },
+    {
+      fetch: async (_url, init) => {
+        seen.push(JSON.parse(init.body).api_key);
+        return new Response("", { status: 200 });
+      },
+    },
+  );
+
+  assert.equal(result.exported, 1);
+  assert.deepEqual(seen, ["phc_project_replay"]);
+});
+
+test("dynamic project replay fails when project credential is missing even if Worker-global token exists", async () => {
+  const projectId = "replay-project-missing";
+  const managedEvent = event({
+    id: "88888888-8888-4888-8888-888888888888",
+    provenance: {
+      version: 2,
+      projectId,
+      profileId: "backend",
+      authentication: "bearer_profile",
+      producer: { kind: "backend" },
+      allowedAuthorityKinds: ["business_state"],
+    },
+  });
+  const archive = mutableArchive([managedEvent]);
+
+  await configureDynamicReplayProject(
+    archive,
+    projectId,
+    null,
+  );
+
+  let fetchCalls = 0;
+
+  await assert.rejects(
+    () =>
+      replayPostHogRange(
+        {
+          ARCHIVE: archive,
+          POSTHOG_PROJECT_TOKEN:
+            "global-must-not-be-used",
+          POSTHOG_HOST: "https://eu.i.posthog.com",
+        },
+        {
+          projectId,
+          from: "2026-09-21T18:35:00.000Z",
+          to: "2026-09-21T18:40:00.000Z",
+          replayId: "missing-project-secret",
+        },
+        {
+          fetch: async () => {
+            fetchCalls += 1;
+            return new Response("", { status: 200 });
+          },
+        },
+      ),
+    ReplayConfigurationError,
+  );
+
+  assert.equal(fetchCalls, 0);
 });

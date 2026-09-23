@@ -102,20 +102,40 @@ management_json() {
   local path="$2"
   local token="$3"
   local body="$4"
-  local status
+  local status=""
 
-  status="$(
-    request_json       "$method"       "$path"       "$token"       "$body"       "$TMP_PREFIX.response"
-  )"
+  for attempt in $(seq 1 20); do
+    status="$(
+      request_json \
+        "$method" \
+        "$path" \
+        "$token" \
+        "$body" \
+        "$TMP_PREFIX.response"
+    )"
 
-  if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+    if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+      cat "$TMP_PREFIX.response"
+      return 0
+    fi
+
+    # Cloudflare Worker secret/deploy propagation can briefly expose
+    # the previous secret version at another edge immediately after
+    # wrangler secret put + deploy. Retry only expected-success
+    # management calls; negative authorization assertions use
+    # request_json directly and therefore remain strict.
+    if [ "$status" = "401" ] && [ "$attempt" -lt 20 ]; then
+      sleep 1
+      continue
+    fi
+
     printf 'HTTP %s for %s %s\n' "$status" "$method" "$path" >&2
     cat "$TMP_PREFIX.response" >&2 || true
     printf '\n' >&2
     return 1
-  fi
+  done
 
-  cat "$TMP_PREFIX.response"
+  return 1
 }
 
 inspect_status() {
@@ -190,9 +210,11 @@ else
 fi
 
 MANAGEMENT_KEY="$(generate_key)"
+DESTINATION_SECRET_KEY="$(generate_key)"
 
 say "Rotating VS10 management credential"
 put_secret ETLAYER_MANAGEMENT_KEY "$MANAGEMENT_KEY"
+put_secret ETLAYER_DESTINATION_SECRET_KEY_V1 "$DESTINATION_SECRET_KEY"
 
 say "Deploying current onboarding-capable Worker"
 (
@@ -286,6 +308,25 @@ case "$PRODUCER_CREDENTIAL" in
   etl_prod_*) ;;
   *) die "Unexpected producer credential shape." ;;
 esac
+
+say "Binding CI PostHog token into encrypted project credential storage"
+DESTINATION_CREDENTIAL_RESPONSE="$(
+  management_json     POST     "/_mgmt/projects/$PROJECT_ID/destinations/posthog/credential/bootstrap-runtime-default"     "$MANAGEMENT_KEY"     '{}'
+)" || die "Failed to bootstrap project PostHog credential."
+
+node -e '
+  const value = JSON.parse(process.argv[1]);
+  if (
+    value.source !== "runtime_default" ||
+    value.credential?.configured !== true ||
+    value.credential?.status !== "active" ||
+    value.credential?.keyVersion !== "v1"
+  ) {
+    console.error(JSON.stringify(value, null, 2));
+    process.exit(1);
+  }
+' "$DESTINATION_CREDENTIAL_RESPONSE" ||
+  die "Project PostHog credential bootstrap is incorrect."
 
 say "Checking inspect state before event exists"
 PENDING_EVENT_ID="$(uuid)"
@@ -381,6 +422,8 @@ CROSS_INSPECT_STATUS="$(
   die "Cross-project inspect was not rejected: HTTP $CROSS_INSPECT_STATUS"
 
 unset MANAGEMENT_KEY
+unset DESTINATION_SECRET_KEY
+unset DESTINATION_CREDENTIAL_RESPONSE
 unset OPERATOR_KEY
 unset SECOND_OPERATOR_KEY
 unset PRODUCER_CREDENTIAL

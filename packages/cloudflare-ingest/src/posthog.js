@@ -6,7 +6,12 @@ export async function exportToPostHog(event, env, options = {}) {
     return { status: "skipped", reason: "posthog_disabled" };
   }
 
-  if (!env.POSTHOG_PROJECT_TOKEN) {
+  const projectToken =
+    Object.hasOwn(options, "credential")
+      ? options.credential
+      : env.POSTHOG_PROJECT_TOKEN;
+
+  if (!projectToken) {
     return { status: "skipped", reason: "posthog_not_configured" };
   }
 
@@ -29,7 +34,7 @@ export async function exportToPostHog(event, env, options = {}) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      api_key: env.POSTHOG_PROJECT_TOKEN,
+      api_key: projectToken,
       ...payload,
     }),
   });
