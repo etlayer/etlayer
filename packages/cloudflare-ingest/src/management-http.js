@@ -5,6 +5,7 @@ import {
   validateProjectId,
 } from "./project-config.js";
 import { authenticateProjectOperator } from "./operator-auth.js";
+import { buildOnboardingBundle } from "./onboarding.js";
 import {
   RegistryConflictError,
   RegistryNotFoundError,
@@ -45,6 +46,18 @@ export async function handleManagementRequest(
     url.pathname === "/_mgmt/evidence"
   ) {
     return readManagementEvidence(request, env);
+  }
+
+  const onboarding = url.pathname.match(
+    /^\/_mgmt\/projects\/([^/]+)\/onboarding$/,
+  );
+  if (request.method === "POST" && onboarding) {
+    return provisionOnboarding(
+      request,
+      env,
+      decodeURIComponent(onboarding[1]),
+      options,
+    );
   }
 
   const producerCreate = url.pathname.match(
@@ -249,6 +262,117 @@ async function createProject(request, env, options) {
       },
       201,
     );
+  } catch (error) {
+    return registryErrorResponse(error);
+  }
+}
+
+async function provisionOnboarding(
+  request,
+  env,
+  projectId,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  const producerId =
+    input.value?.producerId || "backend-main";
+  const requestedDestinations =
+    input.value?.destinations;
+
+  let destinations;
+  try {
+    validateProducerId(producerId);
+
+    if (
+      !Array.isArray(requestedDestinations) ||
+      requestedDestinations.length === 0
+    ) {
+      throw new RegistryValidationError(
+        "destinations must be a non-empty array",
+      );
+    }
+
+    destinations = [
+      ...new Set(requestedDestinations),
+    ];
+
+    for (const destination of destinations) {
+      if (
+        typeof destination !== "string" ||
+        !isSupportedDestination(destination)
+      ) {
+        throw new RegistryValidationError(
+          "destinations may contain only supported destination names",
+        );
+      }
+    }
+  } catch (error) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  const cryptoImpl =
+    options.crypto || globalThis.crypto;
+  const credential = generateCredential(
+    "etl_prod",
+    cryptoImpl,
+  );
+  const fingerprint =
+    await credentialFingerprint(
+      credential,
+      cryptoImpl,
+    );
+
+  try {
+    const created = await createRegistryProducer(
+      env.ARCHIVE,
+      {
+        projectId,
+        producerId,
+        profile: profileTemplate("backend"),
+        credentialFingerprint: fingerprint,
+        now: options.now || new Date(),
+      },
+    );
+
+    let project = await readRegistryProject(
+      env.ARCHIVE,
+      projectId,
+    );
+
+    for (const destination of destinations) {
+      project = await setRegistryDestination(
+        env.ARCHIVE,
+        {
+          projectId,
+          destination,
+          enabled: true,
+          now: options.now || new Date(),
+        },
+      );
+    }
+
+    const bundle = buildOnboardingBundle({
+      requestUrl: request.url,
+      projectId,
+      producer: publicProducer(created.producer),
+      credential,
+      destinations: project.destinations || [],
+    });
+
+    return jsonResponse(bundle, 201);
   } catch (error) {
     return registryErrorResponse(error);
   }
