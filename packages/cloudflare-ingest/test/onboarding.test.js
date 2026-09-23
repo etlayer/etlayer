@@ -175,3 +175,31 @@ test("onboarding validates destination names before creating a producer", async 
     "registry/producers/external-b/backend-main.json";
   assert.equal(archive.objects.has(producerKey), false);
 });
+
+
+test("external onboarding rejects static reference projects before creating registry producers", async () => {
+  const archive = fakeArchive();
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_REPLAY_KEY: "static-operator-key",
+  };
+
+  const response = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/etlayer-default/onboarding",
+    "static-operator-key",
+    {
+      producerId: "backend-main",
+      destinations: ["posthog"],
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(
+    archive.objects.has(
+      "registry/producers/etlayer-default/backend-main.json",
+    ),
+    false,
+  );
+});
