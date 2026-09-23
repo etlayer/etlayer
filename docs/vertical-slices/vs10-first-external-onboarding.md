@@ -1,6 +1,6 @@
 # VS10: First external user onboarding
 
-**Status: implementation complete; CI and isolated live acceptance pending.**
+**Status: VS10 complete; isolated Cloudflare onboarding acceptance and independent PostHog verification passed on 2026-09-23.**
 
 ## Goal
 
@@ -292,10 +292,80 @@ After the automated run, the exact event ID is independently queried in ETLayer 
 - project isolation tests implemented;
 - plaintext producer credential persistence test implemented.
 
-### VS10.2 - Live acceptance - pending
+### VS10.2 - Live acceptance - complete
 
-- run final isolated VS8 -> VS9 -> VS10 suite;
-- record exact project and event ID;
-- independently verify PostHog delivery;
-- update this document with live proof;
-- close #35 and merge PR #36.
+GitHub Actions `Live Acceptance #37` passed on 2026-09-23 against the isolated Cloudflare `ci` environment and executed VS8, VS9, and VS10 serially.
+
+VS10 live run:
+
+```text
+correlationId:
+  vs10-20260923-043136-2771c79f
+
+projectId:
+  vs10-20260923-043136-2771c79f-a
+
+secondProjectId:
+  vs10-20260923-043136-2771c79f-b
+
+producerId:
+  backend-main
+
+eventId:
+  a2076fc9-627e-4970-ba07-7ea97a8ef6cc
+```
+
+Canonical source:
+
+```text
+projects/vs10-20260923-043136-2771c79f-a/events/2026/09/23/04/a2076fc9-627e-4970-ba07-7ea97a8ef6cc.json
+```
+
+Product endpoints returned by the onboarding bundle:
+
+```text
+OTLP:
+  https://etlayer-ingest-ci.sergii-ponomarov.workers.dev/v1/logs
+
+Inspect:
+  https://etlayer-ingest-ci.sergii-ponomarov.workers.dev/_ops/inspect
+```
+
+The automated acceptance proved:
+
+```text
+unknownEventStatus          = pending_or_unknown
+validation                  = valid
+authority                   = allowed
+routeEligible               = true
+posthogDelivery             = exported
+crossProjectInspectStatus   = 401
+generatedQuickstartExecuted = true
+```
+
+The first event was produced by writing the exact `quickstart.source` returned by the onboarding API to a temporary Node `.mjs` file and executing it. The acceptance did not reconstruct the OTLP payload independently.
+
+The generated quickstart intentionally omitted `etlayer.project.id` from the event payload.
+
+Independent provider-side SQL verification in ETLayer PostHog EU Project `117513` returned:
+
+```text
+uuid:
+  a2076fc9-627e-4970-ba07-7ea97a8ef6cc
+
+event:
+  account.created
+
+etlayer.project.id:
+  vs10-20260923-043136-2771c79f-a
+
+total rows:
+  1
+
+rows with trusted project:
+  1
+```
+
+Therefore the destination-side project attribution was derived from trusted ETLayer provenance created from the producer credential, not from a producer-supplied project claim.
+
+This completes the first external-user path from provisioned dynamic project to generated connection bundle, first OTLP event, project-scoped evidence inspection, and independently verified destination delivery.
