@@ -343,19 +343,29 @@ R2:     etlayer-fixture-state-ci
 Bootstrap them once using the local Wrangler OAuth session:
 
 ```bash
-git switch feat/vs8-project-isolation
+git switch main
 git pull --ff-only
 ./scripts/once/bootstrap-cloudflare-ci.sh
 ```
 
-The script will securely prompt for:
+The script will securely prompt for four persistent CI secrets:
 
 ```text
+ETLayer destination encryption master key v1
+ETLayer idempotency encryption master key v1
 ETLayer PostHog project token
 ETLayer Statsig server secret
 ```
 
-Those values are written directly to `etlayer-ingest-ci` as Cloudflare Worker secrets. They are not written to the repository or GitHub Actions.
+Generate each encryption master key once with:
+
+```bash
+openssl rand -hex 32
+```
+
+Keep both v1 master-key values stable and store recovery copies in an appropriate secret manager/password vault. Acceptance scripts must not rotate them. Future key rotation must introduce a new key version and migrate encrypted records deliberately.
+
+All four values are written directly to `etlayer-ingest-ci` as Cloudflare Worker secrets. They are not written to the repository or GitHub Actions.
 
 After bootstrap, use a dedicated GitHub Environment named `ci`:
 
@@ -448,7 +458,7 @@ Run:
 
 The helper proves the destination-secret boundary end-to-end:
 
-- rotates an ephemeral CI-only `ETLAYER_DESTINATION_SECRET_KEY_V1`;
+- uses the persistent CI `ETLAYER_DESTINATION_SECRET_KEY_V1` provisioned by the one-time bootstrap;
 - creates two dynamic projects;
 - writes the same known plaintext canary to both projects;
 - proves the plaintext literal is absent from exact registry evidence;
@@ -459,7 +469,7 @@ The helper proves the destination-secret boundary end-to-end:
 - disables project B's provider credential and proves the next valid event is not exported;
 - leaves exact event IDs for independent PostHog verification.
 
-Important: rotating `ETLAYER_DESTINATION_SECRET_KEY_V1` is acceptable only in the disposable CI acceptance environment. Do not overwrite the production `v1` master key while any `v1` encrypted destination credentials must remain decryptable.
+Important: the CI `ETLAYER_DESTINATION_SECRET_KEY_V1` is an encryption root, not an acceptance credential. Keep it stable across runs. Do not overwrite any persistent `v1` master key while encrypted records depend on it.
 
 
 ## VS12 external integration contract acceptance
@@ -507,4 +517,4 @@ It then proves:
 
 The live workflow runs VS8 through VS12 serially so the new product boundary cannot weaken the existing isolation/security foundation.
 
-The helper rotates `ETLAYER_IDEMPOTENCY_SECRET_KEY_V1` only in the disposable CI environment. Do not overwrite an in-use persistent key version while unexpired replay capsules depend on it.
+The helper uses the persistent CI `ETLAYER_IDEMPOTENCY_SECRET_KEY_V1` provisioned by the one-time bootstrap. It must remain stable while unexpired replay capsules depend on it. Future rotation should introduce a new key version rather than overwrite `v1`.
