@@ -1,6 +1,6 @@
 # VS8: Project-scoped configuration and isolation
 
-**Status: implementation complete; live Cloudflare acceptance pending.**
+**Status: VS8 complete; isolated Cloudflare live acceptance and independent PostHog verification passed on 2026-09-23.**
 
 ## Goal
 
@@ -164,6 +164,14 @@ Replay:
 - rejects destinations not enabled for the project;
 - reads/writes project-scoped delivery state.
 
+Evidence inspection is also project-scoped:
+
+```text
+POST /_ops/evidence
+```
+
+It requires the operator credential for the requested project and only accepts exact keys under that project's `projects/<project-id>/...` namespace. It does not provide listing or cross-project reads. Live acceptance uses this operator boundary to verify canonical and derived R2 evidence through the Worker's R2 binding instead of granting GitHub account-wide R2 read access.
+
 ## Isolated Cloudflare CI environment
 
 Automated live acceptance uses a separate named Wrangler environment:
@@ -193,7 +201,34 @@ Bootstrap is intentionally local and one-time:
 ./scripts/once/bootstrap-cloudflare-ci.sh
 ```
 
-Persistent destination credentials stay in Cloudflare Worker secrets. GitHub Actions receives only the Cloudflare deployment credential and account ID.
+Persistent destination credentials stay in Cloudflare Worker secrets.
+
+GitHub Actions uses the `ci` GitHub Environment:
+
+```text
+Secrets:
+  CLOUDFLARE_API_TOKEN
+
+Variables:
+  CLOUDFLARE_ACCOUNT_ID
+```
+
+The final Cloudflare CI token needs:
+
+```text
+Specified Workers:
+  etlayer-ingest-ci
+  etlayer-cloudflare-fixture-ci
+  Individual Workers Editor
+
+Entire account:
+  Workers Content Read-Only
+
+Entire account:
+  Queues Write
+```
+
+No direct R2 object permission is required by the automated live acceptance. Evidence reads go through the authenticated ETLayer operator endpoint and the Worker's R2 binding.
 
 ## Live acceptance
 
@@ -232,11 +267,11 @@ It then proves:
 13. the correct secondary operator can revalidate the secondary event;
 14. secondary Statsig replay is rejected.
 
-After live acceptance, independently verify in ETLayer PostHog EU Project 117513 that:
+Independent destination verification is performed in ETLayer PostHog EU Project 117513:
 
-- the secondary allowed shared event exists with trusted `etlayer.project.id=etlayer-secondary`;
-- the default allowed event exists with trusted `etlayer.project.id=etlayer-default`;
-- the default authority-blocked copy of the shared event did not create a second destination capture.
+- the secondary allowed shared event must exist with trusted `etlayer.project.id=etlayer-secondary`;
+- the default allowed event must exist with trusted `etlayer.project.id=etlayer-default`;
+- the default authority-blocked copy of the shared event must not create a second destination capture.
 
 ## Backward compatibility
 
@@ -278,10 +313,76 @@ The last item is deliberately deferred. VS8 proves project routing/isolation sem
 - existing acceptance helpers updated for the default project;
 - unit/integration tests cover credential mapping, namespace isolation, routing, replay, revalidation, and projection behavior.
 
-### VS8.2 - Live acceptance - pending
+### VS8.2 - Live acceptance - complete
 
-- run `./scripts/once/vs8-project-isolation.sh`;
-- record live R2 source keys and event IDs;
-- verify PostHog EU Project 117513 provider-side project properties;
-- update this document with live evidence;
-- close #31 and merge PR #32.
+GitHub Actions `Live Acceptance #14` passed on 2026-09-23 in the isolated Cloudflare `ci` environment.
+
+Live run:
+
+```text
+correlationId:
+  vs8-project-isolation-20260923T015702Z-a9e5b2f8
+
+shared event ID:
+  22bac902-ea81-4dd5-8cda-ca2d56a20d3e
+
+default allowed event ID:
+  938b0a14-fdc3-40c6-8e9c-92b36eaf1d41
+```
+
+The same shared event ID was preserved independently under both project namespaces:
+
+```text
+projects/etlayer-default/events/2026/09/23/01/22bac902-ea81-4dd5-8cda-ca2d56a20d3e.json
+
+projects/etlayer-secondary/events/2026/09/23/01/22bac902-ea81-4dd5-8cda-ca2d56a20d3e.json
+```
+
+The separate allowed default event was preserved at:
+
+```text
+projects/etlayer-default/events/2026/09/23/01/938b0a14-fdc3-40c6-8e9c-92b36eaf1d41.json
+```
+
+The automated acceptance proved:
+
+```text
+sameEventIdAcrossProjects        = true
+payloadProjectClaimIgnoredForTrust = true
+defaultBlocked                   = true
+secondaryAllowed                 = true
+defaultDestinations              = [posthog, statsig]
+secondaryDestinations            = [posthog]
+crossProjectOperatorStatus       = 401
+crossProjectSourceStatus         = 400
+secondaryStatsigReplayStatus     = 400
+```
+
+It also verified project-scoped canonical storage, authority state, delivery state, decision pointers, and correct secondary revalidation through the authenticated evidence/operator boundaries.
+
+Independent provider-side SQL verification in ETLayer PostHog EU Project `117513` returned:
+
+```text
+shared UUID
+  total rows       = 1
+  secondary rows   = 1
+  default rows     = 0
+
+default allowed UUID
+  total rows       = 1
+  default rows     = 1
+```
+
+The exact PostHog rows were:
+
+```text
+22bac902-ea81-4dd5-8cda-ca2d56a20d3e
+  event      = account.created
+  project    = etlayer-secondary
+
+938b0a14-fdc3-40c6-8e9c-92b36eaf1d41
+  event      = account.created
+  project    = etlayer-default
+```
+
+This gives destination-side evidence that the authority-blocked default copy of the shared event was not delivered, while the allowed secondary copy was delivered exactly once with trusted project attribution.
