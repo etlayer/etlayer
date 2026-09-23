@@ -27,20 +27,34 @@ export function scopedEventKey(event, relativeKey) {
   return scopedProjectKey(projectIdForEvent(event), relativeKey);
 }
 
-export function requireProjectSourceKey(projectId, sourceKey) {
-  const prefix = `${projectPrefix(projectId)}/events/`;
+export function requireProjectKey(projectId, key) {
+  const prefix = `${projectPrefix(projectId)}/`;
 
   if (
-    typeof sourceKey !== "string" ||
-    !sourceKey.startsWith(prefix) ||
-    sourceKey.includes("..")
+    typeof key !== "string" ||
+    !key.startsWith(prefix) ||
+    key === prefix ||
+    key.includes("..")
   ) {
+    throw new ProjectScopeError(
+      "key must reference evidence in the requested project",
+    );
+  }
+
+  return key;
+}
+
+export function requireProjectSourceKey(projectId, sourceKey) {
+  const key = requireProjectKey(projectId, sourceKey);
+  const prefix = `${projectPrefix(projectId)}/events/`;
+
+  if (!key.startsWith(prefix)) {
     throw new ProjectScopeError(
       "sourceKey must reference a canonical event in the requested project",
     );
   }
 
-  return sourceKey;
+  return key;
 }
 
 function validateRelativeKey(value) {
