@@ -40,6 +40,13 @@ export async function handleManagementRequest(
     return createProject(request, env, options);
   }
 
+  if (
+    request.method === "POST" &&
+    url.pathname === "/_mgmt/evidence"
+  ) {
+    return readManagementEvidence(request, env);
+  }
+
   const producerCreate = url.pathname.match(
     /^\/_mgmt\/projects\/([^/]+)\/producers$/,
   );
@@ -96,6 +103,71 @@ export async function handleManagementRequest(
     { error: "management route not found" },
     404,
   );
+}
+
+async function readManagementEvidence(request, env) {
+  const management = authenticateManagement(
+    request,
+    env,
+  );
+
+  if (!management.ok) {
+    return management.reason === "not_configured"
+      ? jsonResponse(
+          { error: "management credential is not configured" },
+          503,
+        )
+      : jsonResponse(
+          { error: "invalid management credential" },
+          401,
+        );
+  }
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  const key = input.value?.key;
+  if (
+    typeof key !== "string" ||
+    !key.startsWith("registry/") ||
+    key.includes("..")
+  ) {
+    return jsonResponse(
+      { error: "key must reference exact registry evidence" },
+      400,
+    );
+  }
+
+  const object = await env.ARCHIVE.get(key);
+  if (!object) {
+    return jsonResponse(
+      { error: "registry evidence not found", key },
+      404,
+    );
+  }
+
+  const text =
+    typeof object.text === "function"
+      ? await object.text()
+      : object.body != null
+        ? await new Response(object.body).text()
+        : null;
+
+  if (text == null) {
+    return jsonResponse(
+      { error: "registry evidence has no readable body", key },
+      500,
+    );
+  }
+
+  return new Response(text, {
+    status: 200,
+    headers: {
+      "content-type":
+        "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
 }
 
 async function createProject(request, env, options) {
