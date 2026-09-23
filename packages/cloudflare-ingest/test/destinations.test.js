@@ -5,6 +5,12 @@ import {
   DestinationRouterConfigurationError,
   routeEventDestinations,
 } from "../src/destinations.js";
+import {
+  createRegistryProject,
+  credentialFingerprint,
+  setRegistryDestination,
+} from "../src/registry.js";
+import { writeDestinationCredential } from "../src/destination-credentials.js";
 
 test("routes an event through configured destinations in order", async () => {
   const calls = [];
@@ -261,5 +267,183 @@ test("default project keeps PostHog and Statsig routing", async () => {
   assert.deepEqual(
     results.map(({ destination }) => destination),
     ["posthog", "statsig"],
+  );
+});
+
+
+function registryArchive() {
+  const objects = new Map();
+
+  return {
+    objects,
+    async put(key, body, options = {}) {
+      if (
+        options.onlyIf?.etagDoesNotMatch === "*" &&
+        objects.has(key)
+      ) {
+        return null;
+      }
+      objects.set(key, { body });
+      return { key };
+    },
+    async get(key) {
+      const stored = objects.get(key);
+      if (!stored) return null;
+      return {
+        async text() {
+          return stored.body;
+        },
+      };
+    },
+  };
+}
+
+async function createDynamicPostHogProject(
+  archive,
+  projectId,
+  secret,
+) {
+  const operatorFingerprint =
+    await credentialFingerprint(
+      "operator-" + projectId,
+    );
+
+  await createRegistryProject(archive, {
+    projectId,
+    operatorFingerprint,
+    now: new Date("2026-09-23T12:00:00.000Z"),
+  });
+
+  await setRegistryDestination(archive, {
+    projectId,
+    destination: "posthog",
+    enabled: true,
+    now: new Date("2026-09-23T12:00:01.000Z"),
+  });
+
+  if (secret) {
+    await writeDestinationCredential(
+      archive,
+      {
+        ETLAYER_DESTINATION_SECRET_KEY_V1:
+          "22".repeat(32),
+      },
+      {
+        projectId,
+        destination: "posthog",
+        secret,
+        credentialId: "credential-" + projectId,
+      },
+    );
+  }
+}
+
+function dynamicEvent(projectId, id) {
+  return {
+    id,
+    eventName: "account.created",
+    receivedAt: "2026-09-23T12:00:00.000Z",
+    provenance: {
+      version: 2,
+      projectId,
+      profileId: "backend",
+      authentication: "bearer_profile",
+      producer: { kind: "backend" },
+      allowedAuthorityKinds: ["business_state"],
+    },
+    resource: { attributes: [] },
+    scope: {},
+    logRecord: { attributes: [] },
+  };
+}
+
+test("dynamic projects route with their own encrypted PostHog credentials", async () => {
+  const archive = registryArchive();
+  await createDynamicPostHogProject(
+    archive,
+    "project-a",
+    "phc_project_a",
+  );
+  await createDynamicPostHogProject(
+    archive,
+    "project-b",
+    "phc_project_b",
+  );
+
+  const seen = [];
+  const fetchImpl = async (_url, request) => {
+    seen.push(JSON.parse(request.body).api_key);
+    return new Response("", { status: 200 });
+  };
+
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_DESTINATION_SECRET_KEY_V1:
+      "22".repeat(32),
+    POSTHOG_HOST: "https://eu.i.posthog.com",
+    POSTHOG_PROJECT_TOKEN: "global-must-not-be-used",
+  };
+
+  const routing = {
+    posthog: { fetch: fetchImpl },
+    async readState() {
+      return null;
+    },
+    async recordState() {},
+  };
+
+  await routeEventDestinations(
+    dynamicEvent("project-a", "evt-a"),
+    env,
+    routing,
+  );
+  await routeEventDestinations(
+    dynamicEvent("project-b", "evt-b"),
+    env,
+    routing,
+  );
+
+  assert.deepEqual(seen, [
+    "phc_project_a",
+    "phc_project_b",
+  ]);
+});
+
+test("dynamic project without credential never falls back to Worker-global PostHog token", async () => {
+  const archive = registryArchive();
+  await createDynamicPostHogProject(
+    archive,
+    "project-a",
+    null,
+  );
+
+  let fetchCalls = 0;
+
+  const results = await routeEventDestinations(
+    dynamicEvent("project-a", "evt-no-secret"),
+    {
+      ARCHIVE: archive,
+      POSTHOG_HOST: "https://eu.i.posthog.com",
+      POSTHOG_PROJECT_TOKEN: "global-must-not-be-used",
+    },
+    {
+      posthog: {
+        async fetch() {
+          fetchCalls += 1;
+          return new Response("", { status: 200 });
+        },
+      },
+      async readState() {
+        return null;
+      },
+      async recordState() {},
+    },
+  );
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(results[0].status, "skipped");
+  assert.equal(
+    results[0].reason,
+    "posthog_not_configured",
   );
 });
