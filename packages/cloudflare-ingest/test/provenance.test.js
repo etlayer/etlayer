@@ -5,6 +5,11 @@ import {
   authenticateIngest,
   stampTrustedProvenance,
 } from "../src/provenance.js";
+import {
+  createRegistryProducer,
+  credentialFingerprint,
+} from "../src/registry.js";
+import { profileTemplate } from "../src/project-config.js";
 
 function request(token) {
   return new Request("https://events.test/v1/logs", {
@@ -14,7 +19,38 @@ function request(token) {
   });
 }
 
-test("authenticates browser backend and agent-runtime profiles", () => {
+function fakeArchive() {
+  const objects = new Map();
+
+  return {
+    objects,
+    async put(key, body, options = {}) {
+      if (
+        options.onlyIf?.etagDoesNotMatch === "*" &&
+        objects.has(key)
+      ) {
+        return null;
+      }
+
+      objects.set(key, {
+        body,
+        customMetadata: options.customMetadata || {},
+      });
+      return { key };
+    },
+    async get(key) {
+      const stored = objects.get(key);
+      if (!stored) return null;
+      return {
+        async text() {
+          return stored.body;
+        },
+      };
+    },
+  };
+}
+
+test("authenticates browser backend and agent-runtime profiles", async () => {
   const env = {
     ETLAYER_BROWSER_INGEST_KEY: "browser-key",
     ETLAYER_BACKEND_INGEST_KEY: "backend-key",
@@ -22,7 +58,7 @@ test("authenticates browser backend and agent-runtime profiles", () => {
   };
 
   assert.deepEqual(
-    authenticateIngest(request("browser-key"), env),
+    await authenticateIngest(request("browser-key"), env),
     {
       ok: true,
       provenance: {
@@ -37,20 +73,28 @@ test("authenticates browser backend and agent-runtime profiles", () => {
   );
 
   assert.equal(
-    authenticateIngest(request("backend-key"), env)
-      .provenance.producer.kind,
+    (
+      await authenticateIngest(
+        request("backend-key"),
+        env,
+      )
+    ).provenance.producer.kind,
     "backend",
   );
 
   assert.deepEqual(
-    authenticateIngest(request("agent-key"), env)
-      .provenance.allowedAuthorityKinds,
+    (
+      await authenticateIngest(
+        request("agent-key"),
+        env,
+      )
+    ).provenance.allowedAuthorityKinds,
     ["agent_runtime"],
   );
 });
 
-test("secondary project credential resolves a different trusted project", () => {
-  const result = authenticateIngest(
+test("secondary project credential resolves a different trusted project", async () => {
+  const result = await authenticateIngest(
     request("secondary-key"),
     {
       ETLAYER_SECONDARY_BACKEND_INGEST_KEY:
@@ -70,8 +114,8 @@ test("secondary project credential resolves a different trusted project", () => 
   );
 });
 
-test("legacy credential remains authenticated but grants no authority", () => {
-  const result = authenticateIngest(
+test("legacy credential remains authenticated but grants no authority", async () => {
+  const result = await authenticateIngest(
     request("legacy-key"),
     { ETLAYER_INGEST_KEY: "legacy-key" },
   );
@@ -81,9 +125,9 @@ test("legacy credential remains authenticated but grants no authority", () => {
   assert.deepEqual(result.provenance.allowedAuthorityKinds, []);
 });
 
-test("does not authenticate unknown or missing credentials", () => {
+test("does not authenticate unknown or missing credentials", async () => {
   assert.deepEqual(
-    authenticateIngest(request("wrong"), {
+    await authenticateIngest(request("wrong"), {
       ETLAYER_BACKEND_INGEST_KEY: "backend-key",
     }),
     {
@@ -93,12 +137,43 @@ test("does not authenticate unknown or missing credentials", () => {
   );
 
   assert.deepEqual(
-    authenticateIngest(request("anything"), {}),
+    await authenticateIngest(request("anything"), {}),
     {
       ok: false,
       reason: "ingest_credentials_not_configured",
     },
   );
+});
+
+test("authenticates an active dynamic producer from credential fingerprint", async () => {
+  const archive = fakeArchive();
+  const credential = "etl_prod_dynamic-secret";
+  const fingerprint = await credentialFingerprint(
+    credential,
+  );
+
+  await createRegistryProducer(archive, {
+    projectId: "dynamic-project",
+    producerId: "backend-main",
+    profile: profileTemplate("backend"),
+    credentialFingerprint: fingerprint,
+    now: new Date("2026-09-23T03:00:00.000Z"),
+  });
+
+  const result = await authenticateIngest(
+    request(credential),
+    { ARCHIVE: archive },
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.provenance, {
+    version: 2,
+    projectId: "dynamic-project",
+    profileId: "backend",
+    authentication: "bearer_profile",
+    producer: { kind: "backend" },
+    allowedAuthorityKinds: ["business_state"],
+  });
 });
 
 test("stamps provenance without credential material", () => {
