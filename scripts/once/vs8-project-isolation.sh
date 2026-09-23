@@ -74,96 +74,95 @@ put_secret() {
   )
 }
 
-r2_api_url() {
+project_operator_for_key() {
   local key="$1"
-  printf 'https://api.cloudflare.com/client/v4/accounts/%s/r2/buckets/%s/objects/%s' \
-    "$CLOUDFLARE_ACCOUNT_ID" \
-    "$ARCHIVE_BUCKET" \
-    "$key"
+
+  case "$key" in
+    "projects/$DEFAULT_PROJECT_ID/"*)
+      EVIDENCE_PROJECT_ID="$DEFAULT_PROJECT_ID"
+      EVIDENCE_OPERATOR_KEY="$DEFAULT_OPERATOR_KEY"
+      ;;
+    "projects/$SECONDARY_PROJECT_ID/"*)
+      EVIDENCE_PROJECT_ID="$SECONDARY_PROJECT_ID"
+      EVIDENCE_OPERATOR_KEY="$SECONDARY_OPERATOR_KEY"
+      ;;
+    *)
+      die "Evidence key is outside configured project namespaces: $key"
+      ;;
+  esac
+}
+
+evidence_request_status() {
+  local key="$1"
+  local output="$2"
+
+  project_operator_for_key "$key"
+
+  local body
+  body="$(
+    node -e '
+      const [projectId, key] = process.argv.slice(1);
+      process.stdout.write(JSON.stringify({ projectId, key }));
+    ' "$EVIDENCE_PROJECT_ID" "$key"
+  )"
+
+  curl --silent --show-error \
+    -o "$output" \
+    -w '%{http_code}' \
+    -X POST "$INGEST_URL/_ops/evidence" \
+    -H "authorization: Bearer $EVIDENCE_OPERATOR_KEY" \
+    -H "content-type: application/json" \
+    --data "$body"
 }
 
 get_r2_json() {
   local key="$1"
-  local value=""
   local status=""
-  local body_file="$TMP_PREFIX.r2-body"
-  local error_file="$TMP_PREFIX.r2-error"
+  local body_file="$TMP_PREFIX.evidence-body"
 
   for attempt in $(seq 1 35); do
-    if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] &&
-       [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-      status="$(
-        curl --silent --show-error \
-          -o "$body_file" \
-          -w '%{http_code}' \
-          -H "authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-          "$(r2_api_url "$key")" \
-          2>"$error_file" || true
-      )"
+    status="$(
+      evidence_request_status "$key" "$body_file" || true
+    )"
 
-      if [ "$status" = "200" ]; then
-        cat "$body_file"
-        return 0
+    if [ "$status" = "200" ]; then
+      cat "$body_file"
+      return 0
+    fi
+
+    if [ "$status" != "404" ]; then
+      printf 'Evidence read failed for %s with HTTP %s\n' \
+        "$key" "${status:-unknown}" >&2
+      if [ -s "$body_file" ]; then
+        head -c 1000 "$body_file" >&2
+        printf '\n' >&2
       fi
-    else
-      if value="$(
-        cd "$INGEST_DIR"
-        npx wrangler r2 object get \
-          "$ARCHIVE_BUCKET/$key" \
-          --remote --pipe "${WRANGLER_ENV_ARGS[@]}" 2>"$error_file"
-      )"; then
-        printf '%s' "$value"
-        return 0
-      fi
+      return 1
     fi
 
     sleep 1
   done
 
-  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
-    printf 'R2 read failed for %s with HTTP %s\n' "$key" "${status:-unknown}" >&2
-    if [ -s "$body_file" ]; then
-      head -c 1000 "$body_file" >&2
-      printf '\n' >&2
-    fi
-  elif [ -s "$error_file" ]; then
-    cat "$error_file" >&2
-  fi
-
+  printf 'Evidence not found after retries: %s\n' "$key" >&2
   return 1
 }
 
 assert_r2_absent() {
   local key="$1"
+  local status
+  local body_file="$TMP_PREFIX.absent-body"
 
-  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] &&
-     [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-    local status
-    status="$(
-      curl --silent --show-error \
-        -o "$TMP_PREFIX.absent-body" \
-        -w '%{http_code}' \
-        -H "authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "$(r2_api_url "$key")" || true
-    )"
+  status="$(
+    evidence_request_status "$key" "$body_file" || true
+  )"
 
-    case "$status" in
-      404) return 0 ;;
-      200) die "Unexpected R2 object exists: $key" ;;
-      *)
-        die "Unable to verify R2 absence for $key: HTTP $status"
-        ;;
-    esac
-  fi
-
-  if (
-    cd "$INGEST_DIR"
-    npx wrangler r2 object get \
-      "$ARCHIVE_BUCKET/$key" \
-      --remote --pipe "${WRANGLER_ENV_ARGS[@]}" >/dev/null 2>&1
-  ); then
-    die "Unexpected R2 object exists: $key"
-  fi
+  case "$status" in
+    404) return 0 ;;
+    200) die "Unexpected R2 object exists: $key" ;;
+    *)
+      die "Unable to verify R2 absence for $key: HTTP $status"
+      ;;
+  esac
 }
 
 assert_delivery_status() {
