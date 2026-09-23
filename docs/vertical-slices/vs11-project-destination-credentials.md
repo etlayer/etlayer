@@ -1,6 +1,6 @@
 # VS11: Project-scoped destination credentials
 
-**Status: implementation complete; CI and isolated live acceptance pending.**
+**Status: VS11 complete; isolated Cloudflare credential acceptance and independent PostHog verification passed on 2026-09-23.**
 
 ## Goal
 
@@ -372,10 +372,95 @@ VS11 acceptance:
 - dynamic global-token fallback blocked;
 - unit tests cover encryption, rotation, disable, isolation, transplant resistance, routing, and replay.
 
-### VS11.2 - Live acceptance - pending
+### VS11.2 - Live acceptance - complete
 
-- run final isolated VS8 -> VS9 -> VS10 -> VS11 suite;
-- record exact project/event/credential IDs;
-- independently verify PostHog provider delivery and disabled-event absence;
-- update this document with live proof;
-- close #37 and merge PR #38.
+GitHub Actions `Live Acceptance #45` passed on 2026-09-23 against the isolated Cloudflare `ci` environment and executed VS8, VS9, VS10, and VS11 serially.
+
+VS11 live run:
+
+```text
+correlationId:
+  vs11-20260923-115948-ea597e2c
+
+project A:
+  vs11-20260923-115948-ea597e2c-a
+
+project B:
+  vs11-20260923-115948-ea597e2c-b
+```
+
+Event IDs:
+
+```text
+project A initial:
+  98a0e386-4780-4359-9c6f-8a9c9b996b70
+
+project B initial:
+  fcf3fead-c987-483a-92b9-cbe32ad30c92
+
+project A after destination credential rotation:
+  df85d5d4-e1da-41da-8417-09983afb54c0
+
+project B after destination credential disable:
+  2b7b0643-b737-4403-9dbb-c98e467c839a
+```
+
+The automated Cloudflare acceptance proved:
+
+```text
+samePlaintextDifferentCiphertext = true
+samePlaintextDifferentIv         = true
+plaintextCanaryAbsentFromRegistry = true
+projectARuntimeCredentialRotated = true
+
+project A initial delivery       = exported
+project B initial delivery       = exported
+project A rotated delivery       = exported
+
+project B disabled delivery      = skipped
+project B disabled reason        = posthog_not_configured
+```
+
+The canary test deliberately wrote the **same known plaintext secret** into project A and project B, then read the exact encrypted registry records through the global management diagnostic operation.
+
+The plaintext literal was absent from both records, while both the random IV and resulting ciphertext differed.
+
+The helper then replaced the canary with the real CI PostHog token through the global-management-only runtime bootstrap. That token was never returned to the acceptance process.
+
+Project A was subsequently rotated again using the same underlying runtime provider token. The new encrypted credential version became active and a new event still exported successfully.
+
+Project B's active credential pointer was then disabled. Its next event remained:
+
+```text
+validation = valid
+authority = allowed
+routeEligible = true
+```
+
+but PostHog delivery was durably:
+
+```text
+status = skipped
+reason = posthog_not_configured
+```
+
+Independent provider-side SQL verification in ETLayer PostHog EU Project `117513` returned:
+
+```text
+98a0e386-4780-4359-9c6f-8a9c9b996b70
+  project = vs11-20260923-115948-ea597e2c-a
+  rows    = 1
+
+fcf3fead-c987-483a-92b9-cbe32ad30c92
+  project = vs11-20260923-115948-ea597e2c-b
+  rows    = 1
+
+df85d5d4-e1da-41da-8417-09983afb54c0
+  project = vs11-20260923-115948-ea597e2c-a
+  rows    = 1
+
+2b7b0643-b737-4403-9dbb-c98e467c839a
+  rows    = 0
+```
+
+Thus the final provider evidence matches ETLayer's durable delivery state: each active project credential delivered only within its trusted project identity, rotation preserved delivery, and disabling project B's destination credential prevented provider delivery even though the Worker-global PostHog token still existed.
