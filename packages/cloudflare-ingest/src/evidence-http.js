@@ -36,10 +36,11 @@ export async function handleEvidenceRead(
   const authenticate =
     options.authenticateProjectOperator ||
     authenticateProjectOperator;
-  const authentication = authenticate(
+  const authentication = await authenticate(
     request,
     env,
     input.projectId,
+    { crypto: options.crypto },
   );
 
   if (!authentication.ok) {
