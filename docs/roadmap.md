@@ -6,7 +6,7 @@ It is intentionally outcome-driven. A roadmap item becomes a numbered vertical s
 
 ## Current state
 
-```text
+~~~text
 Phase 1 - Data Plane Foundation
 VS1  Preserve + Replay                         complete
 VS2  Multi-destination                        complete
@@ -19,51 +19,76 @@ VS8  Project Isolation                        complete
 VS9  Dynamic Management                       complete
 VS10 External Onboarding                      complete
 VS11 Project-scoped Destination Credentials   complete
-```
+
+Phase 2 - Product Contract
+VS12 External Integration Contract            design selected
+~~~
 
 The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS11 together.
 
-See [Post-VS11 Architecture Review](reviews/post-vs11-architecture-review.md).
+See:
+
+- [Post-VS11 Architecture Review](reviews/post-vs11-architecture-review.md)
+- [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
+- GitHub issue #40
 
 ## Phase 2 - Product Contract
 
-### Candidate VS12 - External Integration Contract
+### VS12 - External Integration Contract
 
 **Purpose:** prove ETLayer from the perspective of an application that does not know ETLayer internals.
 
 Target invariant:
 
-```text
-documented public contract
+~~~text
+documented versioned public contract
   + issued credentials
-  + OTLP
-  + inspection
+  + standard OTLP
+  + public event status
   =
 sufficient to integrate and operate
-```
+~~~
 
-Acceptance should prove:
+Selected public boundary:
 
-- versioned external API surface;
-- stable machine-readable errors;
-- idempotent/retry-safe onboarding mutations;
+~~~text
+POST /api/v1/projects/:projectId/onboarding
+GET  /api/v1/projects/:projectId/events/:eventId
+
+POST /v1/logs
+  remains standard OTLP ingest
+~~~
+
+VS12 acceptance must prove:
+
+- a versioned external API surface;
+- stable machine-readable error codes;
+- required idempotency for secret-bearing onboarding;
+- retry of a lost onboarding response returns the same logical/credential result without duplicate mutation;
+- same idempotency key with a different request is rejected;
 - explicit global-management vs project-operator capabilities;
-- one-shot/redacted credential behavior;
-- clean external consumer integration;
+- a clean external consumer can onboard, emit OTLP, and inspect outcome;
 - no R2 key knowledge;
-- no Wrangler requirement;
-- no internal diagnostic evidence dependency;
+- no Wrangler or Cloudflare credentials in the external consumer;
+- no /_mgmt or /_ops dependency in the external consumer;
+- no ETLayer implementation-package imports;
+- cross-project inspection remains denied;
+- independent destination proof succeeds;
 - VS8 -> VS11 regressions remain green.
+
+The design deliberately introduces a dedicated encryption domain for bounded idempotency response replay rather than persisting one-shot producer credentials in plaintext or reusing the destination-provider secret key.
+
+See the full design document for API/error/idempotency semantics.
 
 ### Product-contract follow-ups
 
 Do only when required by the external integration proof:
 
-- project status/read surface;
-- safe resume/compensation for partial onboarding;
+- project status/read surface beyond event status;
+- safe resume/compensation for broader partial onboarding cases;
 - project retirement/deletion semantics;
 - producer re-enable or replacement semantics;
-- API deprecation/compatibility policy;
+- API deprecation/compatibility policy hardening;
 - generated OpenAPI/schema if the public surface is stable enough;
 - CLI/client helpers only as thin consumers of the public API.
 
@@ -75,13 +100,13 @@ Near-term, before long-lived hosted production credentials become common:
 
 Prove:
 
-```text
+~~~text
 v1 active credentials
   -> introduce v2
   -> re-encrypt/migrate
   -> verify decrypt/delivery
   -> retire v1 according to retention policy
-```
+~~~
 
 Requirements:
 
@@ -172,7 +197,7 @@ Only introduce an adapter capability/projection manifest when multiple real adap
 
 The foundation already separates:
 
-```text
+~~~text
 subject
 actor
 delegation
@@ -181,7 +206,7 @@ authority
 provenance
 correlation
 causation
-```
+~~~
 
 Do not create an agent-specific core or framework-specific schema.
 

@@ -12,7 +12,7 @@ Product events often start life inside a vendor SDK. That makes the analytics ba
 
 ETLayer keeps those concerns separate.
 
-```text
+~~~text
 Applications / services / agents
             |
             | OTLP
@@ -38,7 +38,7 @@ Applications / services / agents
        |                 |
        v                 v
     PostHog            Statsig
-```
+~~~
 
 ETLayer is not an analytics UI and is not intended to replace OpenTelemetry.
 
@@ -48,7 +48,7 @@ OpenTelemetry owns instrumentation and transport where practical. ETLayer focuse
 
 ETLayer deliberately keeps these dimensions separate:
 
-```text
+~~~text
 subject     - who the product journey/event is about
 actor       - who or what directly acted
 delegation  - on whose behalf / through whom
@@ -58,24 +58,24 @@ provenance  - trusted identity established at the ingest boundary
 project     - trusted tenant/project scope
 causation   - direct causal predecessor
 correlation - larger activity/journey grouping
-```
+~~~
 
 Important invariants include:
 
-```text
+~~~text
 subject != actor
 producer != actor
 authority != actor
 payload claim != trusted provenance
 payload project != trusted project
 valid contract != allowed authority
-```
+~~~
 
 ## Current implementation
 
 The reference implementation targets Cloudflare:
 
-```text
+~~~text
 OTLP/HTTP
    |
 Cloudflare Worker
@@ -88,7 +88,7 @@ Cloudflare Queue
    +-- replay
    +-- revalidation
    +-- inspection
-```
+~~~
 
 Dynamic project support includes:
 
@@ -106,7 +106,7 @@ Provider credentials for dynamic projects are encrypted before R2 persistence wi
 
 Phase 1 - Data Plane Foundation is complete through VS11.
 
-```text
+~~~text
 VS1  Preserve + Replay                         complete
 VS2  Multi-destination                        complete
 VS3  Contracts + Governance                   complete
@@ -118,7 +118,9 @@ VS8  Project Isolation                        complete
 VS9  Dynamic Management                       complete
 VS10 External Onboarding                      complete
 VS11 Project-scoped Destination Credentials   complete
-```
+
+VS12 External Integration Contract            design selected
+~~~
 
 The current live acceptance suite re-proves VS8 -> VS11 serially in an isolated Cloudflare CI environment.
 
@@ -126,7 +128,7 @@ See:
 
 - [Roadmap](docs/roadmap.md)
 - [Post-VS11 Architecture Review](docs/reviews/post-vs11-architecture-review.md)
-- [VS11: Project-scoped destination credentials](docs/vertical-slices/vs11-project-destination-credentials.md)
+- [VS12: External Integration Contract](docs/vertical-slices/vs12-external-integration-contract.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
@@ -145,14 +147,23 @@ See:
 
 ## Next phase
 
-The foundation is no longer the main unknown.
+Phase 2 has selected its first slice: **VS12 - External Integration Contract**.
 
-The next product question is whether an external application can integrate and operate against ETLayer using only a documented, versioned public contract and issued credentials, without knowledge of R2 paths, Wrangler, registry internals, or ETLayer implementation details.
+The goal is to prove that a clean external application can integrate with ETLayer using only:
 
-The current strongest candidate for the next vertical experiment is **External Integration Contract**. See the roadmap and Post-VS11 review for the proposed acceptance boundary.
+~~~text
+documented /api/v1 product endpoints
+issued project credentials
+standard OTLP
+public event status
+~~~
+
+without knowledge of R2 paths, Wrangler, registry internals, /_mgmt or /_ops diagnostic surfaces, or ETLayer implementation modules.
+
+VS12 also makes secret-bearing onboarding explicitly retry-safe through idempotency and a bounded encrypted response replay contract.
 
 ## Stability
 
 ETLayer is still pre-stable.
 
-The core architecture has been proven through VS11, but public API naming, control-plane identity, hosted-product surfaces, and some operational/security lifecycle features are intentionally not frozen yet.
+The data-plane architecture has been proven through VS11. VS12 is the first deliberate public product-contract slice, so public API naming and compatibility rules are now being formalized rather than assumed.
