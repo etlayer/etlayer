@@ -11,7 +11,12 @@ export async function exportToStatsig(event, env, options = {}) {
     return { status: "skipped", reason: "statsig_disabled" };
   }
 
-  if (!env.STATSIG_SERVER_SECRET) {
+  const serverSecret =
+    Object.hasOwn(options, "credential")
+      ? options.credential
+      : env.STATSIG_SERVER_SECRET;
+
+  if (!serverSecret) {
     return { status: "skipped", reason: "statsig_not_configured" };
   }
 
@@ -25,7 +30,7 @@ export async function exportToStatsig(event, env, options = {}) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "statsig-api-key": env.STATSIG_SERVER_SECRET,
+      "statsig-api-key": serverSecret,
     },
     body: JSON.stringify({
       events: [payload],
