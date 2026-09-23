@@ -25,15 +25,18 @@ const onboardingBody = {
   destinations: ["posthog"],
 };
 
-const first = await requestJson(onboardingUrl, {
-  method: "POST",
-  headers: {
-    authorization: "Bearer " + operatorCredential,
-    "content-type": "application/json",
-    "idempotency-key": idempotencyKey,
+const first = await requestOnboardingWithPropagationRetry(
+  onboardingUrl,
+  {
+    method: "POST",
+    headers: {
+      authorization: "Bearer " + operatorCredential,
+      "content-type": "application/json",
+      "idempotency-key": idempotencyKey,
+    },
+    body: JSON.stringify(onboardingBody),
   },
-  body: JSON.stringify(onboardingBody),
-});
+);
 
 assertStatus(first, 201, "first onboarding");
 const firstBody = first.body;
@@ -312,6 +315,33 @@ process.stdout.write(
     2,
   ) + "\n",
 );
+
+async function requestOnboardingWithPropagationRetry(
+  url,
+  init,
+) {
+  let last = null;
+
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    last = await requestJson(url, init);
+
+    if (last.status !== 503) {
+      return last;
+    }
+
+    if (
+      last.body?.error?.code !== "service_unavailable"
+    ) {
+      return last;
+    }
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 1000),
+    );
+  }
+
+  return last;
+}
 
 async function waitForComplete(url, credential) {
   let last = null;
