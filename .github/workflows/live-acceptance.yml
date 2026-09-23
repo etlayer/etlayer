@@ -25,11 +25,12 @@ jobs:
         contains(github.event.pull_request.labels.*.name, 'live-acceptance')
       )
     runs-on: ubuntu-latest
+    environment: ci
     timeout-minutes: 20
     env:
       CI: "1"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       ETLAYER_WRANGLER_ENV: ci
       ETLAYER_INGEST_URL: https://etlayer-ingest-ci.sergii-ponomarov.workers.dev
       ETLAYER_ARCHIVE_BUCKET: etlayer-events-archive-ci
@@ -52,7 +53,7 @@ jobs:
           fi
 
           if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"
+            echo "::error::Missing ci environment variable CLOUDFLARE_ACCOUNT_ID"
             exit 1
           fi
 
