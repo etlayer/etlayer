@@ -355,13 +355,33 @@ ETLayer Statsig server secret
 
 Those values are written directly to `etlayer-ingest-ci` as Cloudflare Worker secrets. They are not written to the repository or GitHub Actions.
 
-After bootstrap, create a dedicated Cloudflare API token for GitHub and add only these repository secrets:
+After bootstrap, use a dedicated GitHub Environment named `ci`:
 
 ```text
-CLOUDFLARE_API_TOKEN
-CLOUDFLARE_ACCOUNT_ID
+Environment secret:
+  CLOUDFLARE_API_TOKEN
+
+Environment variable:
+  CLOUDFLARE_ACCOUNT_ID
 ```
 
-The GitHub token only needs to deploy the two existing CI Workers and read the CI archive bucket. It does not need to create Workers, Queues, R2 buckets, zones, routes, DNS records, or domains.
+The Cloudflare token needs:
+
+```text
+Specified Workers:
+  etlayer-ingest-ci
+  etlayer-cloudflare-fixture-ci
+  Individual Workers Editor
+
+Entire account:
+  Workers Content Read-Only
+
+Entire account:
+  Queues Write
+```
+
+Direct R2 object permission is not required. The live acceptance reads exact evidence through ETLayer's authenticated `/_ops/evidence` operation, which is restricted to the requesting project's namespace and reads through the Worker's R2 binding.
+
+The token does not need to create Workers, R2 buckets, zones, routes, DNS records, or domains.
 
 Live acceptance runs on same-repository pull requests carrying the `live-acceptance` label. A manual `workflow_dispatch` entry point is also available.
