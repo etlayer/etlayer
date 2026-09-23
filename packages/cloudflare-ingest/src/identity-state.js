@@ -1,3 +1,6 @@
+import { DEFAULT_PROJECT_ID } from "./project-config.js";
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+
 export async function recordIdentityState(
   archive,
   event,
@@ -24,8 +27,10 @@ export async function recordIdentityState(
     );
   }
 
+  const projectId = projectIdForEvent(event);
   const state = {
-    version: 2,
+    version: 3,
+    projectId,
     eventId: event.id,
     eventName: event.eventName,
     status: identity.status,
@@ -47,13 +52,14 @@ export async function recordIdentityState(
     updatedAt: now.toISOString(),
   };
 
-  const key = identityStateKey(event.id);
+  const key = identityStateKey(event.id, projectId);
 
   await archive.put(key, JSON.stringify(state), {
     httpMetadata: {
       contentType: "application/json; charset=utf-8",
     },
     customMetadata: {
+      project_id: projectId,
       event_id: event.id,
       event_name: event.eventName,
       status: identity.status,
@@ -67,10 +73,17 @@ export async function recordIdentityState(
   return { key, state };
 }
 
-export async function readIdentityState(archive, eventId) {
+export async function readIdentityState(
+  archive,
+  eventId,
+  options = {},
+) {
   if (!archive || typeof archive.get !== "function") return null;
 
-  const key = identityStateKey(eventId);
+  const key = identityStateKey(
+    eventId,
+    options.projectId || DEFAULT_PROJECT_ID,
+  );
   const object = await archive.get(key);
   if (!object) return null;
 
@@ -96,14 +109,20 @@ export async function readIdentityState(archive, eventId) {
   }
 }
 
-export function identityStateKey(eventId) {
+export function identityStateKey(
+  eventId,
+  projectId = DEFAULT_PROJECT_ID,
+) {
   if (typeof eventId !== "string" || eventId.trim() === "") {
     throw new IdentityStateConfigurationError(
       "event id must be a non-empty string",
     );
   }
 
-  return `identity/${encodeURIComponent(eventId)}.json`;
+  return scopedProjectKey(
+    projectId,
+    `identity/${encodeURIComponent(eventId)}.json`,
+  );
 }
 
 function validateEvent(event) {

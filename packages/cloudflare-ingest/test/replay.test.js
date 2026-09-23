@@ -7,6 +7,7 @@ import {
   replayPostHogRange,
   replayStatsigRange,
   ReplayLimitError,
+  ReplayValidationError,
   selectArchivedEvents,
 } from "../src/replay.js";
 
@@ -81,6 +82,7 @@ test("selects archived events by received-at range in deterministic order", asyn
   const selected = await selectArchivedEvents(
     fakeArchive([later, outside, earlier]),
     {
+      projectId: "etlayer-default",
       from: "2026-09-21T18:35:00.000Z",
       to: "2026-09-21T18:45:00.000Z",
       replayId: "replay-1",
@@ -104,6 +106,7 @@ test("replays canonical events with original identity and occurrence time", asyn
       POSTHOG_PROJECT_TOKEN: "phc_test",
     },
     {
+      projectId: "etlayer-default",
       from: "2026-09-21T18:35:00.000Z",
       to: "2026-09-21T18:40:00.000Z",
       replayId: "replay-proof",
@@ -151,6 +154,7 @@ test("retrying the same replay keeps the same PostHog UUID", async () => {
   };
 
   const input = {
+    projectId: "etlayer-default",
     from: "2026-09-21T18:35:00.000Z",
     to: "2026-09-21T18:40:00.000Z",
     replayId: "replay-retry",
@@ -174,6 +178,7 @@ test("fails instead of silently truncating a replay range", async () => {
   await assert.rejects(
     () =>
       selectArchivedEvents(archive, {
+        projectId: "etlayer-default",
         from: "2026-09-21T18:35:00.000Z",
         to: "2026-09-21T18:40:00.000Z",
         maxEvents: 1,
@@ -195,6 +200,7 @@ test("Statsig-targeted replay calls Statsig only", async () => {
       STATSIG_HOST: "https://api.statsig.test",
     },
     {
+      projectId: "etlayer-default",
       from: "2026-09-21T18:35:00.000Z",
       to: "2026-09-21T18:40:00.000Z",
       replayId: "replay-statsig-only",
@@ -264,6 +270,7 @@ test("repeating a Statsig replay does not send an already exported event again",
     STATSIG_HOST: "https://api.statsig.test",
   };
   const input = {
+    projectId: "etlayer-default",
     from: "2026-09-21T18:35:00.000Z",
     to: "2026-09-21T18:40:00.000Z",
     replayId: "replay-statsig-idempotent",
@@ -288,4 +295,35 @@ test("repeating a Statsig replay does not send an already exported event again",
     second.deliveries[0].reason,
     "already_exported",
   );
+});
+
+
+test("secondary project cannot replay Statsig because it is not enabled", async () => {
+  let archiveRead = false;
+
+  await assert.rejects(
+    () =>
+      replayStatsigRange(
+        {
+          ARCHIVE: {
+            async list() {
+              archiveRead = true;
+              return { objects: [], truncated: false };
+            },
+            async get() {
+              return null;
+            },
+          },
+        },
+        {
+          projectId: "etlayer-secondary",
+          from: "2026-09-21T18:35:00.000Z",
+          to: "2026-09-21T18:40:00.000Z",
+          replayId: "secondary-statsig",
+        },
+      ),
+    ReplayValidationError,
+  );
+
+  assert.equal(archiveRead, false);
 });

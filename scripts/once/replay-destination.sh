@@ -9,6 +9,7 @@ DESTINATION=""
 FROM=""
 TO=""
 MAX_EVENTS="500"
+PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
 
 say() {
   printf '\n==> %s\n' "$*"
@@ -110,17 +111,20 @@ WORKER_URL="$(
 
 BODY="$(
   node -e '
-    const [from, to, replayId, maxEvents] = process.argv.slice(1);
+    const [projectId, from, to, replayId, maxEvents] =
+      process.argv.slice(1);
     process.stdout.write(JSON.stringify({
+      projectId,
       from,
       to,
       replayId,
       maxEvents: Number(maxEvents),
     }));
-  ' "$FROM" "$TO" "$REPLAY_ID" "$MAX_EVENTS"
+  ' "$PROJECT_ID" "$FROM" "$TO" "$REPLAY_ID" "$MAX_EVENTS"
 )"
 
 say "Replaying archived events to $DESTINATION"
+printf 'Project: %s\n' "$PROJECT_ID"
 printf 'Destination: %s\n' "$DESTINATION"
 printf 'Range: [%s, %s)\n' "$FROM" "$TO"
 printf 'Replay ID: %s\n' "$REPLAY_ID"

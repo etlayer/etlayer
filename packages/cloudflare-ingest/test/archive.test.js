@@ -67,7 +67,7 @@ function queueMessage(body) {
 test("builds a deterministic UTC archive key and encodes event ids", () => {
   assert.equal(
     archiveKey(event()),
-    "events/2026/09/21/16/evt%2F123.json",
+    "projects/etlayer-default/events/2026/09/21/16/evt%2F123.json",
   );
 });
 
@@ -80,6 +80,7 @@ test("stores a new event immutably with replay metadata", async () => {
 
   const stored = archive.objects.get(result.key);
   assert.equal(JSON.parse(stored.body).id, "evt/123");
+  assert.equal(stored.customMetadata.project_id, "etlayer-default");
   assert.equal(stored.customMetadata.event_id, "evt/123");
   assert.equal(stored.customMetadata.event_name, "account.created");
   assert.match(stored.customMetadata.sha256, /^[a-f0-9]{64}$/);
@@ -166,4 +167,52 @@ test("retries queue messages when the archive binding is missing", async () => {
 
   assert.equal(message.ackCount, 0);
   assert.equal(message.retryCount, 1);
+});
+
+
+test("the same event id can exist independently in two projects", async () => {
+  const archive = fakeArchive();
+  const shared = {
+    id: "evt-shared",
+    eventName: "account.created",
+    receivedAt: "2026-09-21T16:20:30.000Z",
+    resource: {},
+    scope: {},
+    logRecord: { eventName: "account.created" },
+  };
+
+  const first = await persistManagedEvent(
+    archive,
+    {
+      ...shared,
+      provenance: {
+        version: 2,
+        projectId: "etlayer-default",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+    },
+  );
+
+  const second = await persistManagedEvent(
+    archive,
+    {
+      ...shared,
+      provenance: {
+        version: 2,
+        projectId: "etlayer-secondary",
+        profileId: "backend",
+        authentication: "bearer_profile",
+        producer: { kind: "backend" },
+        allowedAuthorityKinds: ["business_state"],
+      },
+    },
+  );
+
+  assert.notEqual(first.key, second.key);
+  assert.match(first.key, /^projects\/etlayer-default\/events\//);
+  assert.match(second.key, /^projects\/etlayer-secondary\/events\//);
+  assert.equal(archive.writes, 2);
 });

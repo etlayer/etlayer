@@ -11,6 +11,7 @@ function request(token = "replay-key", body = {}) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
+      projectId: "etlayer-default",
       from: "2026-09-21T18:35:00.000Z",
       to: "2026-09-21T18:40:00.000Z",
       replayId: "replay-http-test",
@@ -71,6 +72,7 @@ test("returns Statsig replay summary from the Statsig operator endpoint", async 
         "content-type": "application/json",
       },
       body: JSON.stringify({
+        projectId: "etlayer-default",
         from: "2026-09-21T18:35:00.000Z",
         to: "2026-09-21T18:40:00.000Z",
         replayId: "replay-statsig-http-test",
@@ -100,3 +102,28 @@ test("returns Statsig replay summary from the Statsig operator endpoint", async 
   assert.equal(body.replayId, "replay-statsig-http-test");
   assert.equal(body.exported, 1);
 });
+
+
+test("default project operator cannot authorize secondary replay", async () => {
+  let called = false;
+
+  const response = await handlePostHogReplay(
+    request("replay-key", {
+      projectId: "etlayer-secondary",
+    }),
+    {
+      ETLAYER_REPLAY_KEY: "replay-key",
+      ETLAYER_SECONDARY_REPLAY_KEY: "secondary-key",
+    },
+    {
+      replay: async () => {
+        called = true;
+        return {};
+      },
+    },
+  );
+
+  assert.equal(response.status, 401);
+  assert.equal(called, false);
+});
+

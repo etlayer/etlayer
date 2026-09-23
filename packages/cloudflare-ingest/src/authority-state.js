@@ -1,3 +1,6 @@
+import { DEFAULT_PROJECT_ID } from "./project-config.js";
+import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+
 export async function recordAuthorityState(
   archive,
   event,
@@ -24,8 +27,10 @@ export async function recordAuthorityState(
     );
   }
 
+  const projectId = projectIdForEvent(event);
   const state = {
-    version: 1,
+    version: 2,
+    projectId,
     eventId: event.id,
     eventName: event.eventName,
     status: authority.status,
@@ -42,13 +47,14 @@ export async function recordAuthorityState(
     updatedAt: now.toISOString(),
   };
 
-  const key = authorityStateKey(event.id);
+  const key = authorityStateKey(event.id, projectId);
 
   await archive.put(key, JSON.stringify(state), {
     httpMetadata: {
       contentType: "application/json; charset=utf-8",
     },
     customMetadata: {
+      project_id: projectId,
       event_id: event.id,
       event_name: event.eventName,
       status: authority.status,
@@ -64,10 +70,17 @@ export async function recordAuthorityState(
   return { key, state };
 }
 
-export async function readAuthorityState(archive, eventId) {
+export async function readAuthorityState(
+  archive,
+  eventId,
+  options = {},
+) {
   if (!archive || typeof archive.get !== "function") return null;
 
-  const key = authorityStateKey(eventId);
+  const key = authorityStateKey(
+    eventId,
+    options.projectId || DEFAULT_PROJECT_ID,
+  );
   const object = await archive.get(key);
   if (!object) return null;
 
@@ -93,14 +106,20 @@ export async function readAuthorityState(archive, eventId) {
   }
 }
 
-export function authorityStateKey(eventId) {
+export function authorityStateKey(
+  eventId,
+  projectId = DEFAULT_PROJECT_ID,
+) {
   if (typeof eventId !== "string" || eventId.trim() === "") {
     throw new AuthorityStateConfigurationError(
       "event id must be a non-empty string",
     );
   }
 
-  return `authority/${encodeURIComponent(eventId)}.json`;
+  return scopedProjectKey(
+    projectId,
+    `authority/${encodeURIComponent(eventId)}.json`,
+  );
 }
 
 function validateEvent(event) {

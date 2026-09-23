@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
+PROJECT_PREFIX="projects/$PROJECT_ID"
 RUN_ID="${RUN_ID:-vs5-agent-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs5-agent-$$.txt"
 
@@ -133,9 +135,9 @@ get_r2_json() {
 }
 
 say "Reading durable agent identity evidence"
-DIRECT_IDENTITY="$(get_r2_json "identity/$DIRECT_EVENT_ID.json")" ||
+DIRECT_IDENTITY="$(get_r2_json "$PROJECT_PREFIX/identity/$DIRECT_EVENT_ID.json")" ||
   die "Direct-agent identity state did not appear."
-CHILD_IDENTITY="$(get_r2_json "identity/$CHILD_EVENT_ID.json")" ||
+CHILD_IDENTITY="$(get_r2_json "$PROJECT_PREFIX/identity/$CHILD_EVENT_ID.json")" ||
   die "Subagent identity state did not appear."
 
 if command -v jq >/dev/null 2>&1; then
@@ -217,7 +219,7 @@ node -e '
 
 say "Verifying agent contracts"
 for id in "$DIRECT_EVENT_ID" "$CHILD_EVENT_ID"; do
-  VALIDATION="$(get_r2_json "validation/$id.json")" ||
+  VALIDATION="$(get_r2_json "$PROJECT_PREFIX/validation/$id.json")" ||
     die "Validation state missing for $id."
 
   node -e '
@@ -232,7 +234,7 @@ done
 say "Verifying agent destination deliveries"
 for id in "$DIRECT_EVENT_ID" "$CHILD_EVENT_ID"; do
   for destination in posthog statsig; do
-    DELIVERY="$(get_r2_json "deliveries/$destination/$id.json")" ||
+    DELIVERY="$(get_r2_json "$PROJECT_PREFIX/deliveries/$destination/$id.json")" ||
       die "$destination delivery missing for $id."
 
     node -e '

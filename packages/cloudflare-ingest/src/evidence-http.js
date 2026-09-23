@@ -1,13 +1,7 @@
 import { authenticateProjectOperator } from "./operator-auth.js";
-import {
-  revalidateArchivedEvent,
-  RevalidationArchiveError,
-  RevalidationConfigurationError,
-  RevalidationNotFoundError,
-  RevalidationValidationError,
-} from "./revalidate.js";
+import { requireProjectKey } from "./project-scope.js";
 
-export async function handleRevalidate(
+export async function handleEvidenceRead(
   request,
   env,
   options = {},
@@ -72,47 +66,59 @@ export async function handleRevalidate(
     );
   }
 
+  let key;
   try {
-    const revalidate =
-      options.revalidate || revalidateArchivedEvent;
-    const result = await revalidate(env, input, options);
-    return jsonResponse(result, 200);
+    key = requireProjectKey(input.projectId, input.key);
   } catch (error) {
-    if (error instanceof RevalidationValidationError) {
-      return jsonResponse({ error: error.message }, 400);
-    }
-
-    if (error instanceof RevalidationConfigurationError) {
-      return jsonResponse({ error: error.message }, 503);
-    }
-
-    if (error instanceof RevalidationNotFoundError) {
-      return jsonResponse({ error: error.message }, 404);
-    }
-
-    if (error instanceof RevalidationArchiveError) {
-      return jsonResponse({ error: error.message }, 500);
-    }
-
-    console.error("failed to revalidate ETLayer event", {
-      projectId: input?.projectId,
-      sourceKey: input?.sourceKey,
-      error:
-        error instanceof Error
-          ? error.message
-          : String(error),
-    });
-
     return jsonResponse(
       {
         error:
           error instanceof Error
             ? error.message
-            : "revalidation failed",
+            : "invalid project evidence key",
       },
+      400,
+    );
+  }
+
+  if (!env.ARCHIVE || typeof env.ARCHIVE.get !== "function") {
+    return jsonResponse(
+      { error: "archive bucket is not configured" },
+      503,
+    );
+  }
+
+  const object = await env.ARCHIVE.get(key);
+  if (!object) {
+    return jsonResponse(
+      { error: "evidence not found", key },
+      404,
+    );
+  }
+
+  const text =
+    typeof object.text === "function"
+      ? await object.text()
+      : object.body != null
+        ? await new Response(object.body).text()
+        : null;
+
+  if (text == null) {
+    return jsonResponse(
+      { error: "evidence has no readable body", key },
       500,
     );
   }
+
+  return new Response(text, {
+    status: 200,
+    headers: {
+      "content-type":
+        object.httpMetadata?.contentType ||
+        "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
 }
 
 function isJsonContentType(contentType) {

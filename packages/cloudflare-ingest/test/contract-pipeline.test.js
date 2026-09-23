@@ -93,20 +93,20 @@ test("queue preserves an invalid event before blocking destination routing", asy
   assert.equal(message.retryCount, 0);
 
   assert.deepEqual(archive.writes.slice(0, 5), [
-    "events/2026/09/22/00/evt-blocked-1.json",
-    "validation/evt-blocked-1.json",
-    "authority/evt-blocked-1.json",
-    "privacy/evt-blocked-1.json",
-    "identity/evt-blocked-1.json",
+    "projects/etlayer-default/events/2026/09/22/00/evt-blocked-1.json",
+    "projects/etlayer-default/validation/evt-blocked-1.json",
+    "projects/etlayer-default/authority/evt-blocked-1.json",
+    "projects/etlayer-default/privacy/evt-blocked-1.json",
+    "projects/etlayer-default/identity/evt-blocked-1.json",
   ]);
 
   const decisionKey = archive.writes.find((key) =>
-    key.startsWith("decisions/evt-blocked-1/"),
+    key.startsWith("projects/etlayer-default/decisions/evt-blocked-1/"),
   );
 
   assert.ok(decisionKey);
   assert.equal(
-    archive.writes.includes("decision-latest/evt-blocked-1.json"),
+    archive.writes.includes("projects/etlayer-default/decision-latest/evt-blocked-1.json"),
     true,
   );
 
@@ -121,13 +121,13 @@ test("queue preserves an invalid event before blocking destination routing", asy
   assert.equal(decision.routeEligible, false);
 
   const validation = JSON.parse(
-    archive.objects.get("validation/evt-blocked-1.json").body,
+    archive.objects.get("projects/etlayer-default/validation/evt-blocked-1.json").body,
   );
 
   assert.equal(validation.status, "blocked");
   assert.equal(
     validation.sourceKey,
-    "events/2026/09/22/00/evt-blocked-1.json",
+    "projects/etlayer-default/events/2026/09/22/00/evt-blocked-1.json",
   );
   assert.deepEqual(validation.errors, [
     {
@@ -138,7 +138,7 @@ test("queue preserves an invalid event before blocking destination routing", asy
 
   assert.equal(
     [...archive.objects.keys()].some((key) =>
-      key.startsWith("deliveries/"),
+      key.startsWith("projects/etlayer-default/deliveries/"),
     ),
     false,
   );

@@ -27,7 +27,7 @@ function archiveWith(event) {
     async get(key) {
       if (
         key !==
-        "events/2026/09/22/00/evt_revalidate_1.json"
+        "projects/etlayer-default/events/2026/09/22/00/evt_revalidate_1.json"
       ) {
         return null;
       }
@@ -48,8 +48,9 @@ test("revalidates a preserved event without producer involvement", async () => {
   const result = await revalidateArchivedEvent(
     { ARCHIVE: archiveWith(event) },
     {
+      projectId: "etlayer-default",
       sourceKey:
-        "events/2026/09/22/00/evt_revalidate_1.json",
+        "projects/etlayer-default/events/2026/09/22/00/evt_revalidate_1.json",
     },
     {
       async process(receivedEvent, _env, options) {
@@ -76,7 +77,7 @@ test("revalidates a preserved event without producer involvement", async () => {
   assert.equal(calls[0].receivedEvent.id, event.id);
   assert.equal(
     calls[0].options.sourceKey,
-    "events/2026/09/22/00/evt_revalidate_1.json",
+    "projects/etlayer-default/events/2026/09/22/00/evt_revalidate_1.json",
   );
   assert.equal(result.eventId, event.id);
   assert.equal(result.validation.status, "blocked");
@@ -88,7 +89,10 @@ test("rejects source keys outside canonical events", async () => {
     () =>
       revalidateArchivedEvent(
         { ARCHIVE: archiveWith(archivedEvent()) },
-        { sourceKey: "validation/evt.json" },
+        {
+          projectId: "etlayer-default",
+          sourceKey: "validation/evt.json",
+        },
       ),
     RevalidationValidationError,
   );
@@ -105,7 +109,11 @@ test("reports a missing canonical event", async () => {
             },
           },
         },
-        { sourceKey: "events/missing.json" },
+        {
+          projectId: "etlayer-default",
+          sourceKey:
+            "projects/etlayer-default/events/missing.json",
+        },
       ),
     RevalidationNotFoundError,
   );
@@ -118,8 +126,9 @@ test("a corrected policy can route the preserved event", async () => {
   const result = await revalidateArchivedEvent(
     { ARCHIVE: archiveWith(event) },
     {
+      projectId: "etlayer-default",
       sourceKey:
-        "events/2026/09/22/00/evt_revalidate_1.json",
+        "projects/etlayer-default/events/2026/09/22/00/evt_revalidate_1.json",
     },
     {
       validate() {
@@ -173,8 +182,9 @@ test("revalidation reapplies delivery privacy before routing the canonical event
   const result = await revalidateArchivedEvent(
     { ARCHIVE: archiveWith(event) },
     {
+      projectId: "etlayer-default",
       sourceKey:
-        "events/2026/09/22/00/evt_revalidate_1.json",
+        "projects/etlayer-default/events/2026/09/22/00/evt_revalidate_1.json",
     },
     {
       validate() {
@@ -206,4 +216,31 @@ test("revalidation reapplies delivery privacy before routing the canonical event
   assert.equal(keys.includes("user.email"), false);
   assert.equal(keys.includes("account.id"), true);
   assert.equal(result.validation.status, "valid");
+});
+
+
+test("rejects a canonical source key belonging to another project before archive read", async () => {
+  let reads = 0;
+
+  await assert.rejects(
+    () =>
+      revalidateArchivedEvent(
+        {
+          ARCHIVE: {
+            async get() {
+              reads += 1;
+              return null;
+            },
+          },
+        },
+        {
+          projectId: "etlayer-default",
+          sourceKey:
+            "projects/etlayer-secondary/events/2026/09/22/00/evt.json",
+        },
+      ),
+    RevalidationValidationError,
+  );
+
+  assert.equal(reads, 0);
 });

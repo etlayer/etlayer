@@ -79,9 +79,16 @@ export function evaluateEventAuthority(event) {
 }
 
 function validProvenance(provenance) {
+  const versionValid =
+    provenance?.version === 1 ||
+    (
+      provenance?.version === 2 &&
+      typeof provenance.projectId === "string" &&
+      provenance.projectId.length > 0
+    );
+
   return (
-    provenance &&
-    provenance.version === 1 &&
+    versionValid &&
     typeof provenance.profileId === "string" &&
     typeof provenance.producer?.kind === "string" &&
     Array.isArray(provenance.allowedAuthorityKinds)

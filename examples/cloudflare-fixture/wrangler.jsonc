@@ -20,5 +20,25 @@
       "binding": "ETLAYER",
       "service": "etlayer-ingest"
     }
-  ]
+  ],
+  "env": {
+    "ci": {
+      "vars": {
+        "ETLAYER_OTLP_ENDPOINT": "https://etlayer-ingest-ci.sergii-ponomarov.workers.dev/v1/logs",
+        "DEPLOYMENT_ENVIRONMENT_NAME": "ci-acceptance"
+      },
+      "r2_buckets": [
+        {
+          "binding": "STATE",
+          "bucket_name": "etlayer-fixture-state-ci"
+        }
+      ],
+      "services": [
+        {
+          "binding": "ETLAYER",
+          "service": "etlayer-ingest-ci"
+        }
+      ]
+    }
+  }
 }

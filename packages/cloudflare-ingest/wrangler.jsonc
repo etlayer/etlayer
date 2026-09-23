@@ -32,5 +32,37 @@
       "binding": "ARCHIVE",
       "bucket_name": "etlayer-events-archive"
     }
-  ]
+  ],
+  "env": {
+    "ci": {
+      "vars": {
+        "ETLAYER_MAX_REQUEST_BYTES": "1048576",
+        "POSTHOG_HOST": "https://eu.i.posthog.com",
+        "STATSIG_HOST": "https://api.statsig.com"
+      },
+      "queues": {
+        "producers": [
+          {
+            "binding": "EVENTS",
+            "queue": "etlayer-events-ci"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "etlayer-events-ci",
+            "max_batch_size": 100,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "dead_letter_queue": "etlayer-events-ci-dlq"
+          }
+        ]
+      },
+      "r2_buckets": [
+        {
+          "binding": "ARCHIVE",
+          "bucket_name": "etlayer-events-archive-ci"
+        }
+      ]
+    }
+  }
 }

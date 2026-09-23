@@ -6,6 +6,8 @@ INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
 INGEST_URL="${ETLAYER_INGEST_URL:-https://etlayer-ingest.sergii-ponomarov.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
+PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
+PROJECT_PREFIX="projects/$PROJECT_ID"
 RUN_ID="${RUN_ID:-vs7-decision-lineage-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs7-decision-lineage-$$.txt"
 
@@ -93,7 +95,7 @@ get_r2_json() {
 assert_delivery_absent() {
   local destination="$1"
   local event_id="$2"
-  local key="deliveries/$destination/$event_id.json"
+  local key="$PROJECT_PREFIX/deliveries/$destination/$event_id.json"
 
   if npx wrangler r2 object get \
     "$ARCHIVE_BUCKET/$key" \
@@ -103,7 +105,7 @@ assert_delivery_absent() {
 }
 
 say "Reading initial decision pointer"
-INITIAL_POINTER="$(get_r2_json "decision-latest/$EVENT_ID.json")" ||
+INITIAL_POINTER="$(get_r2_json "$PROJECT_PREFIX/decision-latest/$EVENT_ID.json")" ||
   die "Initial decision pointer is missing."
 
 INITIAL_DECISION_ID="$(read_json_field "$INITIAL_POINTER" decisionId)" ||
@@ -123,7 +125,8 @@ node -e '
   );
 
   const ok =
-    value.version === 1 &&
+    value.version === 2 &&
+    value.projectId === process.argv[3] &&
     value.eventId === eventId &&
     value.evaluationKind === "processing" &&
     value.validation?.status === "valid" &&
@@ -136,7 +139,8 @@ node -e '
     authorityCodes.includes("producer_kind_mismatch") &&
     authorityCodes.includes("authority_not_allowed") &&
     value.privacy?.policyVersion === 1 &&
-    value.provenance?.version === 1 &&
+    value.provenance?.version === 2 &&
+    value.provenance?.projectId === process.argv[3] &&
     value.provenance?.profileId === "browser" &&
     value.provenance?.producerKind === "browser" &&
     value.routeEligible === false;
@@ -145,7 +149,7 @@ node -e '
     console.error(JSON.stringify(value, null, 2));
     process.exit(1);
   }
-' "$INITIAL_DECISION" "$EVENT_ID" ||
+' "$INITIAL_DECISION" "$EVENT_ID" "$PROJECT_ID" ||
   die "Initial decision lineage evidence is incorrect."
 
 SOURCE_KEY="$(read_json_field "$INITIAL_DECISION" sourceKey)" ||
@@ -169,7 +173,7 @@ REVALIDATION="$(
     -X POST "$INGEST_URL/_ops/revalidate" \
     -H "authorization: Bearer $OPERATOR_KEY" \
     -H "content-type: application/json" \
-    --data "$(jq -nc --arg sourceKey "$SOURCE_KEY" '{sourceKey:$sourceKey}')"
+    --data "$(jq -nc --arg projectId "$PROJECT_ID" --arg sourceKey "$SOURCE_KEY" '{projectId:$projectId,sourceKey:$sourceKey}')"
 )"
 printf '%s\n' "$REVALIDATION"
 
@@ -201,7 +205,7 @@ node -e '
   die "Revalidation decision lineage is incorrect."
 
 say "Verifying latest pointer advanced without rewriting original decision"
-LATEST_POINTER="$(get_r2_json "decision-latest/$EVENT_ID.json")" ||
+LATEST_POINTER="$(get_r2_json "$PROJECT_PREFIX/decision-latest/$EVENT_ID.json")" ||
   die "Latest decision pointer is missing after revalidation."
 
 LATEST_DECISION_ID="$(read_json_field "$LATEST_POINTER" decisionId)" ||
