@@ -1,6 +1,15 @@
 import { configuredProjects } from "./project-config.js";
+import {
+  credentialFingerprint,
+  readProducerCredential,
+  readRegistryProducer,
+} from "./registry.js";
 
-export function authenticateIngest(request, env) {
+export async function authenticateIngest(
+  request,
+  env,
+  options = {},
+) {
   const authorization = request.headers.get("authorization");
   const token = bearerToken(authorization);
 
@@ -23,7 +32,52 @@ export function authenticateIngest(request, env) {
       if (token === secret) {
         return {
           ok: true,
-          provenance: provenanceFor(project.id, profile),
+          provenance: provenanceFor(
+            project.id,
+            profile,
+          ),
+        };
+      }
+    }
+  }
+
+  if (
+    env.ARCHIVE &&
+    typeof env.ARCHIVE.get === "function"
+  ) {
+    configured = true;
+    const cryptoImpl =
+      options.crypto || globalThis.crypto;
+    const fingerprint = await credentialFingerprint(
+      token,
+      cryptoImpl,
+    );
+    const credential = await readProducerCredential(
+      env.ARCHIVE,
+      fingerprint,
+    );
+
+    if (
+      credential &&
+      credential.status === "active"
+    ) {
+      const producer = await readRegistryProducer(
+        env.ARCHIVE,
+        credential.projectId,
+        credential.producerId,
+      );
+
+      if (
+        producer &&
+        producer.status === "active" &&
+        producer.credentialFingerprint === fingerprint
+      ) {
+        return {
+          ok: true,
+          provenance: provenanceFor(
+            producer.projectId,
+            producer,
+          ),
         };
       }
     }
@@ -55,7 +109,9 @@ function provenanceFor(projectId, profile) {
     producer: {
       kind: profile.producerKind,
     },
-    allowedAuthorityKinds: [...profile.allowedAuthorityKinds],
+    allowedAuthorityKinds: [
+      ...profile.allowedAuthorityKinds,
+    ],
   };
 }
 
