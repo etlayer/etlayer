@@ -121,6 +121,10 @@ test("provisions a backend onboarding bundle with copy-ready OTLP settings", asy
   assert.match(source, /account\.id/);
   assert.match(source, /etlayer\.producer\.kind/);
   assert.match(source, /business_state/);
+  assert.equal(
+    source.includes("etlayer.project.id"),
+    false,
+  );
   assert.match(source, /crypto\.randomUUID/);
   assert.match(
     source,
