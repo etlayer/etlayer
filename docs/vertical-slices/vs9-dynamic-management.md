@@ -1,6 +1,6 @@
 # VS9: Dynamic project, producer, and destination management
 
-**Status: implementation complete and CI green; isolated Cloudflare live acceptance pending.**
+**Status: VS9 complete; isolated Cloudflare live acceptance and independent PostHog verification passed on 2026-09-23.**
 
 ## Goal
 
@@ -295,10 +295,87 @@ After the automated run, exact accepted event IDs are independently checked in E
 - static VS8 behavior remains compatible;
 - unit/integration lifecycle tests pass.
 
-### VS9.2 - Live acceptance - pending
+### VS9.2 - Live acceptance - complete
 
-- run isolated VS8 -> VS9 acceptance suite;
-- record dynamic project and exact event IDs;
-- independently verify PostHog project attribution;
-- record live proof here;
-- close #33 and merge PR #34.
+GitHub Actions `Live Acceptance #22` passed on 2026-09-23 and executed VS8 first, then VS9, against the isolated Cloudflare `ci` environment.
+
+VS9 live run:
+
+```text
+correlationId:
+  vs9-20260923-032221-2e825014
+
+projectId:
+  vs9-20260923-032221-2e825014-a
+
+secondProjectId:
+  vs9-20260923-032221-2e825014-b
+
+producerId:
+  backend-main
+```
+
+Accepted events:
+
+```text
+initialEventId:
+  d03292f5-4a38-4bd2-8402-29ae4d34048e
+
+rotatedEventId:
+  9cc566aa-05b7-4677-a2d8-23c63a42419c
+```
+
+Canonical source keys:
+
+```text
+projects/vs9-20260923-032221-2e825014-a/events/2026/09/23/03/d03292f5-4a38-4bd2-8402-29ae4d34048e.json
+
+projects/vs9-20260923-032221-2e825014-a/events/2026/09/23/03/9cc566aa-05b7-4677-a2d8-23c63a42419c.json
+```
+
+The automated live acceptance proved:
+
+```text
+dynamicDestinations              = [posthog]
+crossProjectOperatorStatus       = 401
+oldCredentialStatus              = 401
+disabledCredentialStatus         = 401
+registryStoresFingerprintsOnly   = true
+rotationSupersedesOldCredential  = true
+```
+
+It also proved:
+
+- project A and project B were created dynamically at runtime;
+- project B's operator could not mutate project A;
+- PostHog was enabled without editing source code;
+- a backend producer was created dynamically;
+- only SHA-256 credential fingerprints were present in exact registry evidence;
+- the initial producer credential authenticated and produced trusted `backend/business_state` authority;
+- Statsig delivery evidence was absent because only PostHog was enabled;
+- rotation immediately invalidated the old producer credential;
+- the rotated credential authenticated and produced a second event;
+- the previous credential registry record became `superseded`;
+- disabling the producer immediately invalidated the current credential.
+
+Independent provider-side SQL verification in ETLayer PostHog EU Project `117513` returned:
+
+```text
+d03292f5-4a38-4bd2-8402-29ae4d34048e
+  event       = account.created
+  project     = vs9-20260923-032221-2e825014-a
+  total rows  = 1
+
+9cc566aa-05b7-4677-a2d8-23c63a42419c
+  event       = account.created
+  project     = vs9-20260923-032221-2e825014-a
+  total rows  = 1
+```
+
+Both rows carried the trusted dynamic project property:
+
+```text
+etlayer.project.id = vs9-20260923-032221-2e825014-a
+```
+
+This is end-to-end evidence that a project and producer created entirely through the management API can authenticate, route, rotate credentials, and continue delivering to the configured destination without any source-code configuration change.
