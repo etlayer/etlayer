@@ -1,0 +1,601 @@
+import {
+  isSupportedDestination,
+  profileTemplate,
+  projectConfiguration,
+  validateProjectId,
+} from "./project-config.js";
+import { authenticateProjectOperator } from "./operator-auth.js";
+import {
+  RegistryConflictError,
+  RegistryNotFoundError,
+  RegistryStateError,
+  RegistryValidationError,
+  createRegistryProducer,
+  createRegistryProject,
+  credentialFingerprint,
+  disableRegistryProducer,
+  generateCredential,
+  readRegistryProject,
+  rotateRegistryProducer,
+  setRegistryDestination,
+} from "./registry.js";
+
+export async function handleManagementRequest(
+  request,
+  env,
+  url = new URL(request.url),
+  options = {},
+) {
+  if (!env.ARCHIVE) {
+    return jsonResponse(
+      { error: "registry storage is not configured" },
+      503,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/_mgmt/projects"
+  ) {
+    return createProject(request, env, options);
+  }
+
+  const producerCreate = url.pathname.match(
+    /^\/_mgmt\/projects\/([^/]+)\/producers$/,
+  );
+  if (request.method === "POST" && producerCreate) {
+    return createProducer(
+      request,
+      env,
+      decodeURIComponent(producerCreate[1]),
+      options,
+    );
+  }
+
+  const producerAction = url.pathname.match(
+    /^\/_mgmt\/projects\/([^/]+)\/producers\/([^/]+)\/(rotate|disable)$/,
+  );
+  if (request.method === "POST" && producerAction) {
+    const projectId = decodeURIComponent(producerAction[1]);
+    const producerId = decodeURIComponent(producerAction[2]);
+    const action = producerAction[3];
+
+    if (action === "rotate") {
+      return rotateProducer(
+        request,
+        env,
+        projectId,
+        producerId,
+        options,
+      );
+    }
+
+    return disableProducer(
+      request,
+      env,
+      projectId,
+      producerId,
+      options,
+    );
+  }
+
+  const destination = url.pathname.match(
+    /^\/_mgmt\/projects\/([^/]+)\/destinations\/([^/]+)$/,
+  );
+  if (request.method === "PUT" && destination) {
+    return configureDestination(
+      request,
+      env,
+      decodeURIComponent(destination[1]),
+      decodeURIComponent(destination[2]),
+      options,
+    );
+  }
+
+  return jsonResponse(
+    { error: "management route not found" },
+    404,
+  );
+}
+
+async function createProject(request, env, options) {
+  const management = authenticateManagement(
+    request,
+    env,
+  );
+
+  if (!management.ok) {
+    return management.reason === "not_configured"
+      ? jsonResponse(
+          { error: "management credential is not configured" },
+          503,
+        )
+      : jsonResponse(
+          { error: "invalid management credential" },
+          401,
+        );
+  }
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  let projectId;
+  try {
+    projectId = validateProjectId(input.value?.id);
+  } catch (error) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  if (projectConfiguration(projectId)) {
+    return jsonResponse(
+      { error: "project already exists" },
+      409,
+    );
+  }
+
+  if (
+    await readRegistryProject(
+      env.ARCHIVE,
+      projectId,
+    )
+  ) {
+    return jsonResponse(
+      { error: "project already exists" },
+      409,
+    );
+  }
+
+  const cryptoImpl =
+    options.crypto || globalThis.crypto;
+  const operatorCredential = generateCredential(
+    "etl_op",
+    cryptoImpl,
+  );
+  const operatorFingerprint =
+    await credentialFingerprint(
+      operatorCredential,
+      cryptoImpl,
+    );
+
+  try {
+    const result = await createRegistryProject(
+      env.ARCHIVE,
+      {
+        projectId,
+        operatorFingerprint,
+        now: options.now || new Date(),
+      },
+    );
+
+    return jsonResponse(
+      {
+        project: publicProject(result.project),
+        operatorCredential,
+      },
+      201,
+    );
+  } catch (error) {
+    return registryErrorResponse(error);
+  }
+}
+
+async function createProducer(
+  request,
+  env,
+  projectId,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  let profile;
+  try {
+    validateProjectId(projectId);
+    validateProducerId(input.value?.id);
+    profile = profileTemplate(input.value?.profileId);
+  } catch (error) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  const cryptoImpl =
+    options.crypto || globalThis.crypto;
+  const credential = generateCredential(
+    "etl_prod",
+    cryptoImpl,
+  );
+  const fingerprint =
+    await credentialFingerprint(
+      credential,
+      cryptoImpl,
+    );
+
+  try {
+    const result = await createRegistryProducer(
+      env.ARCHIVE,
+      {
+        projectId,
+        producerId: input.value.id,
+        profile,
+        credentialFingerprint: fingerprint,
+        now: options.now || new Date(),
+      },
+    );
+
+    return jsonResponse(
+      {
+        producer: publicProducer(result.producer),
+        credential,
+      },
+      201,
+    );
+  } catch (error) {
+    return registryErrorResponse(error);
+  }
+}
+
+async function rotateProducer(
+  request,
+  env,
+  projectId,
+  producerId,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  try {
+    validateProducerId(producerId);
+  } catch (error) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  const cryptoImpl =
+    options.crypto || globalThis.crypto;
+  const credential = generateCredential(
+    "etl_prod",
+    cryptoImpl,
+  );
+  const fingerprint =
+    await credentialFingerprint(
+      credential,
+      cryptoImpl,
+    );
+
+  try {
+    const result = await rotateRegistryProducer(
+      env.ARCHIVE,
+      {
+        projectId,
+        producerId,
+        credentialFingerprint: fingerprint,
+        now: options.now || new Date(),
+      },
+    );
+
+    return jsonResponse(
+      {
+        producer: publicProducer(result.producer),
+        credential,
+      },
+      200,
+    );
+  } catch (error) {
+    return registryErrorResponse(error);
+  }
+}
+
+async function disableProducer(
+  request,
+  env,
+  projectId,
+  producerId,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  try {
+    validateProducerId(producerId);
+    const producer = await disableRegistryProducer(
+      env.ARCHIVE,
+      {
+        projectId,
+        producerId,
+        now: options.now || new Date(),
+      },
+    );
+
+    return jsonResponse(
+      { producer: publicProducer(producer) },
+      200,
+    );
+  } catch (error) {
+    return registryErrorResponse(error);
+  }
+}
+
+async function configureDestination(
+  request,
+  env,
+  projectId,
+  destination,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  if (!isSupportedDestination(destination)) {
+    return jsonResponse(
+      {
+        error:
+          `unsupported destination: ${destination}`,
+      },
+      400,
+    );
+  }
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  if (typeof input.value?.enabled !== "boolean") {
+    return jsonResponse(
+      { error: "enabled must be boolean" },
+      400,
+    );
+  }
+
+  try {
+    const project = await setRegistryDestination(
+      env.ARCHIVE,
+      {
+        projectId,
+        destination,
+        enabled: input.value.enabled,
+        now: options.now || new Date(),
+      },
+    );
+
+    return jsonResponse(
+      {
+        project: publicProject(project),
+        destination,
+        enabled: input.value.enabled,
+      },
+      200,
+    );
+  } catch (error) {
+    return registryErrorResponse(error);
+  }
+}
+
+async function projectAuth(
+  request,
+  env,
+  projectId,
+  options,
+) {
+  try {
+    validateProjectId(projectId);
+  } catch (error) {
+    return {
+      response: jsonResponse(
+        { error: error.message },
+        400,
+      ),
+    };
+  }
+
+  const authenticate =
+    options.authenticateProjectOperator ||
+    authenticateProjectOperator;
+  const authentication = await authenticate(
+    request,
+    env,
+    projectId,
+    { crypto: options.crypto },
+  );
+
+  if (authentication.ok) {
+    return { authentication };
+  }
+
+  if (
+    authentication.reason ===
+    "operator_credential_not_configured"
+  ) {
+    return {
+      response: jsonResponse(
+        {
+          error:
+            "operator credential is not configured for project",
+        },
+        503,
+      ),
+    };
+  }
+
+  if (authentication.reason === "unknown_project") {
+    return {
+      response: jsonResponse(
+        { error: "unknown project" },
+        404,
+      ),
+    };
+  }
+
+  return {
+    response: jsonResponse(
+      {
+        error:
+          "invalid operator credential for project",
+      },
+      401,
+    ),
+  };
+}
+
+function authenticateManagement(request, env) {
+  if (!env.ETLAYER_MANAGEMENT_KEY) {
+    return {
+      ok: false,
+      reason: "not_configured",
+    };
+  }
+
+  const authorization =
+    request.headers.get("authorization");
+
+  if (
+    authorization !==
+    `Bearer ${env.ETLAYER_MANAGEMENT_KEY}`
+  ) {
+    return {
+      ok: false,
+      reason: "invalid",
+    };
+  }
+
+  return { ok: true };
+}
+
+async function readJsonBody(request) {
+  if (!isJsonContentType(request.headers.get("content-type"))) {
+    return {
+      response: jsonResponse(
+        { error: "content-type must be application/json" },
+        415,
+      ),
+    };
+  }
+
+  try {
+    return { value: await request.json() };
+  } catch {
+    return {
+      response: jsonResponse(
+        { error: "request body is not valid JSON" },
+        400,
+      ),
+    };
+  }
+}
+
+function publicProject(project) {
+  return {
+    version: project.version,
+    id: project.id,
+    status: project.status,
+    destinations: [...(project.destinations || [])],
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+  };
+}
+
+function publicProducer(producer) {
+  return {
+    version: producer.version,
+    id: producer.id,
+    projectId: producer.projectId,
+    status: producer.status,
+    profileId: producer.profileId,
+    producerKind: producer.producerKind,
+    allowedAuthorityKinds: [
+      ...(producer.allowedAuthorityKinds || []),
+    ],
+    createdAt: producer.createdAt,
+    updatedAt: producer.updatedAt,
+    disabledAt: producer.disabledAt || null,
+  };
+}
+
+function validateProducerId(value) {
+  if (
+    typeof value !== "string" ||
+    !/^[a-z0-9][a-z0-9._-]*$/.test(value)
+  ) {
+    throw new RegistryValidationError(
+      "producer id must be a lowercase slug",
+    );
+  }
+
+  return value;
+}
+
+function registryErrorResponse(error) {
+  if (error instanceof RegistryConflictError) {
+    return jsonResponse(
+      { error: error.message },
+      409,
+    );
+  }
+
+  if (error instanceof RegistryNotFoundError) {
+    return jsonResponse(
+      { error: error.message },
+      404,
+    );
+  }
+
+  if (
+    error instanceof RegistryStateError ||
+    error instanceof RegistryValidationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  throw error;
+}
+
+function isJsonContentType(contentType) {
+  if (!contentType) return false;
+  return (
+    contentType.split(";", 1)[0].trim().toLowerCase() ===
+    "application/json"
+  );
+}
+
+function jsonResponse(body, status) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "content-type":
+        "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
