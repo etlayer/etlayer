@@ -171,12 +171,10 @@ else
 fi
 
 MANAGEMENT_KEY="$(generate_key)"
-DESTINATION_SECRET_KEY="$(generate_key)"
 IDEMPOTENCY_SECRET_KEY="$(generate_key)"
 
 say "Rotating VS12 CI credentials"
 put_secret ETLAYER_MANAGEMENT_KEY "$MANAGEMENT_KEY"
-put_secret ETLAYER_DESTINATION_SECRET_KEY_V1 "$DESTINATION_SECRET_KEY"
 put_secret ETLAYER_IDEMPOTENCY_SECRET_KEY_V1 "$IDEMPOTENCY_SECRET_KEY"
 
 say "Deploying current Worker"
@@ -267,7 +265,6 @@ node -e '
   die "Idempotency evidence is not encrypted/redacted as required."
 
 unset MANAGEMENT_KEY
-unset DESTINATION_SECRET_KEY
 unset IDEMPOTENCY_SECRET_KEY
 unset OPERATOR_A
 unset OPERATOR_B
