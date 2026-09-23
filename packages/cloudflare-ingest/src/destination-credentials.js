@@ -283,6 +283,28 @@ export async function readDestinationCredentialStatus(
   };
 }
 
+export function runtimeDefaultDestinationSecret(
+  env,
+  destination,
+) {
+  if (!isSupportedDestination(destination)) {
+    throw new DestinationCredentialValidationError(
+      `unsupported destination: ${String(destination)}`,
+    );
+  }
+
+  const envName = STATIC_SECRET_ENVS[destination];
+  const secret = envName ? env?.[envName] : null;
+
+  return {
+    envName,
+    secret:
+      typeof secret === "string" && secret.length > 0
+        ? secret
+        : null,
+  };
+}
+
 export async function resolveDestinationCredential(
   archive,
   env,
@@ -294,21 +316,19 @@ export async function resolveDestinationCredential(
 
   const staticProject = projectConfiguration(projectId);
   if (staticProject) {
-    const envName = STATIC_SECRET_ENVS[destination];
-    const secret = envName ? env?.[envName] : null;
+    const { secret } = runtimeDefaultDestinationSecret(
+      env,
+      destination,
+    );
 
     return {
-      configured:
-        typeof secret === "string" && secret.length > 0,
+      configured: secret != null,
       source: "worker_secret",
       projectId,
       destination,
       credentialId: null,
       keyVersion: null,
-      secret:
-        typeof secret === "string" && secret.length > 0
-          ? secret
-          : null,
+      secret,
     };
   }
 
