@@ -30,10 +30,10 @@ function fakeArchive() {
   };
 }
 
-test("records blocked validation evidence durably", async () => {
+test("records quarantined validation evidence durably", async () => {
   const archive = fakeArchive();
   const event = {
-    id: "evt/blocked",
+    id: "evt/quarantined",
     eventName: "account.created",
   };
 
@@ -41,7 +41,7 @@ test("records blocked validation evidence durably", async () => {
     archive,
     event,
     {
-      status: "blocked",
+      status: "quarantined",
       validatorVersion: 1,
       schemaVersion: 1,
       contractId: "account.created@1",
@@ -54,13 +54,13 @@ test("records blocked validation evidence durably", async () => {
     },
     {
       now: new Date("2026-09-22T00:10:00.000Z"),
-      sourceKey: "projects/etlayer-default/events/2026/09/22/00/evt%2Fblocked.json",
+      sourceKey: "projects/etlayer-default/events/2026/09/22/00/evt%2Fquarantined.json",
     },
   );
 
   assert.equal(
     result.key,
-    "projects/etlayer-default/validation/evt%2Fblocked.json",
+    "projects/etlayer-default/validation/evt%2Fquarantined.json",
   );
 
   const state = JSON.parse(
@@ -68,13 +68,13 @@ test("records blocked validation evidence durably", async () => {
   );
 
   assert.deepEqual(state, {
-    version: 2,
+    version: 3,
     projectId: "etlayer-default",
-    eventId: "evt/blocked",
+    eventId: "evt/quarantined",
     eventName: "account.created",
     validatorVersion: 1,
     schemaVersion: 1,
-    status: "blocked",
+    status: "quarantined",
     contractId: "account.created@1",
     errors: [
       {
@@ -82,7 +82,7 @@ test("records blocked validation evidence durably", async () => {
         attribute: "account.id",
       },
     ],
-    sourceKey: "projects/etlayer-default/events/2026/09/22/00/evt%2Fblocked.json",
+    sourceKey: "projects/etlayer-default/events/2026/09/22/00/evt%2Fquarantined.json",
     updatedAt: "2026-09-22T00:10:00.000Z",
   });
 });
