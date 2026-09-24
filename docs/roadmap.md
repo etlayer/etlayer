@@ -23,6 +23,7 @@ VS11 Project-scoped Destination Credentials   complete
 Phase 2 - Product Contract
 VS12 External Integration Contract            complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
+VS14 First-class Quarantine                    in progress
 ~~~
 
 The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS13 together.
@@ -34,7 +35,8 @@ See:
 - [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md)
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
-- GitHub issue #43
+- [VS14: First-class Quarantine](vertical-slices/vs14-quarantine.md)
+- GitHub issues #43 and #48
 
 ## Phase 2 - Product Contract
 
@@ -177,6 +179,20 @@ Before a public hosted service:
 The technical capability gap analysis identified a small set of capabilities that strengthen ETLayer's existing trust model before broader hosted-product surfaces are built.
 
 See [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md) for the full classification scheme and longer backlog.
+
+**VS14 - First-class Quarantine is the selected next slice.**
+
+Its target invariant is:
+
+~~~text
+recoverable contract/data-quality failure != semantic trust violation
+
+authority denied      -> BLOCK
+validation failure    -> QUARANTINE
+otherwise             -> ALLOW
+~~~
+
+Routing occurs only for ALLOW, and BLOCK takes precedence over QUARANTINE when both conditions exist.
 
 The first milestone candidate is:
 
