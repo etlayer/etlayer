@@ -272,3 +272,151 @@ test("idempotency storage key contains only project operation and key fingerprin
     ),
   );
 });
+
+
+test("new idempotency operations use v2 while unexpired v1 replay remains readable", async () => {
+  const archive = fakeArchive();
+  const versionedEnv = {
+    ...env,
+    ETLAYER_IDEMPOTENCY_SECRET_KEY_V2:
+      "33".repeat(32),
+  };
+  const requestFingerprint =
+    await fingerprintSemanticRequest({
+      producerId: "backend-main",
+      destinations: ["posthog"],
+    });
+
+  const first = await beginIdempotentOperation(
+    archive,
+    versionedEnv,
+    {
+      projectId: "customer-v",
+      operation: "onboarding-v1",
+      idempotencyKey: "v1-key",
+      requestFingerprint,
+      recoveryPayload: {
+        credential: "etl_prod_v1",
+      },
+      now: new Date("2026-09-24T02:00:00.000Z"),
+    },
+  );
+
+  assert.equal(first.record.keyVersion, "v1");
+
+  await completeIdempotentOperation(
+    archive,
+    versionedEnv,
+    {
+      key: first.key,
+      record: {
+        ...first.record,
+        statusCode: 201,
+      },
+      responsePayload: {
+        credential: "etl_prod_v1",
+      },
+      now: new Date("2026-09-24T02:00:01.000Z"),
+    },
+  );
+
+  const v2Env = {
+    ...versionedEnv,
+    ETLAYER_IDEMPOTENCY_SECRET_ACTIVE_VERSION: "v2",
+  };
+
+  const second = await beginIdempotentOperation(
+    archive,
+    v2Env,
+    {
+      projectId: "customer-v",
+      operation: "onboarding-v1",
+      idempotencyKey: "v2-key",
+      requestFingerprint,
+      recoveryPayload: {
+        credential: "etl_prod_v2",
+      },
+      now: new Date("2026-09-24T02:00:02.000Z"),
+    },
+  );
+
+  assert.equal(second.record.keyVersion, "v2");
+
+  const replay = await beginIdempotentOperation(
+    archive,
+    v2Env,
+    {
+      projectId: "customer-v",
+      operation: "onboarding-v1",
+      idempotencyKey: "v1-key",
+      requestFingerprint,
+      recoveryPayload: {
+        credential: "unused",
+      },
+      now: new Date("2026-09-24T02:00:03.000Z"),
+    },
+  );
+
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.record.keyVersion, "v1");
+  assert.deepEqual(replay.payload, {
+    credential: "etl_prod_v1",
+  });
+});
+
+test("idempotency completion stays on the operation key version even after active version changes", async () => {
+  const archive = fakeArchive();
+  const versionedEnv = {
+    ...env,
+    ETLAYER_IDEMPOTENCY_SECRET_KEY_V2:
+      "33".repeat(32),
+  };
+  const requestFingerprint =
+    await fingerprintSemanticRequest({
+      producerId: "backend-main",
+      destinations: ["posthog"],
+    });
+
+  const started = await beginIdempotentOperation(
+    archive,
+    versionedEnv,
+    {
+      projectId: "customer-pinned",
+      operation: "onboarding-v1",
+      idempotencyKey: "pinned-key",
+      requestFingerprint,
+      recoveryPayload: {
+        credential: "etl_prod_pinned",
+      },
+      now: new Date("2026-09-24T02:10:00.000Z"),
+    },
+  );
+
+  assert.equal(started.record.keyVersion, "v1");
+
+  const completed = await completeIdempotentOperation(
+    archive,
+    {
+      ...versionedEnv,
+      ETLAYER_IDEMPOTENCY_SECRET_ACTIVE_VERSION: "v2",
+    },
+    {
+      key: started.key,
+      record: {
+        ...started.record,
+        statusCode: 201,
+      },
+      responsePayload: {
+        credential: "etl_prod_pinned",
+      },
+      now: new Date("2026-09-24T02:10:01.000Z"),
+    },
+  );
+
+  assert.equal(completed.keyVersion, "v1");
+
+  const stored = JSON.parse(
+    archive.objects.get(started.key).body,
+  );
+  assert.equal(stored.keyVersion, "v1");
+});
