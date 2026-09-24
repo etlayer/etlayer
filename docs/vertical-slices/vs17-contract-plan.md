@@ -1,6 +1,6 @@
 # VS17: Contract Plan Against Historical Events
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #54.
 
@@ -196,3 +196,56 @@ VS17 does not include:
 - dashboard visualization.
 
 Those can build on the planning primitive.
+
+
+---
+
+# Completion evidence
+
+VS17 completed with:
+
+~~~text
+PR CI                       green
+Live Acceptance #98 attempt 2 green
+runtime head                4eb978e8152db8de1638ad156abe6eebb6c867d8
+~~~
+
+The first Live Acceptance attempt failed transiently in the already-proven VS13 Cloudflare ingest path with Worker 1101 before VS17 executed. The same immutable SHA was re-run without code changes and passed the full suite.
+
+Final VS17 live correlation:
+
+~~~text
+vs17-20260924-142236-6fe8dfa5
+~~~
+
+Project:
+
+~~~text
+vs17-20260924-142236-6fe8dfa5
+~~~
+
+Observed plan:
+
+~~~text
+selected 3
+changed  1
+
+allow_to_allow                 1
+allow_to_quarantine            1
+quarantine_to_quarantine       1
+~~~
+
+Read-only proof:
+
+~~~text
+decisionId before
+b2aa5ef7-6323-47d7-8a27-22900a8a3e5d
+
+decisionId after
+b2aa5ef7-6323-47d7-8a27-22900a8a3e5d
+
+decision lineage mutated       false
+destination delivery triggered false
+~~~
+
+Therefore ETLayer can now evaluate a proposed contract against real preserved project history before publication without changing runtime truth.
