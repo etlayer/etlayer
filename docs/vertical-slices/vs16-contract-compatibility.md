@@ -1,6 +1,6 @@
 # VS16: Contract Compatibility Checker
 
-**Status: implementation in progress.**
+**Status: complete and CI-proven.**
 
 Tracks GitHub issue #52.
 
@@ -193,3 +193,51 @@ VS16 does not include:
 - automatic contract inference.
 
 Those build on this compatibility primitive.
+
+
+---
+
+# Completion evidence
+
+VS16 completed with:
+
+~~~text
+CI #775                green
+acceptance             scripts/once/vs16-contract-compatibility.sh
+authoritative surface  deterministic CLI / CI
+runtime deployment     not required
+~~~
+
+The acceptance proved:
+
+~~~text
+account.created@1
+  -> relaxed v2
+
+backward
+  compatible
+  exit 0
+
+forward
+  breaking
+
+full
+  breaking
+  exit 2
+
+account.created@1
+  -> breaking v2
+
+required plan.id
+  required_attribute_added
+
+account.id
+  string -> integer
+  attribute_constraint_narrowed
+
+backward
+  breaking
+  exit 2
+~~~
+
+This establishes a machine-enforceable contract-evolution gate without introducing a schema registry or changing runtime event processing.
