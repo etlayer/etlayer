@@ -1,6 +1,6 @@
 # ETLayer Roadmap
 
-This roadmap describes the current product sequence after the completion of VS12.
+This roadmap describes the current product sequence after the completion of VS13.
 
 It is intentionally outcome-driven. A roadmap item becomes a numbered vertical slice only when it has a concrete invariant and executable acceptance proof.
 
@@ -22,10 +22,10 @@ VS11 Project-scoped Destination Credentials   complete
 
 Phase 2 - Product Contract
 VS12 External Integration Contract            complete
-VS13 Versioned Encryption Roots & Safe Rotation design selected
+VS13 Versioned Encryption Roots & Safe Rotation complete
 ~~~
 
-The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS12 together.
+The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS13 together.
 
 See:
 
@@ -116,7 +116,7 @@ Near-term, before long-lived hosted production credentials become common:
 
 ### VS13 - Versioned Encryption Roots & Safe Rotation
 
-**Selected next slice.**
+**Complete and live-proven.**
 
 VS13 hardens the two existing encrypted-state domains without introducing a generic KMS abstraction.
 
