@@ -89,6 +89,9 @@ jobs:
           bash ./scripts/once/vs15-control-plane-audit.sh |
             tee "$RUNNER_TEMP/vs15-live-acceptance.log"
 
+          bash ./scripts/once/vs17-contract-plan.sh |
+            tee "$RUNNER_TEMP/vs17-live-acceptance.log"
+
       - name: Upload acceptance logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,5 +106,6 @@ jobs:
             ${{ runner.temp }}/vs13-live-acceptance.log
             ${{ runner.temp }}/vs14-live-acceptance.log
             ${{ runner.temp }}/vs15-live-acceptance.log
+            ${{ runner.temp }}/vs17-live-acceptance.log
           if-no-files-found: ignore
           retention-days: 7
