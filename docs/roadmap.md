@@ -33,6 +33,7 @@ The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS15 toge
 
 See:
 
+- [RFC-0001: Protocol boundaries and durable causal lineage](rfcs/0001-protocol-boundaries-and-causal-lineage.md)
 - [Post-VS11 Architecture Review](reviews/post-vs11-architecture-review.md)
 - [Post-VS12 Architecture Review](reviews/post-vs12-architecture-review.md)
 - [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md)
