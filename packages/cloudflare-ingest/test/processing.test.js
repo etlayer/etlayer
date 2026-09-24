@@ -115,7 +115,7 @@ function decisionState(overrides = {}) {
   };
 }
 
-test("blocked validation records validation, privacy, and identity evidence but never routes", async () => {
+test("quarantined validation records evidence but never routes", async () => {
   const calls = [];
   const event = {
     id: "evt_1",
@@ -130,7 +130,7 @@ test("blocked validation records validation, privacy, and identity evidence but 
       validate() {
         calls.push("validate");
         return {
-          status: "blocked",
+          status: "quarantined",
           validatorVersion: 1,
           schemaVersion: 1,
           contractId: "account.created@1",
@@ -171,7 +171,7 @@ test("blocked validation records validation, privacy, and identity evidence but 
       },
       async recordDecisionHistory() {
         calls.push("record-decision");
-        return decisionState({ routeEligible: false });
+        return decisionState({ outcome: "quarantine", routeEligible: false });
       },
       async route() {
         calls.push("route");
@@ -191,7 +191,7 @@ test("blocked validation records validation, privacy, and identity evidence but 
     "record-identity",
     "record-decision",
   ]);
-  assert.equal(result.validation.status, "blocked");
+  assert.equal(result.validation.status, "quarantined");
   assert.equal(result.identity.subject.id, "anon_1");
   assert.deepEqual(result.deliveries, []);
 });
