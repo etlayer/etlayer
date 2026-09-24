@@ -74,6 +74,33 @@ put_secret() {
   )
 }
 
+wait_for_ingest_credential() {
+  local token="$1"
+  local label="$2"
+  local output="$TMP_PREFIX.credential-readiness"
+
+  for attempt in $(seq 1 30); do
+    local status
+    status="$(
+      curl --silent --show-error         -o "$output"         -w '%{http_code}'         -X POST "$INGEST_URL/v1/logs"         -H "authorization: Bearer $token"         -H "content-type: text/plain"         --data '{}' || true
+    )"
+
+    # Authentication runs before media-type validation.
+    # 415 therefore proves this exact rotated credential reached the Worker.
+    if [ "$status" = "415" ]; then
+      printf 'credential active: %s\n' "$label"
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  printf 'last readiness response for %s:\n' "$label" >&2
+  cat "$output" >&2 || true
+  printf '\n' >&2
+  die "Rotated ingest credential did not converge: $label"
+}
+
 project_operator_for_key() {
   local key="$1"
 
@@ -324,6 +351,11 @@ say "Deploying project-aware ETLayer Worker"
   cd "$INGEST_DIR"
   npx wrangler deploy "${WRANGLER_ENV_ARGS[@]}"
 )
+
+say "Waiting for rotated ingest credentials to converge"
+wait_for_ingest_credential "$DEFAULT_BROWSER_KEY" "default browser"
+wait_for_ingest_credential "$DEFAULT_BACKEND_KEY" "default backend"
+wait_for_ingest_credential "$SECONDARY_BACKEND_KEY" "secondary backend"
 
 say "Keeping the default fixture synchronized with rotated default credentials"
 put_secret "$FIXTURE_DIR" ETLAYER_BROWSER_INGEST_KEY "$DEFAULT_BROWSER_KEY"
