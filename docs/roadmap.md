@@ -31,6 +31,7 @@ See:
 
 - [Post-VS11 Architecture Review](reviews/post-vs11-architecture-review.md)
 - [Post-VS12 Architecture Review](reviews/post-vs12-architecture-review.md)
+- [Competitor Gap Analysis and Trust Governance Priorities](reviews/competitor-gap-analysis.md)
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
 - GitHub issue #43
@@ -170,6 +171,47 @@ Before a public hosted service:
 - project-level resource limits;
 - authentication brute-force controls;
 - documented failure semantics.
+
+## Trust Governance milestone
+
+The competitor gap analysis identified a small set of capabilities that strengthen ETLayer's existing trust model before broader hosted-product surfaces are built.
+
+See [Competitor Gap Analysis and Trust Governance Priorities](reviews/competitor-gap-analysis.md) for the full comparison, classification scheme, and longer backlog.
+
+The first milestone candidate is:
+
+~~~text
+A1-NOW-GOV/OPS  Quarantine
+A1-NOW-GOV/SEC  Control-plane Audit Log
+A2-NOW-GOV/DX   Contract Compatibility Checker
+A2-NOW-GOV/DX   etlayer plan
+A2-NOW-OPS/UX   Delivery + Attempt
+A2-NOW-GOV/DX   Governance-as-Code
+~~~
+
+Expanded meanings:
+
+- **A1-NOW-GOV/OPS - Quarantine:** core, small effort, do now; Governance + Operations / Reliability / Observability.
+- **A1-NOW-GOV/SEC - Control-plane Audit Log:** core, small effort, do now; Governance + Security.
+- **A2-NOW-GOV/DX - Contract Compatibility Checker:** core, medium effort, do now; Governance + Developer Experience.
+- **A2-NOW-GOV/DX - `etlayer plan`:** core, medium effort, do now; Governance + Developer Experience.
+- **A2-NOW-OPS/UX - Delivery + Attempt:** core, medium effort, do now; Operations / Reliability / Observability + User Experience.
+- **A2-NOW-GOV/DX - Governance-as-Code:** core, medium effort, do now; Governance + Developer Experience.
+
+These are milestone capabilities, not pre-assigned VS numbers. Preserve the roadmap rule: promote one capability into the next vertical slice only after its risk, invariant, executable acceptance, and smallest useful scope are explicit.
+
+A useful sequencing hypothesis is:
+
+~~~text
+Quarantine
+  -> Audit Log
+  -> Compatibility
+  -> etlayer plan
+  -> Delivery / Attempt
+  -> Governance-as-Code
+~~~
+
+This sequence is deliberately revisable. The invariant/acceptance proof for the next slice remains authoritative over the ordering hypothesis.
 
 ## Phase 3 - Hosted Product
 
