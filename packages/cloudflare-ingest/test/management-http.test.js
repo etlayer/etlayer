@@ -611,3 +611,79 @@ test("global key usage audit reports destination migration and idempotency drain
     },
   );
 });
+
+
+test("global encryption config exposes active versions without secret material", async () => {
+  const archive = fakeArchive();
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_MANAGEMENT_KEY: "management-key",
+    ETLAYER_DESTINATION_SECRET_ACTIVE_VERSION: "v2",
+    ETLAYER_IDEMPOTENCY_SECRET_ACTIVE_VERSION: "v1",
+    ETLAYER_DESTINATION_SECRET_KEY_V1:
+      "11".repeat(32),
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+    ETLAYER_IDEMPOTENCY_SECRET_KEY_V1:
+      "33".repeat(32),
+  };
+
+  const request = new Request(
+    "https://events.test/_mgmt/encryption/config",
+    {
+      method: "GET",
+      headers: {
+        authorization: "Bearer management-key",
+      },
+    },
+  );
+
+  const response = await handleManagementRequest(
+    request,
+    env,
+    new URL(request.url),
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+
+  assert.deepEqual(body, {
+    destination: {
+      activeKeyVersion: "v2",
+    },
+    idempotency: {
+      activeKeyVersion: "v1",
+    },
+  });
+
+  const serialized = JSON.stringify(body);
+  assert.equal(serialized.includes("11".repeat(32)), false);
+  assert.equal(serialized.includes("22".repeat(32)), false);
+  assert.equal(serialized.includes("33".repeat(32)), false);
+});
+
+test("project operator cannot read global encryption config", async () => {
+  const archive = fakeArchive();
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_MANAGEMENT_KEY: "management-key",
+  };
+
+  const request = new Request(
+    "https://events.test/_mgmt/encryption/config",
+    {
+      method: "GET",
+      headers: {
+        authorization: "Bearer etl_op_project-a",
+      },
+    },
+  );
+
+  const response = await handleManagementRequest(
+    request,
+    env,
+    new URL(request.url),
+  );
+
+  assert.equal(response.status, 401);
+});
