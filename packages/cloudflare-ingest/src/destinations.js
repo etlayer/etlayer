@@ -4,6 +4,10 @@ import { exportToStatsig } from "./statsig.js";
 import { projectConfiguration, resolveProjectDestinations } from "./project-config.js";
 import { resolveDestinationCredential } from "./destination-credentials.js";
 import { projectIdForEvent } from "./project-scope.js";
+import {
+  nextAttemptNumber,
+  recordDeliveryAttempt,
+} from "./delivery-attempt.js";
 
 const DEFAULT_DESTINATIONS = [
   {
@@ -27,6 +31,8 @@ export async function routeEventDestinations(event, env, options = {}) {
     );
   const readState = options.readState || readDeliveryState;
   const recordState = options.recordState || recordDeliveryState;
+  const recordAttempt =
+    options.recordAttempt || recordDeliveryAttempt;
   const results = [];
 
   for (const destination of destinations) {
@@ -51,6 +57,12 @@ export async function routeEventDestinations(event, env, options = {}) {
       continue;
     }
 
+    const attemptNumber =
+      nextAttemptNumber(previous);
+    const startedAt =
+      options.now instanceof Date
+        ? options.now
+        : new Date(options.now || Date.now());
     let result;
 
     try {
@@ -89,6 +101,27 @@ export async function routeEventDestinations(event, env, options = {}) {
       };
     }
 
+    const attempt =
+      options.recordAttempt ||
+      typeof env.ARCHIVE?.put === "function"
+        ? await recordAttempt(
+            env.ARCHIVE,
+            event,
+            destination.name,
+            result,
+            {
+              attemptNumber,
+              startedAt,
+              now: options.now,
+              delivery:
+                destinationOptions.delivery,
+              crypto:
+                destinationOptions.crypto ||
+                options.crypto,
+            },
+          )
+        : null;
+
     await recordState(
       env.ARCHIVE,
       event,
@@ -97,12 +130,23 @@ export async function routeEventDestinations(event, env, options = {}) {
       {
         now: options.now,
         delivery: destinationOptions.delivery,
+        attempt: attempt?.state,
       },
     );
 
     results.push({
       destination: destination.name,
       ...result,
+      ...(attempt
+        ? {
+            deliveryId:
+              attempt.state.deliveryId,
+            attemptId:
+              attempt.state.attemptId,
+            attemptNumber:
+              attempt.state.attemptNumber,
+          }
+        : {}),
     });
   }
 
