@@ -378,6 +378,35 @@ The acceptance also proves:
 
 The versioned public onboarding endpoint is intentionally not wrapped by VS15's random operation IDs because its retry contract is already idempotency-key based. Unifying those two operation identities is a follow-up.
 
+## VS16 contract compatibility acceptance
+
+Run:
+
+~~~bash
+bash ./scripts/once/vs16-contract-compatibility.sh
+~~~
+
+VS16 is a deterministic governance/DX slice and does not require Cloudflare.
+
+The acceptance uses `account.created@1` as the real baseline and proves:
+
+- removing a required field is backward-compatible;
+- the same relaxation is forward-breaking and therefore full-breaking;
+- adding a required field is backward-breaking;
+- tightening `account.id` from string to integer is backward-breaking;
+- breaking reasons are machine-readable;
+- CLI exit code is `0` for compatible and `2` for breaking.
+
+Direct CLI usage:
+
+~~~bash
+npm run contract:check -- \
+  --from packages/cloudflare-ingest/contracts/account.created.v1.js \
+  --to path/to/account.created.v2.js \
+  --mode backward \
+  --json
+~~~
+
 ## One-time Cloudflare CI bootstrap
 
 VS8 live acceptance has a dedicated Cloudflare environment. It does not deploy branch code to the default ETLayer Workers.

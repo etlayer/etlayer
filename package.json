@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test packages/cloudflare-ingest/test/*.test.js examples/cloudflare-fixture/test/*.test.js && node scripts/check-external-consumer-boundary.mjs",
-    "smoke:posthog": "node scripts/posthog-smoke.mjs"
+    "smoke:posthog": "node scripts/posthog-smoke.mjs",
+    "contract:check": "node scripts/check-contract-compatibility.mjs"
   },
   "devDependencies": {
     "wrangler": "4.135.0"
