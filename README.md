@@ -124,6 +124,7 @@ VS13 Versioned Encryption Roots & Safe Rotation complete
 VS14 First-class Quarantine                    complete
 VS15 Append-only Control-plane Audit Log          complete
 VS16 Contract Compatibility Checker               complete
+VS17 Historical Contract Plan                     in progress
 ~~~
 
 The current live acceptance suite re-proves VS8 -> VS15 serially in an isolated Cloudflare CI environment.
@@ -138,6 +139,7 @@ See:
 - [VS14: First-class Quarantine](docs/vertical-slices/vs14-quarantine.md)
 - [VS15: Append-only Control-plane Audit Log](docs/vertical-slices/vs15-control-plane-audit.md)
 - [VS16: Contract Compatibility Checker](docs/vertical-slices/vs16-contract-compatibility.md)
+- [VS17: Contract Plan Against Historical Events](docs/vertical-slices/vs17-contract-plan.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
