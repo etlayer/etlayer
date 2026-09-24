@@ -80,6 +80,9 @@ jobs:
           bash ./scripts/once/vs12-external-integration-contract.sh |
             tee "$RUNNER_TEMP/vs12-live-acceptance.log"
 
+          bash ./scripts/once/vs13-encryption-root-rotation.sh |
+            tee "$RUNNER_TEMP/vs13-live-acceptance.log"
+
       - name: Upload acceptance logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,5 +94,6 @@ jobs:
             ${{ runner.temp }}/vs10-live-acceptance.log
             ${{ runner.temp }}/vs11-live-acceptance.log
             ${{ runner.temp }}/vs12-live-acceptance.log
+            ${{ runner.temp }}/vs13-live-acceptance.log
           if-no-files-found: ignore
           retention-days: 7
