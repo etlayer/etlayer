@@ -320,11 +320,9 @@ else
 fi
 
 MANAGEMENT_KEY="$(generate_key)"
-DESTINATION_SECRET_KEY="$(generate_key)"
 
-say "Rotating VS11 management and destination master credentials"
+say "Rotating VS11 management credential"
 put_secret ETLAYER_MANAGEMENT_KEY "$MANAGEMENT_KEY"
-put_secret ETLAYER_DESTINATION_SECRET_KEY_V1 "$DESTINATION_SECRET_KEY"
 
 say "Deploying current Worker"
 (
@@ -524,7 +522,6 @@ SOURCE_A_2="$(json_field "$INSPECT_A_2" sourceKey)"
 SOURCE_B_2="$(json_field "$INSPECT_B_2" sourceKey)"
 
 unset MANAGEMENT_KEY
-unset DESTINATION_SECRET_KEY
 unset OPERATOR_A
 unset OPERATOR_B
 unset PRODUCER_A

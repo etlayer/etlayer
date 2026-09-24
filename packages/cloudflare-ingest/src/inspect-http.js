@@ -1,17 +1,6 @@
-import { readAuthorityState } from "./authority-state.js";
-import {
-  readDecisionHistory,
-  readLatestDecisionPointer,
-} from "./decision-history.js";
-import { readDeliveryState } from "./delivery-state.js";
-import { readIdentityState } from "./identity-state.js";
+import { inspectEventState } from "./event-inspection.js";
 import { authenticateProjectOperator } from "./operator-auth.js";
-import { readPrivacyState } from "./privacy-state.js";
-import {
-  resolveProjectDestinations,
-  validateProjectId,
-} from "./project-config.js";
-import { readValidationState } from "./validation-state.js";
+import { validateProjectId } from "./project-config.js";
 
 export async function handleEventInspect(
   request,
@@ -96,18 +85,14 @@ export async function handleEventInspect(
     );
   }
 
-  if (!env.ARCHIVE || typeof env.ARCHIVE.get !== "function") {
-    return jsonResponse(
-      { error: "archive bucket is not configured" },
-      503,
-    );
-  }
-
-  let destinations;
   try {
-    destinations = await resolveProjectDestinations(
-      env.ARCHIVE,
-      projectId,
+    return jsonResponse(
+      await inspectEventState(
+        env.ARCHIVE,
+        projectId,
+        eventId,
+      ),
+      200,
     );
   } catch (error) {
     return jsonResponse(
@@ -117,127 +102,9 @@ export async function handleEventInspect(
             ? error.message
             : "project configuration unavailable",
       },
-      404,
+      503,
     );
   }
-
-  const [
-    validation,
-    authority,
-    privacy,
-    identity,
-    pointer,
-  ] = await Promise.all([
-    readValidationState(
-      env.ARCHIVE,
-      eventId,
-      { projectId },
-    ),
-    readAuthorityState(
-      env.ARCHIVE,
-      eventId,
-      { projectId },
-    ),
-    readPrivacyState(
-      env.ARCHIVE,
-      eventId,
-      { projectId },
-    ),
-    readIdentityState(
-      env.ARCHIVE,
-      eventId,
-      { projectId },
-    ),
-    readLatestDecisionPointer(
-      env.ARCHIVE,
-      eventId,
-      { projectId },
-    ),
-  ]);
-
-  const decision = pointer
-    ? await readDecisionHistory(
-        env.ARCHIVE,
-        eventId,
-        pointer.decisionId,
-        { projectId },
-      )
-    : null;
-
-  const deliveryStates = await Promise.all(
-    destinations.map(async (destination) => ({
-      destination,
-      state: await readDeliveryState(
-        env.ARCHIVE,
-        eventId,
-        destination,
-        { projectId },
-      ),
-    })),
-  );
-
-  const known = Boolean(
-    validation ||
-      authority ||
-      privacy ||
-      identity ||
-      decision ||
-      deliveryStates.some(({ state }) => state),
-  );
-
-  const routeEligible =
-    typeof decision?.routeEligible === "boolean"
-      ? decision.routeEligible
-      : null;
-
-  const deliveries = deliveryStates.map(
-    ({ destination, state }) => ({
-      destination,
-      status:
-        state?.status ||
-        (routeEligible === false
-          ? "not_routed"
-          : "pending"),
-      state,
-    }),
-  );
-
-  const deliveryComplete =
-    routeEligible === false ||
-    deliveries.length === 0 ||
-    deliveries.every(({ state }) => state != null);
-
-  const status = !known
-    ? "pending_or_unknown"
-    : !decision || !deliveryComplete
-      ? "processing"
-      : "complete";
-
-  const sourceKey =
-    decision?.sourceKey ||
-    authority?.sourceKey ||
-    validation?.sourceKey ||
-    privacy?.sourceKey ||
-    identity?.sourceKey ||
-    null;
-
-  return jsonResponse(
-    {
-      version: 1,
-      projectId,
-      eventId,
-      status,
-      known,
-      sourceKey,
-      validation,
-      authority,
-      privacy,
-      identity,
-      decision,
-      deliveries,
-    },
-    200,
-  );
 }
 
 function isJsonContentType(contentType) {

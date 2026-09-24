@@ -1,6 +1,6 @@
 # VS12: External Integration Contract
 
-**Status: design selected; implementation not started.**
+**Status: VS12 complete; final CI, full VS8 -> VS12 Cloudflare acceptance, and independent PostHog verification passed on 2026-09-24.**
 
 Tracks issue #40.
 
@@ -866,3 +866,123 @@ consumable versioned product contract
 ~~~
 
 That is the purpose of VS12.
+
+
+## Final acceptance evidence
+
+VS12 is complete.
+
+Final runtime proof was executed from commit:
+
+~~~text
+40eb989303f54814f0bde5901b14768634479024
+~~~
+
+Verification:
+
+~~~text
+CI #640                 success
+Live Acceptance #66    success
+suite                   VS8 -> VS12
+~~~
+
+The final VS12 live consumer used:
+
+~~~text
+project:
+  vs12-20260923-232433-a44c9d64-a
+
+event:
+  4700335c-d23d-43a7-b883-9e84d8ed66f8
+
+idempotency key fingerprint:
+  08033456a810191593c95077fafd935faae53034293d08d36e8263131009be51
+~~~
+
+The external consumer proved:
+
+~~~text
+public onboarding                 true
+same-key/same-request replay      true
+same producer credential replay  true
+same-key/different-request        409 idempotency_key_reused
+validation                        valid
+authority                         allowed
+routeEligible                     true
+PostHog delivery                  exported
+cross-project public status       401 invalid_operator_credential
+encrypted idempotency evidence    true
+external-consumer boundary        true
+~~~
+
+The fixture consumed only:
+
+~~~text
+ETLAYER_BASE_URL
+ETLAYER_PROJECT_ID
+ETLAYER_OPERATOR_CREDENTIAL
+~~~
+
+and the static boundary check prohibited internal ETLayer routes, R2/registry coordinates, Wrangler/Cloudflare credentials, the global management credential, and implementation-package imports.
+
+The durable idempotency evidence was inspected only by privileged acceptance setup and proved that:
+
+- the record reached `completed`;
+- the response replay capsule used AES-256-GCM;
+- the key version was `v1`;
+- the durable JSON contained no plaintext `etl_prod_` producer credential;
+- the plaintext idempotency key was not persisted.
+
+Independent provider-side verification in PostHog EU project `117513` found exactly the accepted event row:
+
+~~~text
+uuid:
+  4700335c-d23d-43a7-b883-9e84d8ed66f8
+
+event:
+  account.created
+
+etlayer.event.id:
+  4700335c-d23d-43a7-b883-9e84d8ed66f8
+
+etlayer.project.id:
+  vs12-20260923-232433-a44c9d64-a
+~~~
+
+PostHog recorded the client event timestamp at `2026-09-24T02:24:56.005+03:00` and ingestion at `2026-09-24T02:25:09.205+03:00`.
+
+Therefore VS12 proved the complete public contract:
+
+~~~text
+clean external consumer
+  -> versioned public onboarding
+  -> idempotent lost-response recovery
+  -> standard OTLP event
+  -> versioned public event status
+  -> trusted project-scoped destination delivery
+~~~
+
+without requiring the external consumer to know ETLayer internal storage or operator surfaces.
+
+## Acceptance hardening discovered by VS12
+
+The serial suite exposed an important encryption-key lifecycle issue in the acceptance harness.
+
+Earlier acceptance helpers rotated `ETLAYER_DESTINATION_SECRET_KEY_V1` between slices. On Cloudflare, secret/deployment propagation can temporarily leave different active Worker/Queue executions on different versions. A credential encrypted under the new root could therefore be read by a stale execution still holding the previous root.
+
+That behavior is incorrect for a versioned encryption root.
+
+The corrected CI model is:
+
+~~~text
+ETLAYER_DESTINATION_SECRET_KEY_V1
+ETLAYER_IDEMPOTENCY_SECRET_KEY_V1
+        |
+        +-- provision once in CI bootstrap
+        +-- remain stable across acceptance runs
+        +-- never rotated as ordinary test credentials
+~~~
+
+Future rotation must introduce a new key version and perform deliberate migration. Acceptance scripts may continue to rotate ordinary management/producer credentials, but not encryption roots.
+
+This hardening is now part of the documented CI bootstrap and VS11/VS12 key-lifecycle model.

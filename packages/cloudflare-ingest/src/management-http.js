@@ -7,6 +7,13 @@ import {
 import { authenticateProjectOperator } from "./operator-auth.js";
 import { buildOnboardingBundle } from "./onboarding.js";
 import {
+  OnboardingConflictError,
+  OnboardingNotFoundError,
+  OnboardingValidationError,
+  ensureOnboarding,
+  normalizeOnboardingRequest,
+} from "./onboarding-domain.js";
+import {
   DestinationCredentialConflictError,
   DestinationCredentialConfigurationError,
   DestinationCredentialDecryptionError,
@@ -371,41 +378,17 @@ async function provisionOnboarding(
   const input = await readJsonBody(request);
   if (input.response) return input.response;
 
-  const producerId =
-    input.value?.producerId || "backend-main";
-  const requestedDestinations =
-    input.value?.destinations;
-
-  let destinations;
+  let normalized;
   try {
-    validateProducerId(producerId);
-
-    if (
-      !Array.isArray(requestedDestinations) ||
-      requestedDestinations.length === 0
-    ) {
-      throw new RegistryValidationError(
-        "destinations must be a non-empty array",
-      );
-    }
-
-    destinations = [
-      ...new Set(requestedDestinations),
-    ];
-
-    for (const destination of destinations) {
-      if (
-        typeof destination !== "string" ||
-        !isSupportedDestination(destination)
-      ) {
-        throw new RegistryValidationError(
-          "destinations may contain only supported destination names",
-        );
-      }
-    }
+    normalized = normalizeOnboardingRequest(input.value);
   } catch (error) {
     return jsonResponse(
-      { error: error.message },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "invalid onboarding request",
+      },
       400,
     );
   }
@@ -416,51 +399,50 @@ async function provisionOnboarding(
     "etl_prod",
     cryptoImpl,
   );
-  const fingerprint =
-    await credentialFingerprint(
-      credential,
-      cryptoImpl,
-    );
 
   try {
-    const created = await createRegistryProducer(
+    const onboarded = await ensureOnboarding(
       env.ARCHIVE,
       {
         projectId,
-        producerId,
-        profile: profileTemplate("backend"),
-        credentialFingerprint: fingerprint,
+        ...normalized,
+        credential,
         now: options.now || new Date(),
+        crypto: cryptoImpl,
       },
     );
-
-    let project = await readRegistryProject(
-      env.ARCHIVE,
-      projectId,
-    );
-
-    for (const destination of destinations) {
-      project = await setRegistryDestination(
-        env.ARCHIVE,
-        {
-          projectId,
-          destination,
-          enabled: true,
-          now: options.now || new Date(),
-        },
-      );
-    }
 
     const bundle = buildOnboardingBundle({
       requestUrl: request.url,
       projectId,
-      producer: publicProducer(created.producer),
+      producer: onboarded.producer,
       credential,
-      destinations: project.destinations || [],
+      destinations: onboarded.destinations,
     });
 
     return jsonResponse(bundle, 201);
   } catch (error) {
+    if (error instanceof OnboardingValidationError) {
+      return jsonResponse(
+        { error: error.message },
+        400,
+      );
+    }
+
+    if (error instanceof OnboardingNotFoundError) {
+      return jsonResponse(
+        { error: error.message },
+        404,
+      );
+    }
+
+    if (error instanceof OnboardingConflictError) {
+      return jsonResponse(
+        { error: error.message },
+        409,
+      );
+    }
+
     return registryErrorResponse(error);
   }
 }

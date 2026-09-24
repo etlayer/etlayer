@@ -313,11 +313,9 @@ else
 fi
 
 MANAGEMENT_KEY="$(generate_key)"
-DESTINATION_SECRET_KEY="$(generate_key)"
 
 say "Rotating VS9 management credential"
 put_secret ETLAYER_MANAGEMENT_KEY "$MANAGEMENT_KEY"
-put_secret ETLAYER_DESTINATION_SECRET_KEY_V1 "$DESTINATION_SECRET_KEY"
 
 say "Deploying current project-aware Worker"
 (
@@ -566,7 +564,6 @@ DISABLED_STATUS="$(
   die "Disabled producer credential remained valid: HTTP $DISABLED_STATUS"
 
 unset MANAGEMENT_KEY
-unset DESTINATION_SECRET_KEY
 unset DESTINATION_CREDENTIAL_RESPONSE
 unset OPERATOR_A
 unset OPERATOR_B

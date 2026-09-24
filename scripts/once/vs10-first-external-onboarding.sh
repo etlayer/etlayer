@@ -210,11 +210,9 @@ else
 fi
 
 MANAGEMENT_KEY="$(generate_key)"
-DESTINATION_SECRET_KEY="$(generate_key)"
 
 say "Rotating VS10 management credential"
 put_secret ETLAYER_MANAGEMENT_KEY "$MANAGEMENT_KEY"
-put_secret ETLAYER_DESTINATION_SECRET_KEY_V1 "$DESTINATION_SECRET_KEY"
 
 say "Deploying current onboarding-capable Worker"
 (
@@ -422,7 +420,6 @@ CROSS_INSPECT_STATUS="$(
   die "Cross-project inspect was not rejected: HTTP $CROSS_INSPECT_STATUS"
 
 unset MANAGEMENT_KEY
-unset DESTINATION_SECRET_KEY
 unset DESTINATION_CREDENTIAL_RESPONSE
 unset OPERATOR_KEY
 unset SECOND_OPERATOR_KEY

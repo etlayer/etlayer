@@ -21,10 +21,10 @@ VS10 External Onboarding                      complete
 VS11 Project-scoped Destination Credentials   complete
 
 Phase 2 - Product Contract
-VS12 External Integration Contract            design selected
+VS12 External Integration Contract            complete
 ~~~
 
-The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS11 together.
+The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS12 together.
 
 See:
 
@@ -59,7 +59,7 @@ POST /v1/logs
   remains standard OTLP ingest
 ~~~
 
-VS12 acceptance must prove:
+VS12 acceptance proved:
 
 - a versioned external API surface;
 - stable machine-readable error codes;
@@ -79,6 +79,21 @@ VS12 acceptance must prove:
 The design deliberately introduces a dedicated encryption domain for bounded idempotency response replay rather than persisting one-shot producer credentials in plaintext or reusing the destination-provider secret key.
 
 See the full design document for API/error/idempotency semantics.
+
+### VS12 completion evidence
+
+Final proof:
+
+~~~text
+CI #640                 green
+Live Acceptance #66    green
+runtime head            40eb989303f54814f0bde5901b14768634479024
+external project        vs12-20260923-232433-a44c9d64-a
+event                   4700335c-d23d-43a7-b883-9e84d8ed66f8
+PostHog delivery        independently verified
+~~~
+
+VS12 established the first versioned product boundary and completed the initial External Integration Contract slice.
 
 ### Product-contract follow-ups
 

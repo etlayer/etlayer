@@ -149,3 +149,162 @@ function nodeQuickstart({
     "}, null, 2));",
   ].join("\n");
 }
+
+
+export function buildPublicOnboardingBundle({
+  requestUrl,
+  projectId,
+  producer,
+  credential,
+  destinations,
+}) {
+  const origin = new URL(requestUrl).origin;
+  const ingestEndpoint = origin + "/v1/logs";
+  const eventStatusUrlTemplate =
+    origin +
+    "/api/v1/projects/" +
+    encodeURIComponent(projectId) +
+    "/events/{eventId}";
+
+  return {
+    apiVersion: "v1",
+    projectId,
+    producer,
+    credential,
+    destinations: [...destinations],
+    connection: {
+      protocol: "otlp/http-json",
+      endpoint: ingestEndpoint,
+      headers: {
+        authorization: "Bearer " + credential,
+        "content-type": "application/json",
+      },
+    },
+    eventStatus: {
+      method: "GET",
+      urlTemplate: eventStatusUrlTemplate,
+    },
+    quickstart: {
+      runtime: "node",
+      command: "node first-etlayer-event.mjs",
+      filename: "first-etlayer-event.mjs",
+      source: publicNodeQuickstart({
+        endpoint: ingestEndpoint,
+        eventStatusUrlTemplate,
+        credential,
+        projectId,
+      }),
+    },
+  };
+}
+
+function publicNodeQuickstart({
+  endpoint,
+  eventStatusUrlTemplate,
+  credential,
+  projectId,
+}) {
+  const endpointLiteral = JSON.stringify(endpoint);
+  const statusTemplateLiteral = JSON.stringify(
+    eventStatusUrlTemplate,
+  );
+  const credentialLiteral = JSON.stringify(credential);
+  const projectLiteral = JSON.stringify(projectId);
+
+  return [
+    "const endpoint = " + endpointLiteral + ";",
+    "const credential = " + credentialLiteral + ";",
+    "const projectId = " + projectLiteral + ";",
+    "const eventStatusUrlTemplate = " +
+      statusTemplateLiteral + ";",
+    "const eventId = crypto.randomUUID();",
+    "const correlationId = \"onboarding-\" + eventId;",
+    "const nowUnixNano = (BigInt(Date.now()) * 1_000_000n).toString();",
+    "",
+    "const payload = {",
+    "  resourceLogs: [{",
+    "    resource: {",
+    "      attributes: [{",
+    "        key: \"service.name\",",
+    "        value: { stringValue: \"etlayer-onboarding\" },",
+    "      }],",
+    "    },",
+    "    scopeLogs: [{",
+    "      scope: {",
+    "        name: \"etlayer.onboarding\",",
+    "        version: \"1\",",
+    "      },",
+    "      logRecords: [{",
+    "        eventName: \"account.created\",",
+    "        timeUnixNano: nowUnixNano,",
+    "        observedTimeUnixNano: nowUnixNano,",
+    "        attributes: [",
+    "          {",
+    "            key: \"etlayer.event.id\",",
+    "            value: { stringValue: eventId },",
+    "          },",
+    "          {",
+    "            key: \"etlayer.schema.version\",",
+    "            value: { intValue: \"1\" },",
+    "          },",
+    "          {",
+    "            key: \"actor.anonymous.id\",",
+    "            value: { stringValue: \"anon_external_onboarding\" },",
+    "          },",
+    "          {",
+    "            key: \"account.id\",",
+    "            value: { stringValue: \"account_external_onboarding\" },",
+    "          },",
+    "          {",
+    "            key: \"correlation.id\",",
+    "            value: { stringValue: correlationId },",
+    "          },",
+    "          {",
+    "            key: \"causation.id\",",
+    "            value: { stringValue: \"onboarding-root\" },",
+    "          },",
+    "          {",
+    "            key: \"etlayer.producer.kind\",",
+    "            value: { stringValue: \"backend\" },",
+    "          },",
+    "          {",
+    "            key: \"etlayer.authority.kind\",",
+    "            value: { stringValue: \"business_state\" },",
+    "          },",
+    "        ],",
+    "      }],",
+    "    }],",
+    "  }],",
+    "};",
+    "",
+    "const response = await fetch(endpoint, {",
+    "  method: \"POST\",",
+    "  headers: {",
+    "    authorization: \"Bearer \" + credential,",
+    "    \"content-type\": \"application/json\",",
+    "  },",
+    "  body: JSON.stringify(payload),",
+    "});",
+    "",
+    "if (!response.ok) {",
+    "  throw new Error(",
+    "    \"ETLayer ingest failed: HTTP \" +",
+    "      response.status + \" \" + await response.text(),",
+    "  );",
+    "}",
+    "",
+    "const eventStatusUrl = eventStatusUrlTemplate.replace(",
+    "  \"{eventId}\",",
+    "  encodeURIComponent(eventId),",
+    ");",
+    "",
+    "console.log(JSON.stringify({",
+    "  eventId,",
+    "  projectId,",
+    "  eventStatus: {",
+    "    method: \"GET\",",
+    "    url: eventStatusUrl,",
+    "  },",
+    "}, null, 2));",
+  ].join("\n");
+}

@@ -6,6 +6,7 @@ import { handleRevalidate } from "./revalidate-http.js";
 import { handleEvidenceRead } from "./evidence-http.js";
 import { handleEventInspect } from "./inspect-http.js";
 import { handleManagementRequest } from "./management-http.js";
+import { handlePublicApiRequest } from "./public-api.js";
 
 export default {
   async fetch(request, env) {
@@ -52,6 +53,14 @@ export default {
       url.pathname === "/_ops/inspect"
     ) {
       return handleEventInspect(request, env);
+    }
+
+    if (url.pathname.startsWith("/api/v1/")) {
+      return handlePublicApiRequest(
+        request,
+        env,
+        url,
+      );
     }
 
     if (url.pathname.startsWith("/_mgmt/")) {
