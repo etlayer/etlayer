@@ -18,6 +18,12 @@ function invalidAccountEvent() {
     receivedAt: "2026-09-22T00:20:00.000Z",
     resource: {},
     scope: {},
+    provenance: {
+      version: 1,
+      profileId: "backend",
+      producer: { kind: "backend" },
+      allowedAuthorityKinds: ["business_state"],
+    },
     logRecord: {
       eventName: "account.created",
       attributes: [
