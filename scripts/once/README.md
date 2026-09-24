@@ -351,6 +351,33 @@ The quarantined event is then revalidated from the immutable preserved source wi
 
 VS14 reuses the existing R2 evidence and revalidation primitives. It does not create a separate quarantine queue or storage subsystem.
 
+## VS15 control-plane audit acceptance
+
+Run:
+
+~~~bash
+./scripts/once/vs15-control-plane-audit.sh
+~~~
+
+The helper proves append-only internal management audit evidence around real Cloudflare mutations:
+
+~~~text
+requested
+  -> mutation
+  -> applied
+~~~
+
+It verifies project creation, producer creation, destination configuration, producer credential rotation, and producer disable. Each successful management response exposes an `x-etlayer-operation-id`, and the helper reads the exact `requested` and `applied` evidence through the privileged registry evidence path.
+
+The acceptance also proves:
+
+- global management vs project-operator actor attribution;
+- project/resource target attribution;
+- raw management/operator/producer credentials are absent from audit evidence;
+- unauthorized cross-project mutation returns HTTP 401 and exposes no operation ID.
+
+The versioned public onboarding endpoint is intentionally not wrapped by VS15's random operation IDs because its retry contract is already idempotency-key based. Unifying those two operation identities is a follow-up.
+
 ## One-time Cloudflare CI bootstrap
 
 VS8 live acceptance has a dedicated Cloudflare environment. It does not deploy branch code to the default ETLayer Workers.
