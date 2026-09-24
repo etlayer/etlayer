@@ -420,3 +420,80 @@ test("idempotency completion stays on the operation key version even after activ
   );
   assert.equal(stored.keyVersion, "v1");
 });
+
+
+test("expired v1 idempotency capsule does not require v1 root after drain", async () => {
+  const archive = fakeArchive();
+  const bothRoots = {
+    ...env,
+    ETLAYER_IDEMPOTENCY_SECRET_KEY_V2:
+      "33".repeat(32),
+  };
+  const requestFingerprint =
+    await fingerprintSemanticRequest({
+      producerId: "backend-main",
+      destinations: ["posthog"],
+    });
+
+  await beginIdempotentOperation(
+    archive,
+    bothRoots,
+    {
+      projectId: "customer-drain",
+      operation: "onboarding-v1",
+      idempotencyKey: "drained-v1-key",
+      requestFingerprint,
+      recoveryPayload: {
+        credential: "etl_prod_old",
+      },
+      now: new Date("2026-09-24T04:00:00.000Z"),
+      replaySeconds: 1,
+    },
+  );
+
+  await assert.rejects(
+    beginIdempotentOperation(
+      archive,
+      {
+        ETLAYER_IDEMPOTENCY_SECRET_KEY_V2:
+          "33".repeat(32),
+        ETLAYER_IDEMPOTENCY_SECRET_ACTIVE_VERSION:
+          "v2",
+      },
+      {
+        projectId: "customer-drain",
+        operation: "onboarding-v1",
+        idempotencyKey: "drained-v1-key",
+        requestFingerprint,
+        recoveryPayload: {
+          credential: "unused",
+        },
+        now: new Date("2026-09-24T04:00:02.000Z"),
+        replaySeconds: 1,
+      },
+    ),
+    IdempotencyKeyExpiredError,
+  );
+
+  const fresh = await beginIdempotentOperation(
+    archive,
+    {
+      ETLAYER_IDEMPOTENCY_SECRET_KEY_V2:
+        "33".repeat(32),
+      ETLAYER_IDEMPOTENCY_SECRET_ACTIVE_VERSION:
+        "v2",
+    },
+    {
+      projectId: "customer-drain",
+      operation: "onboarding-v1",
+      idempotencyKey: "fresh-v2-key",
+      requestFingerprint,
+      recoveryPayload: {
+        credential: "etl_prod_new",
+      },
+      now: new Date("2026-09-24T04:00:02.000Z"),
+    },
+  );
+
+  assert.equal(fresh.record.keyVersion, "v2");
+});
