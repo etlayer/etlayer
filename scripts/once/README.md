@@ -121,7 +121,7 @@ The helper verifies:
 
 - the event was accepted by OTLP ingest;
 - the canonical event exists in R2;
-- durable validation state is `blocked`;
+- durable validation state is `quarantined`;
 - the exact error is `required_attribute_missing/account.id`;
 - validation state points back to the exact canonical `sourceKey`;
 - PostHog delivery state is absent;
@@ -268,7 +268,7 @@ The helper proves:
 - durable `authority/<event-id>.json` evidence contains exact block reasons;
 - blocked spoof events never reach PostHog or Statsig;
 - canonical provenance contains no credential material;
-- canonical revalidation remains blocked without producer re-emission.
+- canonical revalidation remains quarantined without producer re-emission.
 
 The helper rotates the protected revalidation operator secret and redeploys the current ingest Worker before the revalidation assertion.
 
@@ -324,6 +324,32 @@ It proves:
 
 Existing VS3-VS7 helpers default to `ETLAYER_PROJECT_ID=etlayer-default` after VS8.
 
+
+## VS14 first-class quarantine acceptance
+
+Run:
+
+~~~bash
+./scripts/once/vs14-quarantine.sh
+~~~
+
+The helper proves the explicit trust decision model:
+
+~~~text
+ALLOW       valid contract + allowed authority -> route
+QUARANTINE  recoverable contract failure       -> preserve, do not route
+BLOCK       semantic authority failure          -> preserve, do not route
+~~~
+
+It creates one isolated dynamic project, provisions a backend producer through the public onboarding contract, and emits three events:
+
+- a valid `account.created@1` that reaches PostHog;
+- an `account.created@1` missing `account.id`, which becomes quarantined;
+- a contract-valid `landing.hero.exposed@1` sent with the backend credential while claiming browser/interaction authority, which is blocked.
+
+The quarantined event is then revalidated from the immutable preserved source without producer re-emission and remains quarantined.
+
+VS14 reuses the existing R2 evidence and revalidation primitives. It does not create a separate quarantine queue or storage subsystem.
 
 ## One-time Cloudflare CI bootstrap
 
