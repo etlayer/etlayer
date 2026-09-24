@@ -41,7 +41,7 @@ function evaluation({
       schemaVersion: 1,
       contractId: "account.created@1",
       errors:
-        validationStatus === "blocked"
+        ["blocked", "quarantined"].includes(validationStatus)
           ? [{ code: "required_attribute_missing" }]
           : [],
     },
@@ -129,10 +129,12 @@ test("records append-only decision evidence and advances only the latest pointer
   );
 
   assert.equal(original.authority.status, "allowed");
+  assert.equal(original.outcome, "allow");
   assert.equal(original.routeEligible, true);
   assert.equal(original.evaluationKind, "processing");
 
   assert.equal(revalidation.authority.status, "blocked");
+  assert.equal(revalidation.outcome, "block");
   assert.equal(revalidation.routeEligible, false);
   assert.equal(revalidation.evaluationKind, "revalidation");
 
@@ -151,6 +153,44 @@ test("records append-only decision evidence and advances only the latest pointer
     ),
     true,
   );
+});
+
+
+test("quarantined validation produces quarantine unless authority is blocked", async () => {
+  const store = archive();
+  const event = {
+    id: "evt_quarantine",
+    eventName: "account.created",
+  };
+
+  const quarantined = await recordDecisionHistory(
+    store,
+    event,
+    evaluation({ validationStatus: "quarantined" }),
+    {
+      decisionId: "decision-quarantine",
+      now: new Date("2026-09-22T11:05:00.000Z"),
+    },
+  );
+
+  assert.equal(quarantined.state.outcome, "quarantine");
+  assert.equal(quarantined.state.routeEligible, false);
+
+  const blocked = await recordDecisionHistory(
+    store,
+    event,
+    evaluation({
+      validationStatus: "quarantined",
+      authorityStatus: "blocked",
+    }),
+    {
+      decisionId: "decision-block",
+      now: new Date("2026-09-22T11:06:00.000Z"),
+    },
+  );
+
+  assert.equal(blocked.state.outcome, "block");
+  assert.equal(blocked.state.routeEligible, false);
 });
 
 test("decision evidence contains policy lineage but no credential material", async () => {

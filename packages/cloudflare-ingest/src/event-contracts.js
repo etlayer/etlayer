@@ -21,7 +21,7 @@ export function validateEventContract(event, options = {}) {
   const schemaVersion = normalizeSchemaVersion(rawVersion);
 
   if (schemaVersion == null) {
-    return blocked(null, null, [
+    return quarantined(null, null, [
       {
         code: "schema_version_invalid",
         attribute: "etlayer.schema.version",
@@ -34,7 +34,7 @@ export function validateEventContract(event, options = {}) {
   const contract = find(event.eventName, schemaVersion);
 
   if (!contract) {
-    return blocked(schemaVersion, null, [
+    return quarantined(schemaVersion, null, [
       {
         code: "contract_not_found",
         eventName: event.eventName,
@@ -94,7 +94,7 @@ export function validateEventContract(event, options = {}) {
   }
 
   if (errors.length > 0) {
-    return blocked(schemaVersion, contract.id, errors);
+    return quarantined(schemaVersion, contract.id, errors);
   }
 
   return {
@@ -110,9 +110,9 @@ export function decodeEventAttributes(event) {
   return decodeAttributes(event?.logRecord?.attributes);
 }
 
-function blocked(schemaVersion, contractId, errors) {
+function quarantined(schemaVersion, contractId, errors) {
   return {
-    status: "blocked",
+    status: "quarantined",
     validatorVersion: CONTRACT_VALIDATOR_VERSION,
     schemaVersion,
     contractId,

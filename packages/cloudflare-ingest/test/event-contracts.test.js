@@ -57,7 +57,7 @@ test("validates the reference hero exposure contract", () => {
   });
 });
 
-test("blocks account.created when account.id is missing", () => {
+test("quarantines account.created when account.id is missing", () => {
   const result = validateEventContract(
     event("account.created", {
       "etlayer.schema.version": 1,
@@ -69,7 +69,7 @@ test("blocks account.created when account.id is missing", () => {
     }),
   );
 
-  assert.equal(result.status, "blocked");
+  assert.equal(result.status, "quarantined");
   assert.equal(result.contractId, "account.created@1");
   assert.deepEqual(result.errors, [
     {
@@ -79,7 +79,7 @@ test("blocks account.created when account.id is missing", () => {
   ]);
 });
 
-test("blocks forbidden experiment context on account.created", () => {
+test("quarantines forbidden experiment context on account.created", () => {
   const result = validateEventContract(
     event("account.created", {
       "etlayer.schema.version": 1,
@@ -94,7 +94,7 @@ test("blocks forbidden experiment context on account.created", () => {
     }),
   );
 
-  assert.equal(result.status, "blocked");
+  assert.equal(result.status, "quarantined");
   assert.deepEqual(result.errors, [
     {
       code: "forbidden_attribute_present",
@@ -107,7 +107,7 @@ test("blocks forbidden experiment context on account.created", () => {
   ]);
 });
 
-test("blocks an authority mismatch with an exact machine-readable error", () => {
+test("quarantines an authority mismatch with an exact machine-readable error", () => {
   const result = validateEventContract(
     event("account.created", {
       "etlayer.schema.version": 1,
@@ -120,7 +120,7 @@ test("blocks an authority mismatch with an exact machine-readable error", () => 
     }),
   );
 
-  assert.equal(result.status, "blocked");
+  assert.equal(result.status, "quarantined");
   assert.deepEqual(result.errors, [
     {
       code: "attribute_value_mismatch",
@@ -147,7 +147,7 @@ test("treats unversioned events as unmanaged during migration", () => {
   });
 });
 
-test("blocks a versioned event with no matching contract", () => {
+test("quarantines a versioned event with no matching contract", () => {
   const result = validateEventContract(
     event("unknown.product.event", {
       "etlayer.schema.version": 1,
@@ -155,7 +155,7 @@ test("blocks a versioned event with no matching contract", () => {
   );
 
   assert.deepEqual(result, {
-    status: "blocked",
+    status: "quarantined",
     validatorVersion: 1,
     schemaVersion: 1,
     contractId: null,

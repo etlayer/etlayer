@@ -101,7 +101,7 @@ node -e '
   const state = JSON.parse(process.argv[1]);
   const errors = state.errors || [];
   const exact =
-    state.status === "blocked" &&
+    state.status === "quarantined" &&
     state.eventName === "account.created" &&
     state.schemaVersion === 1 &&
     state.contractId === "account.created@1" &&
@@ -163,7 +163,7 @@ for destination in posthog statsig; do
     >/tmp/etlayer-vs3-delivery-check-$$.json 2>/dev/null; then
     cat /tmp/etlayer-vs3-delivery-check-$$.json >&2 || true
     rm -f /tmp/etlayer-vs3-delivery-check-$$.json
-    die "Blocked event unexpectedly has $destination delivery state."
+    die "Quarantined event unexpectedly has $destination delivery state."
   fi
 
   rm -f /tmp/etlayer-vs3-delivery-check-$$.json
@@ -220,7 +220,7 @@ node -e '
   const valid =
     result.sourceKey === process.argv[2] &&
     result.eventId === process.argv[3] &&
-    result.validation?.status === "blocked" &&
+    result.validation?.status === "quarantined" &&
     errors.length === 1 &&
     errors[0].code === "required_attribute_missing" &&
     errors[0].attribute === "account.id" &&
@@ -235,18 +235,18 @@ node -e '
     process.exit(1);
   }
 ' "$REVALIDATE_RESPONSE" "$SOURCE_KEY" "$EVENT_ID" ||
-  die "Preserved-event revalidation did not match expected blocked result."
+  die "Preserved-event revalidation did not match expected quarantined result."
 
 say "VS3 invalid-event acceptance passed"
 cat <<EOF
 {
   "correlationId": "$CORRELATION_ID",
   "eventId": "$EVENT_ID",
-  "validationStatus": "blocked",
+  "validationStatus": "quarantined",
   "validationError": "required_attribute_missing:account.id",
   "sourceKey": "$SOURCE_KEY",
   "posthogDelivery": "absent",
   "statsigDelivery": "absent",
-  "revalidation": "blocked_without_producer_reemission"
+  "revalidation": "quarantined_without_producer_reemission"
 }
 EOF

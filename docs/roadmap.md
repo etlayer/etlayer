@@ -23,9 +23,10 @@ VS11 Project-scoped Destination Credentials   complete
 Phase 2 - Product Contract
 VS12 External Integration Contract            complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
+VS14 First-class Quarantine                    complete
 ~~~
 
-The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS13 together.
+The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS14 together.
 
 See:
 
@@ -34,7 +35,8 @@ See:
 - [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md)
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
-- GitHub issue #43
+- [VS14: First-class Quarantine](vertical-slices/vs14-quarantine.md)
+- GitHub issues #43 and #48
 
 ## Phase 2 - Product Contract
 
@@ -178,7 +180,25 @@ The technical capability gap analysis identified a small set of capabilities tha
 
 See [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md) for the full classification scheme and longer backlog.
 
-The first milestone candidate is:
+**VS14 - First-class Quarantine is complete and live-proven.**
+
+Its target invariant is:
+
+~~~text
+recoverable contract/data-quality failure != semantic trust violation
+
+authority denied      -> BLOCK
+validation failure    -> QUARANTINE
+otherwise             -> ALLOW
+~~~
+
+Routing occurs only for ALLOW, and BLOCK takes precedence over QUARANTINE when both conditions exist.
+
+Live Acceptance #93 proved VS8 -> VS14 serially in the isolated Cloudflare CI environment.
+
+The next sequencing candidate is Control-plane Audit Log, but it does not receive a VS number until its risk, invariant, executable acceptance, and smallest useful scope are explicit.
+
+The milestone backlog is:
 
 ~~~text
 A1-NOW-GOV/OPS  Quarantine

@@ -57,7 +57,7 @@ test("revalidates a preserved event without producer involvement", async () => {
         calls.push({ receivedEvent, options });
         return {
           validation: {
-            status: "blocked",
+            status: "quarantined",
             schemaVersion: 1,
             contractId: "account.created@1",
             errors: [
@@ -80,7 +80,7 @@ test("revalidates a preserved event without producer involvement", async () => {
     "projects/etlayer-default/events/2026/09/22/00/evt_revalidate_1.json",
   );
   assert.equal(result.eventId, event.id);
-  assert.equal(result.validation.status, "blocked");
+  assert.equal(result.validation.status, "quarantined");
   assert.deepEqual(result.deliveries, []);
 });
 

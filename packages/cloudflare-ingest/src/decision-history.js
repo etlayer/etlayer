@@ -1,7 +1,7 @@
 import { DEFAULT_PROJECT_ID } from "./project-config.js";
 import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
 
-export const DECISION_HISTORY_VERSION = 2;
+export const DECISION_HISTORY_VERSION = 3;
 
 export async function recordDecisionHistory(
   archive,
@@ -53,6 +53,7 @@ export async function recordDecisionHistory(
   const privacy = evaluation.privacy;
 
   const projectId = projectIdForEvent(event);
+  const outcome = decisionOutcome(validation, authority);
   const state = {
     version: DECISION_HISTORY_VERSION,
     projectId,
@@ -62,6 +63,7 @@ export async function recordDecisionHistory(
     evaluationKind,
     sourceKey,
     evaluatedAt: now.toISOString(),
+    outcome,
     provenance: {
       version: event.provenance?.version || null,
       projectId,
@@ -89,9 +91,7 @@ export async function recordDecisionHistory(
       ingestActions: privacy.ingestActions || [],
       deliveryActions: privacy.deliveryActions || [],
     },
-    routeEligible:
-      validation.status !== "blocked" &&
-      authority.status !== "blocked",
+    routeEligible: outcome === "allow",
   };
 
   const key = decisionHistoryKey(
@@ -112,6 +112,7 @@ export async function recordDecisionHistory(
       evaluation_kind: evaluationKind,
       validation_status: validation.status,
       authority_status: authority.status,
+      decision_outcome: outcome,
       route_eligible: String(state.routeEligible),
       source_key: sourceKey || "",
       evaluated_at: state.evaluatedAt,
@@ -231,6 +232,21 @@ async function readJsonObject(archive, key) {
       `decision evidence is not valid JSON: ${key}`,
     );
   }
+}
+
+function decisionOutcome(validation, authority) {
+  if (authority.status === "blocked") {
+    return "block";
+  }
+
+  if (
+    validation.status === "quarantined" ||
+    validation.status === "blocked"
+  ) {
+    return "quarantine";
+  }
+
+  return "allow";
 }
 
 function normalizeDecisionId(value) {
