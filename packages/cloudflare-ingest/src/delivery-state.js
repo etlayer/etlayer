@@ -1,5 +1,6 @@
 import { DEFAULT_PROJECT_ID } from "./project-config.js";
 import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+import { deliveryResourceId } from "./delivery-attempt.js";
 
 export async function readDeliveryState(
   archive,
@@ -82,8 +83,13 @@ export async function recordDeliveryState(
 
   const projectId = projectIdForEvent(event);
   const state = {
-    version: 2,
+    version: 3,
     projectId,
+    deliveryId: deliveryResourceId(
+      event.id,
+      destination,
+      projectId,
+    ),
     eventId: event.id,
     eventName: event.eventName,
     destination,
@@ -101,6 +107,15 @@ export async function recordDeliveryState(
 
   if (result?.error) {
     state.error = serializeError(result.error);
+  }
+
+  if (options.attempt) {
+    state.attemptCount =
+      options.attempt.attemptNumber;
+    state.latestAttemptId =
+      options.attempt.attemptId;
+    state.lastAttemptAt =
+      options.attempt.completedAt;
   }
 
   if (options.delivery?.mode) {
