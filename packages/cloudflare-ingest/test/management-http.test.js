@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { handleManagementRequest } from "../src/management-http.js";
+import { controlPlaneAuditKey } from "../src/control-plane-audit.js";
 import { authenticateIngest } from "../src/provenance.js";
 import { routeEventDestinations } from "../src/destinations.js";
 import {
@@ -686,4 +687,249 @@ test("project operator cannot read global encryption config", async () => {
   );
 
   assert.equal(response.status, 401);
+});
+
+
+test("control-plane mutations emit append-only attributable audit evidence", async () => {
+  const archive = fakeArchive();
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_MANAGEMENT_KEY: "management-key",
+  };
+
+  const projectResponse = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects",
+    "management-key",
+    { id: "audit-a" },
+  );
+
+  assert.equal(projectResponse.status, 201);
+  const projectOperation =
+    projectResponse.headers.get(
+      "x-etlayer-operation-id",
+    );
+  assert.ok(projectOperation);
+
+  const projectBody = await projectResponse.json();
+  const operatorCredential =
+    projectBody.operatorCredential;
+
+  const producerResponse = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/audit-a/producers",
+    operatorCredential,
+    {
+      id: "backend-main",
+      profileId: "backend",
+    },
+  );
+  assert.equal(producerResponse.status, 201);
+  const producerOperation =
+    producerResponse.headers.get(
+      "x-etlayer-operation-id",
+    );
+  assert.ok(producerOperation);
+  const producerBody = await producerResponse.json();
+  const producerCredential =
+    producerBody.credential;
+
+  const destinationResponse = await manage(
+    env,
+    "PUT",
+    "/_mgmt/projects/audit-a/destinations/posthog",
+    operatorCredential,
+    { enabled: true },
+  );
+  assert.equal(destinationResponse.status, 200);
+  const destinationOperation =
+    destinationResponse.headers.get(
+      "x-etlayer-operation-id",
+    );
+  assert.ok(destinationOperation);
+
+  const rotateResponse = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/audit-a/producers/backend-main/rotate",
+    operatorCredential,
+    {},
+  );
+  assert.equal(rotateResponse.status, 200);
+  const rotateOperation =
+    rotateResponse.headers.get(
+      "x-etlayer-operation-id",
+    );
+  assert.ok(rotateOperation);
+  const rotatedCredential =
+    (await rotateResponse.json()).credential;
+
+  const disableResponse = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/audit-a/producers/backend-main/disable",
+    operatorCredential,
+    {},
+  );
+  assert.equal(disableResponse.status, 200);
+  const disableOperation =
+    disableResponse.headers.get(
+      "x-etlayer-operation-id",
+    );
+  assert.ok(disableOperation);
+
+  const expectations = [
+    {
+      operationId: projectOperation,
+      action: "project.create",
+      actor: "management",
+      target: "project",
+    },
+    {
+      operationId: producerOperation,
+      action: "producer.create",
+      actor: "project_operator",
+      target: "producer",
+    },
+    {
+      operationId: destinationOperation,
+      action: "destination.configure",
+      actor: "project_operator",
+      target: "destination",
+    },
+    {
+      operationId: rotateOperation,
+      action: "producer.rotate",
+      actor: "project_operator",
+      target: "producer",
+    },
+    {
+      operationId: disableOperation,
+      action: "producer.disable",
+      actor: "project_operator",
+      target: "producer",
+    },
+  ];
+
+  for (const expectation of expectations) {
+    const requestedResponse = await manage(
+      env,
+      "POST",
+      "/_mgmt/evidence",
+      "management-key",
+      {
+        key: controlPlaneAuditKey(
+          expectation.operationId,
+          "requested",
+        ),
+      },
+    );
+    assert.equal(requestedResponse.status, 200);
+
+    const appliedResponse = await manage(
+      env,
+      "POST",
+      "/_mgmt/evidence",
+      "management-key",
+      {
+        key: controlPlaneAuditKey(
+          expectation.operationId,
+          "applied",
+        ),
+      },
+    );
+    assert.equal(appliedResponse.status, 200);
+
+    const requested = await requestedResponse.json();
+    const applied = await appliedResponse.json();
+
+    assert.equal(
+      requested.operationId,
+      expectation.operationId,
+    );
+    assert.equal(requested.phase, "requested");
+    assert.equal(applied.phase, "applied");
+    assert.equal(requested.action, expectation.action);
+    assert.equal(requested.actor.kind, expectation.actor);
+    assert.equal(requested.target.kind, expectation.target);
+    assert.equal(requested.target.projectId, "audit-a");
+    assert.equal(
+      typeof requested.recordedAt,
+      "string",
+    );
+  }
+
+  const auditBeforeUnauthorized = [
+    ...archive.objects.keys(),
+  ].filter((key) =>
+    key.startsWith("registry/audit/"),
+  ).length;
+
+  const projectB = await (
+    await manage(
+      env,
+      "POST",
+      "/_mgmt/projects",
+      "management-key",
+      { id: "audit-b" },
+    )
+  ).json();
+
+  const auditAfterProjectB = [
+    ...archive.objects.keys(),
+  ].filter((key) =>
+    key.startsWith("registry/audit/"),
+  ).length;
+
+  const denied = await manage(
+    env,
+    "PUT",
+    "/_mgmt/projects/audit-a/destinations/statsig",
+    projectB.operatorCredential,
+    { enabled: true },
+  );
+
+  assert.equal(denied.status, 401);
+  assert.equal(
+    denied.headers.get("x-etlayer-operation-id"),
+    null,
+  );
+
+  const auditAfterUnauthorized = [
+    ...archive.objects.keys(),
+  ].filter((key) =>
+    key.startsWith("registry/audit/"),
+  ).length;
+
+  assert.equal(
+    auditAfterUnauthorized,
+    auditAfterProjectB,
+  );
+  assert.ok(
+    auditAfterProjectB > auditBeforeUnauthorized,
+  );
+
+  const auditBodies = [
+    ...archive.objects.entries(),
+  ]
+    .filter(([key]) =>
+      key.startsWith("registry/audit/"),
+    )
+    .map(([, { body }]) => body)
+    .join("\n");
+
+  for (const secret of [
+    "management-key",
+    operatorCredential,
+    producerCredential,
+    rotatedCredential,
+    projectB.operatorCredential,
+  ]) {
+    assert.equal(
+      auditBodies.includes(secret),
+      false,
+    );
+  }
 });
