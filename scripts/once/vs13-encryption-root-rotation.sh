@@ -629,12 +629,25 @@ REPLAY_RESULT="$(
 
 node -e '
   const value = JSON.parse(process.argv[1]);
-  if (!(value?.exported >= 1)) {
+  const deliveries = value?.deliveries || [];
+  const safe =
+    value?.selected >= 1 &&
+    deliveries.length === value.selected &&
+    deliveries.every(
+      (delivery) =>
+        delivery?.status === "exported" ||
+        (
+          delivery?.status === "skipped" &&
+          delivery?.reason === "already_exported"
+        ),
+    );
+
+  if (!safe) {
     console.error(JSON.stringify(value, null, 2));
     process.exit(1);
   }
 ' "$REPLAY_RESULT" ||
-  die "PostHog replay exported no project A events"
+  die "PostHog replay did not safely resolve project A events after rewrap"
 
 say "Phase D: comparing authoritative key usage"
 USAGE_AFTER="$(key_usage)"
@@ -712,7 +725,9 @@ cat <<EOF
   "destinationRewrap": "v1->v2",
   "appendOnlyHistory": true,
   "deliveryAfterRewrap": "exported",
+  "replayAfterRewrapSelected": $(json_field "$REPLAY_RESULT" selected),
   "replayAfterRewrapExported": $(json_field "$REPLAY_RESULT" exported),
+  "replayAfterRewrapSkipped": $(json_field "$REPLAY_RESULT" skipped),
   "destinationV1ActivePointersBefore": $DEST_V1_BEFORE,
   "destinationV1ActivePointersAfter": $DEST_V1_AFTER,
   "destinationV2ActivePointersBefore": $DEST_V2_BEFORE,
