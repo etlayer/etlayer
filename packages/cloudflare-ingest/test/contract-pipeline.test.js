@@ -13,7 +13,7 @@ function attribute(key, value) {
 
 function invalidAccountEvent() {
   return {
-    id: "evt-blocked-1",
+    id: "evt-quarantined-1",
     eventName: "account.created",
     receivedAt: "2026-09-22T00:20:00.000Z",
     resource: {},
@@ -70,7 +70,7 @@ function fakeArchive() {
   };
 }
 
-test("queue preserves an invalid event before blocking destination routing", async () => {
+test("queue preserves an invalid event in quarantine without destination routing", async () => {
   const archive = fakeArchive();
   const message = {
     body: invalidAccountEvent(),
@@ -93,20 +93,20 @@ test("queue preserves an invalid event before blocking destination routing", asy
   assert.equal(message.retryCount, 0);
 
   assert.deepEqual(archive.writes.slice(0, 5), [
-    "projects/etlayer-default/events/2026/09/22/00/evt-blocked-1.json",
-    "projects/etlayer-default/validation/evt-blocked-1.json",
-    "projects/etlayer-default/authority/evt-blocked-1.json",
-    "projects/etlayer-default/privacy/evt-blocked-1.json",
-    "projects/etlayer-default/identity/evt-blocked-1.json",
+    "projects/etlayer-default/events/2026/09/22/00/evt-quarantined-1.json",
+    "projects/etlayer-default/validation/evt-quarantined-1.json",
+    "projects/etlayer-default/authority/evt-quarantined-1.json",
+    "projects/etlayer-default/privacy/evt-quarantined-1.json",
+    "projects/etlayer-default/identity/evt-quarantined-1.json",
   ]);
 
   const decisionKey = archive.writes.find((key) =>
-    key.startsWith("projects/etlayer-default/decisions/evt-blocked-1/"),
+    key.startsWith("projects/etlayer-default/decisions/evt-quarantined-1/"),
   );
 
   assert.ok(decisionKey);
   assert.equal(
-    archive.writes.includes("projects/etlayer-default/decision-latest/evt-blocked-1.json"),
+    archive.writes.includes("projects/etlayer-default/decision-latest/evt-quarantined-1.json"),
     true,
   );
 
@@ -114,20 +114,21 @@ test("queue preserves an invalid event before blocking destination routing", asy
     archive.objects.get(decisionKey).body,
   );
 
-  assert.equal(decision.validation.status, "blocked");
+  assert.equal(decision.validation.status, "quarantined");
   assert.equal(decision.validation.validatorVersion, 1);
   assert.equal(decision.authority.policyVersion, 1);
   assert.equal(decision.privacy.policyVersion, 1);
+  assert.equal(decision.outcome, "quarantine");
   assert.equal(decision.routeEligible, false);
 
   const validation = JSON.parse(
-    archive.objects.get("projects/etlayer-default/validation/evt-blocked-1.json").body,
+    archive.objects.get("projects/etlayer-default/validation/evt-quarantined-1.json").body,
   );
 
-  assert.equal(validation.status, "blocked");
+  assert.equal(validation.status, "quarantined");
   assert.equal(
     validation.sourceKey,
-    "projects/etlayer-default/events/2026/09/22/00/evt-blocked-1.json",
+    "projects/etlayer-default/events/2026/09/22/00/evt-quarantined-1.json",
   );
   assert.deepEqual(validation.errors, [
     {
