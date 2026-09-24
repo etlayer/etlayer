@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 CONFIG_PATH="$INGEST_DIR/wrangler.jsonc"
-WRANGLER_ENV="\${ETLAYER_WRANGLER_ENV:-ci}"
-INGEST_URL="\${ETLAYER_INGEST_URL:-https://etlayer-ingest-ci.sergii-ponomarov.workers.dev}"
-RUN_ID="\${RUN_ID:-vs13-$(date -u +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)}"
+WRANGLER_ENV="${ETLAYER_WRANGLER_ENV:-ci}"
+INGEST_URL="${ETLAYER_INGEST_URL:-https://etlayer-ingest-ci.sergii-ponomarov.workers.dev}"
+RUN_ID="${RUN_ID:-vs13-$(date -u +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)}"
 PROJECT_A="$RUN_ID-a"
 PROJECT_B="$RUN_ID-b"
 TMP_PREFIX="/tmp/etlayer-vs13-$$"
@@ -401,8 +401,8 @@ wait_for_export() {
 
 cd "$ROOT_DIR"
 
-if [ -n "\${CLOUDFLARE_API_TOKEN:-}" ] &&
-   [ -n "\${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] &&
+   [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
   say "Using non-interactive Cloudflare API token"
 else
   npx wrangler whoami >/dev/null 2>&1 ||
