@@ -119,6 +119,43 @@ deploy_worker() {
   )
 }
 
+wait_for_active_versions() {
+  local expected_destination="$1"
+  local expected_idempotency="$2"
+
+  for attempt in $(seq 1 30); do
+    local status
+    status="$(
+      curl --silent --show-error         -o "$TMP_PREFIX.encryption-config"         -w '%{http_code}'         -X GET         "$INGEST_URL/_mgmt/encryption/config"         -H "authorization: Bearer $MANAGEMENT_KEY"
+    )"
+
+    if [ "$status" = "200" ]; then
+      if node -e '
+        const value = JSON.parse(process.argv[1]);
+        const destination = process.argv[2];
+        const idempotency = process.argv[3];
+
+        process.exit(
+          value?.destination?.activeKeyVersion === destination &&
+          value?.idempotency?.activeKeyVersion === idempotency
+            ? 0
+            : 1,
+        );
+      '         "$(cat "$TMP_PREFIX.encryption-config")"         "$expected_destination"         "$expected_idempotency"; then
+        printf 'active encryption config observed: destination=%s idempotency=%s\n'           "$expected_destination"           "$expected_idempotency"
+        return 0
+      fi
+    fi
+
+    sleep 1
+  done
+
+  printf 'last encryption config response:\n' >&2
+  cat "$TMP_PREFIX.encryption-config" >&2 || true
+  printf '\n' >&2
+  die "Worker did not converge to active encryption config destination=$expected_destination idempotency=$expected_idempotency"
+}
+
 json_field() {
   local json="$1"
   local path="$2"
@@ -421,6 +458,7 @@ put_secret ETLAYER_MANAGEMENT_KEY "$MANAGEMENT_KEY"
 say "Phase A: deploying with V1 as active write version"
 set_active_versions v1 v1
 deploy_worker
+wait_for_active_versions v1 v1
 
 say "Creating V1 project A"
 PROJECT_A_RESPONSE="$(create_project "$PROJECT_A")" ||
@@ -478,6 +516,7 @@ IDEM_V1_BEFORE="$(
 say "Phase B: switching new writes to V2 while retaining V1 roots"
 set_active_versions v2 v2
 deploy_worker
+wait_for_active_versions v2 v2
 
 say "Proving existing V1 onboarding replay still decrypts under V2-active runtime"
 REPLAY_STATUS="$(
