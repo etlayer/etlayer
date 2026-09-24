@@ -120,6 +120,7 @@ VS10 External Onboarding                      complete
 VS11 Project-scoped Destination Credentials   complete
 
 VS12 External Integration Contract            complete
+VS13 Versioned Encryption Roots & Safe Rotation design selected
 ~~~
 
 The current live acceptance suite re-proves VS8 -> VS12 serially in an isolated Cloudflare CI environment.
@@ -128,7 +129,9 @@ See:
 
 - [Roadmap](docs/roadmap.md)
 - [Post-VS11 Architecture Review](docs/reviews/post-vs11-architecture-review.md)
+- [Post-VS12 Architecture Review](docs/reviews/post-vs12-architecture-review.md)
 - [VS12: External Integration Contract](docs/vertical-slices/vs12-external-integration-contract.md)
+- [VS13: Versioned Encryption Roots & Safe Rotation](docs/vertical-slices/vs13-encryption-root-rotation.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
@@ -161,6 +164,22 @@ public event status
 without knowledge of R2 paths, Wrangler, registry internals, /_mgmt or /_ops diagnostic surfaces, or ETLayer implementation modules.
 
 Secret-bearing onboarding is retry-safe through required idempotency and a bounded encrypted response replay contract. The full VS8 -> VS12 live suite and independent PostHog provider verification passed.
+
+## Next slice
+
+**VS13 - Versioned Encryption Roots & Safe Rotation** is design-selected.
+
+VS13 will make the existing `keyVersion` fields operationally real:
+
+~~~text
+read historical v1 + v2
+new writes use explicit active version
+long-lived destination secrets rewrap append-only
+bounded idempotency capsules drain by expiry
+old roots retire only after machine-verifiable readiness
+~~~
+
+The slice intentionally does not introduce a generic KMS abstraction or change the public `/api/v1` contract.
 
 ## Stability
 
