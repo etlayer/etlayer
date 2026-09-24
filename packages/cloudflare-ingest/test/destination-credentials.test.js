@@ -318,3 +318,108 @@ test("ciphertext cannot be transplanted to another project because AAD is scoped
     DestinationCredentialDecryptionError,
   );
 });
+
+
+test("new destination writes can use v2 while historical v1 remains readable", async () => {
+  const archive = fakeArchive();
+  const versionedEnv = {
+    ...env,
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+  };
+
+  const first = await writeDestinationCredential(
+    archive,
+    versionedEnv,
+    {
+      projectId: "project-v",
+      destination: "posthog",
+      secret: "provider-v1",
+      credentialId: "credential-v1",
+    },
+  );
+
+  assert.equal(first.record.keyVersion, "v1");
+
+  const v2Env = {
+    ...versionedEnv,
+    ETLAYER_DESTINATION_SECRET_ACTIVE_VERSION: "v2",
+  };
+
+  const second = await writeDestinationCredential(
+    archive,
+    v2Env,
+    {
+      projectId: "project-v",
+      destination: "statsig",
+      secret: "provider-v2",
+      credentialId: "credential-v2",
+    },
+  );
+
+  assert.equal(second.record.keyVersion, "v2");
+
+  const resolvedV2 = await resolveDestinationCredential(
+    archive,
+    v2Env,
+    "project-v",
+    "statsig",
+  );
+  assert.equal(resolvedV2.secret, "provider-v2");
+  assert.equal(resolvedV2.keyVersion, "v2");
+
+  archive.objects.set(
+    destinationCredentialCurrentKey(
+      "project-v",
+      "posthog",
+    ),
+    {
+      body: JSON.stringify(first.pointer),
+    },
+  );
+
+  const resolvedV1 = await resolveDestinationCredential(
+    archive,
+    v2Env,
+    "project-v",
+    "posthog",
+  );
+
+  assert.equal(resolvedV1.secret, "provider-v1");
+  assert.equal(resolvedV1.keyVersion, "v1");
+});
+
+test("historical v1 destination state fails clearly when v1 root is missing", async () => {
+  const archive = fakeArchive();
+  const versionedEnv = {
+    ...env,
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+  };
+
+  await writeDestinationCredential(
+    archive,
+    versionedEnv,
+    {
+      projectId: "project-missing-root",
+      destination: "posthog",
+      secret: "provider-v1",
+      credentialId: "credential-v1",
+    },
+  );
+
+  await assert.rejects(
+    resolveDestinationCredential(
+      archive,
+      {
+        ETLAYER_DESTINATION_SECRET_KEY_V2:
+          "22".repeat(32),
+        ETLAYER_DESTINATION_SECRET_ACTIVE_VERSION:
+          "v2",
+      },
+      "project-missing-root",
+      "posthog",
+    ),
+    /ETLAYER_DESTINATION_SECRET_KEY_V1 is required/,
+  );
+});
