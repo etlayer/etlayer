@@ -43,12 +43,31 @@ export function validateEventContract(event, options = {}) {
     ]);
   }
 
+  return validateEventAgainstContract(
+    event,
+    contract,
+  );
+}
+
+export function validateEventAgainstContract(
+  event,
+  contract,
+) {
+  validateManagedEvent(event);
+  validateContract(contract, event.eventName);
+
+  const attributes = decodeAttributes(
+    event.logRecord?.attributes,
+  );
   const errors = [];
 
   for (const [attribute, constraint] of Object.entries(
     contract.required || {},
   )) {
-    if (!Object.hasOwn(attributes, attribute) || attributes[attribute] == null) {
+    if (
+      !Object.hasOwn(attributes, attribute) ||
+      attributes[attribute] == null
+    ) {
       errors.push({
         code: "required_attribute_missing",
         attribute,
@@ -85,7 +104,10 @@ export function validateEventContract(event, options = {}) {
   }
 
   for (const attribute of contract.forbidden || []) {
-    if (Object.hasOwn(attributes, attribute) && attributes[attribute] != null) {
+    if (
+      Object.hasOwn(attributes, attribute) &&
+      attributes[attribute] != null
+    ) {
       errors.push({
         code: "forbidden_attribute_present",
         attribute,
@@ -94,14 +116,18 @@ export function validateEventContract(event, options = {}) {
   }
 
   if (errors.length > 0) {
-    return quarantined(schemaVersion, contract.id, errors);
+    return quarantined(
+      contract.version,
+      contract.id || null,
+      errors,
+    );
   }
 
   return {
     status: "valid",
     validatorVersion: CONTRACT_VALIDATOR_VERSION,
-    schemaVersion,
-    contractId: contract.id,
+    schemaVersion: contract.version,
+    contractId: contract.id || null,
     errors: [],
   };
 }
@@ -181,6 +207,20 @@ function decodeAnyValue(value) {
   }
 
   return null;
+}
+
+function validateContract(contract, eventName) {
+  if (
+    !contract ||
+    typeof contract !== "object" ||
+    contract.eventName !== eventName ||
+    !Number.isSafeInteger(contract.version) ||
+    contract.version < 1
+  ) {
+    throw new ContractValidationError(
+      "contract must match eventName and have a positive version",
+    );
+  }
 }
 
 function validateManagedEvent(event) {
