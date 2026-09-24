@@ -1,6 +1,6 @@
 # ETLayer Roadmap
 
-This roadmap describes the current product sequence after the completion of VS11.
+This roadmap describes the current product sequence after the completion of VS12.
 
 It is intentionally outcome-driven. A roadmap item becomes a numbered vertical slice only when it has a concrete invariant and executable acceptance proof.
 
@@ -22,6 +22,7 @@ VS11 Project-scoped Destination Credentials   complete
 
 Phase 2 - Product Contract
 VS12 External Integration Contract            complete
+VS13 Versioned Encryption Roots & Safe Rotation design selected
 ~~~
 
 The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS12 together.
@@ -29,8 +30,10 @@ The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS12 toge
 See:
 
 - [Post-VS11 Architecture Review](reviews/post-vs11-architecture-review.md)
+- [Post-VS12 Architecture Review](reviews/post-vs12-architecture-review.md)
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
-- GitHub issue #40
+- [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
+- GitHub issue #43
 
 ## Phase 2 - Product Contract
 
@@ -111,25 +114,41 @@ Do only when required by the external integration proof:
 
 Near-term, before long-lived hosted production credentials become common:
 
-### Master-key version rotation
+### VS13 - Versioned Encryption Roots & Safe Rotation
 
-Prove:
+**Selected next slice.**
+
+VS13 hardens the two existing encrypted-state domains without introducing a generic KMS abstraction.
+
+Destination credentials are long-lived and require append-only rewrap:
 
 ~~~text
-v1 active credentials
-  -> introduce v2
-  -> re-encrypt/migrate
-  -> verify decrypt/delivery
-  -> retire v1 according to retention policy
+v1 ciphertext
+  -> add v2 root
+  -> new writes use v2
+  -> decrypt old record with v1
+  -> encrypt the same provider secret with v2
+  -> append a new encrypted version
+  -> advance the current pointer
+  -> retire v1 only after no active pointer depends on it
 ~~~
 
-Requirements:
+Public idempotency capsules are bounded and use dual-read plus expiry drain:
 
-- never overwrite an in-use key version;
-- migration is resumable/idempotent;
-- active pointer never references undecryptable material;
-- audit evidence explains key-version transition;
-- rollback behavior is explicit.
+~~~text
+unexpired v1 capsule
+  -> remains readable with v1
+
+new capsule
+  -> uses v2
+
+no unexpired v1 capsules
+  -> v1 becomes retirement-safe
+~~~
+
+VS13 also requires machine-readable key-usage evidence so root retirement is based on authoritative durable state rather than operator memory.
+
+See the VS13 design document and issue #43.
 
 ### Credential lifecycle
 
