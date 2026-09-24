@@ -122,6 +122,7 @@ VS11 Project-scoped Destination Credentials   complete
 VS12 External Integration Contract            complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
 VS14 First-class Quarantine                    complete
+VS15 Append-only Control-plane Audit Log          in progress
 ~~~
 
 The current live acceptance suite re-proves VS8 -> VS14 serially in an isolated Cloudflare CI environment.
@@ -134,6 +135,7 @@ See:
 - [VS12: External Integration Contract](docs/vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](docs/vertical-slices/vs13-encryption-root-rotation.md)
 - [VS14: First-class Quarantine](docs/vertical-slices/vs14-quarantine.md)
+- [VS15: Append-only Control-plane Audit Log](docs/vertical-slices/vs15-control-plane-audit.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
