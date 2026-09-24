@@ -1,6 +1,6 @@
 # VS14: First-class Quarantine
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #48.
 
@@ -201,3 +201,78 @@ VS14 does not include:
 - a new storage engine.
 
 Those can build on the semantic primitive after it is live-proven.
+
+
+---
+
+# Completion evidence
+
+VS14 completed with:
+
+~~~text
+PR CI                 green
+Live Acceptance #93  green
+suite                 VS8 -> VS14
+runtime head          25a75ab189a31c4ddb91a8581dfafae034303f8f
+~~~
+
+Final VS14 live correlation:
+
+~~~text
+vs14-20260924-130746-00e32513
+~~~
+
+Project:
+
+~~~text
+vs14-20260924-130746-00e32513
+~~~
+
+Representative events:
+
+~~~text
+ALLOW
+  b66ffb97-3266-4761-b9ca-d6e0a6161eb6
+
+QUARANTINE
+  4101b5dd-3d84-4e24-b983-c43b480ec12a
+
+BLOCK
+  d84c380c-af04-4ab8-b9f3-6cd492b8f514
+~~~
+
+The live run proved:
+
+~~~text
+valid account.created
+  validation = valid
+  authority  = allowed
+  decision   = allow
+  PostHog    = exported
+
+missing account.id
+  validation = quarantined
+  authority  = allowed
+  decision   = quarantine
+  PostHog    = not_routed
+
+same quarantined source revalidated
+  producer re-emission = no
+  decision             = quarantine
+  deliveries           = none
+
+contract-valid browser/interaction claim
+sent through trusted backend credential
+  validation = valid
+  authority  = blocked
+  decision   = block
+  PostHog    = not_routed
+~~~
+
+Therefore ETLayer now has an explicit trust decision boundary:
+
+~~~text
+recoverable data problem != unauthorized assertion
+~~~
+
+The successful live runtime SHA is recorded separately because the final documentation-only completion commit does not change runtime code or acceptance helpers.
