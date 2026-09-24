@@ -407,6 +407,34 @@ npm run contract:check -- \
   --json
 ~~~
 
+## VS17 historical contract plan acceptance
+
+Run:
+
+~~~bash
+bash ./scripts/once/vs17-contract-plan.sh
+~~~
+
+The helper proves that a proposed contract can be evaluated against immutable project history without mutating runtime state.
+
+It creates three `account.created@1` events and proposes `account.created@2` with a new required `plan.id`.
+
+Expected transitions:
+
+~~~text
+allow_to_allow                 1
+allow_to_quarantine            1
+quarantine_to_quarantine       1
+~~~
+
+It also proves:
+
+- static backward compatibility is breaking;
+- the changed event is identified in bounded examples;
+- the event's latest `decisionId` is byte-for-byte the same coordinate before and after planning;
+- no destination delivery is triggered by plan;
+- the test project has no destinations, so the proof isolates archive analysis from delivery.
+
 ## One-time Cloudflare CI bootstrap
 
 VS8 live acceptance has a dedicated Cloudflare environment. It does not deploy branch code to the default ETLayer Workers.
