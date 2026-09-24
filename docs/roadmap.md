@@ -26,6 +26,7 @@ VS13 Versioned Encryption Roots & Safe Rotation complete
 VS14 First-class Quarantine                    complete
 VS15 Append-only Control-plane Audit Log          complete
 VS16 Contract Compatibility Checker               complete
+VS17 Historical Contract Plan                     complete
 ~~~
 
 The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS15 together.
@@ -40,7 +41,8 @@ See:
 - [VS14: First-class Quarantine](vertical-slices/vs14-quarantine.md)
 - [VS15: Append-only Control-plane Audit Log](vertical-slices/vs15-control-plane-audit.md)
 - [VS16: Contract Compatibility Checker](vertical-slices/vs16-contract-compatibility.md)
-- GitHub issues #43, #48, #50, and #52
+- [VS17: Contract Plan Against Historical Events](vertical-slices/vs17-contract-plan.md)
+- GitHub issues #43, #48, #50, #52, and #54
 
 ## Phase 2 - Product Contract
 
@@ -206,7 +208,11 @@ Live Acceptance #95 proved VS8 -> VS15 serially in the isolated Cloudflare CI en
 
 **VS16 - Contract Compatibility Checker is complete and CI-proven.**\n\nIt defines backward, forward, and full compatibility over ETLayer's actual contract language and provides a deterministic CLI/CI gate. Because the capability is pure governance logic with no runtime dependency, normal CI is its authoritative executable acceptance rather than Cloudflare deployment.
 
-The next sequencing candidate is `etlayer plan`: simulate proposed contract/policy changes against preserved historical evidence before publication. It does not become VS17 until its risk, invariant, executable acceptance, and smallest useful scope are explicit.
+**VS17 - Historical Contract Plan is complete and live-proven.** It combines VS16 compatibility with immutable R2 history to show projected decision transitions before publication. Planning is read-only: no revalidation, decision mutation, or delivery.
+
+Live Acceptance #98 attempt 2 proved the runtime foundation plus VS17 on the same immutable PR SHA.
+
+The next sequencing candidate is Delivery + Attempt: make logical delivery and append-only delivery attempts first-class before building a dashboard over delivery state.
 
 The milestone backlog is:
 

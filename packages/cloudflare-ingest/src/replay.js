@@ -219,7 +219,11 @@ export async function selectArchivedEvents(archive, input, options = {}) {
 
         if (
           receivedAt.getTime() >= range.from.getTime() &&
-          receivedAt.getTime() < range.to.getTime()
+          receivedAt.getTime() < range.to.getTime() &&
+          (
+            !options.filterEvent ||
+            options.filterEvent(event, object.key)
+          )
         ) {
           selected.push({ key: object.key, event });
 
