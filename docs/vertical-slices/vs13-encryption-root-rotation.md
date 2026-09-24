@@ -1,6 +1,6 @@
 # VS13: Versioned Encryption Roots & Safe Rotation
 
-**Status: design selected; implementation not started.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #43.
 
@@ -488,3 +488,101 @@ VS8 -> VS12 regressions                green
 ~~~
 
 At completion, ETLayer will have a real encryption-key lifecycle rather than merely version-labelled ciphertext.
+
+
+---
+
+# Completion evidence
+
+VS13 completed on the implementation PR with:
+
+~~~text
+CI #698              green
+Live Acceptance #88 green
+suite                VS8 -> VS13
+~~~
+
+Final live acceptance correlation:
+
+~~~text
+vs13-20260924-110430-972646b7
+~~~
+
+Projects:
+
+~~~text
+project A:
+  vs13-20260924-110430-972646b7-a
+  created with V1 active roots
+
+project B:
+  vs13-20260924-110430-972646b7-b
+  created after switching active writes to V2
+~~~
+
+Representative events:
+
+~~~text
+V1-origin event:
+  e8a6c9e9-31bf-49f7-bfa3-9d16e0657b14
+
+post-rewrap event:
+  906dcc46-f945-45c6-b09d-a3c20b7b8164
+~~~
+
+The live run proved:
+
+~~~text
+active config V1/V1 observed before Phase A        yes
+active config V2/V2 observed before Phase B        yes
+
+historical V1 destination readable under V2 active yes
+historical V1 idempotency replay under V2 active   yes
+same producer credential recovered                 yes
+
+new destination writes use V2                      yes
+new idempotency writes use V2                      yes
+
+destination V1 -> V2 rewrap                        yes
+append-only old V1 encrypted version preserved     yes
+new V2 version records rewrap lineage               yes
+current pointer advanced to V2                     yes
+
+delivery after rewrap                              exported
+
+authoritative destination usage:
+  V1 active pointers  50 -> 49
+  V2 active pointers   5 -> 7
+
+authoritative idempotency usage:
+  V1 unexpired capsules 13 -> 13
+  V2 unexpired capsules       3
+~~~
+
+The PostHog replay operation after rewrap selected the historical events and completed safely, but skipped both because they already had exported delivery state:
+
+~~~text
+selected = 2
+exported = 0
+skipped  = 2
+~~~
+
+Therefore the completion claim is **replay remains operational after rewrap**, not that the acceptance deliberately produced duplicate provider rows.
+
+The shared CI archive intentionally still contains historical V1 dependencies from previous acceptance runs, so VS13 does **not** claim that the globally shared CI V1 root is currently retirement-safe.
+
+Retirement semantics are instead proven in isolated tests:
+
+- a rewrapped destination resolves and operates with V1 omitted;
+- an expired V1 idempotency capsule no longer requires the V1 root;
+- machine-readable usage audit marks a version retirement-safe only when no still-required state references it;
+- unknown key versions prevent a false sense of safety.
+
+This preserves the production rule:
+
+~~~text
+never remove V1 merely because the newest write uses V2
+
+remove V1 only after authoritative usage says
+no still-required state depends on it
+~~~
