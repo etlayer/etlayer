@@ -21,6 +21,7 @@ import {
   DestinationCredentialValidationError,
   disableDestinationCredential,
   readDestinationCredentialStatus,
+  rewrapDestinationCredential,
   runtimeDefaultDestinationSecret,
   writeDestinationCredential,
 } from "./destination-credentials.js";
@@ -38,6 +39,10 @@ import {
   rotateRegistryProducer,
   setRegistryDestination,
 } from "./registry.js";
+import {
+  EncryptionKeyUsageConfigurationError,
+  auditEncryptionKeyUsage,
+} from "./encryption-key-usage.js";
 
 export async function handleManagementRequest(
   request,
@@ -64,6 +69,17 @@ export async function handleManagementRequest(
     url.pathname === "/_mgmt/evidence"
   ) {
     return readManagementEvidence(request, env);
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/_mgmt/encryption/key-usage"
+  ) {
+    return readEncryptionKeyUsage(
+      request,
+      env,
+      options,
+    );
   }
 
   const onboarding = url.pathname.match(
@@ -147,6 +163,27 @@ export async function handleManagementRequest(
         options,
       );
     }
+  }
+
+  const destinationCredentialRewrap =
+    url.pathname.match(
+      /^\/_mgmt\/projects\/([^/]+)\/destinations\/([^/]+)\/credential\/rewrap$/,
+    );
+  if (
+    request.method === "POST" &&
+    destinationCredentialRewrap
+  ) {
+    return rewrapProjectDestinationCredential(
+      request,
+      env,
+      decodeURIComponent(
+        destinationCredentialRewrap[1],
+      ),
+      decodeURIComponent(
+        destinationCredentialRewrap[2],
+      ),
+      options,
+    );
   }
 
   const destinationCredentialAction = url.pathname.match(
@@ -603,6 +640,162 @@ async function disableProducer(
     );
   } catch (error) {
     return registryErrorResponse(error);
+  }
+}
+
+async function readEncryptionKeyUsage(
+  request,
+  env,
+  options,
+) {
+  const management = authenticateManagement(
+    request,
+    env,
+  );
+
+  if (!management.ok) {
+    return management.reason === "not_configured"
+      ? jsonResponse(
+          {
+            error:
+              "management credential is not configured",
+          },
+          503,
+        )
+      : jsonResponse(
+          { error: "invalid management credential" },
+          401,
+        );
+  }
+
+  try {
+    return jsonResponse(
+      {
+        usage: await auditEncryptionKeyUsage(
+          env.ARCHIVE,
+          {
+            now: options.now || new Date(),
+          },
+        ),
+      },
+      200,
+    );
+  } catch (error) {
+    if (
+      error instanceof
+        EncryptionKeyUsageConfigurationError
+    ) {
+      return jsonResponse(
+        { error: error.message },
+        503,
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function rewrapProjectDestinationCredential(
+  request,
+  env,
+  projectId,
+  destination,
+  options,
+) {
+  const management = authenticateManagement(
+    request,
+    env,
+  );
+
+  if (!management.ok) {
+    return management.reason === "not_configured"
+      ? jsonResponse(
+          {
+            error:
+              "management credential is not configured",
+          },
+          503,
+        )
+      : jsonResponse(
+          { error: "invalid management credential" },
+          401,
+        );
+  }
+
+  try {
+    validateProjectId(projectId);
+  } catch (error) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  const dynamicError = dynamicProjectOnly(projectId);
+  if (dynamicError) return dynamicError;
+
+  if (!isSupportedDestination(destination)) {
+    return jsonResponse(
+      {
+        error:
+          `unsupported destination: ${destination}`,
+      },
+      400,
+    );
+  }
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  if (
+    typeof input.value?.targetKeyVersion !==
+      "string"
+  ) {
+    return jsonResponse(
+      {
+        error:
+          "targetKeyVersion must be a string",
+      },
+      400,
+    );
+  }
+
+  try {
+    const result =
+      await rewrapDestinationCredential(
+        env.ARCHIVE,
+        env,
+        {
+          projectId,
+          destination,
+          targetKeyVersion:
+            input.value.targetKeyVersion,
+          now: options.now || new Date(),
+          crypto:
+            options.crypto || globalThis.crypto,
+        },
+      );
+
+    return jsonResponse(
+      {
+        rewrapped: result.rewrapped,
+        previous: {
+          credentialId:
+            result.previousPointer.credentialId,
+          keyVersion:
+            result.previousPointer.keyVersion,
+        },
+        credential:
+          await readDestinationCredentialStatus(
+            env.ARCHIVE,
+            projectId,
+            destination,
+          ),
+      },
+      200,
+    );
+  } catch (error) {
+    return destinationCredentialErrorResponse(error);
   }
 }
 
