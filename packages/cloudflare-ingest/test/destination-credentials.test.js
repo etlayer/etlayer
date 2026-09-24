@@ -8,6 +8,7 @@ import {
   disableDestinationCredential,
   readDestinationCredentialStatus,
   resolveDestinationCredential,
+  rewrapDestinationCredential,
   writeDestinationCredential,
 } from "../src/destination-credentials.js";
 
@@ -422,4 +423,165 @@ test("historical v1 destination state fails clearly when v1 root is missing", as
     ),
     /ETLAYER_DESTINATION_SECRET_KEY_V1 is required/,
   );
+});
+
+
+test("rewrap appends a v2 encrypted version and preserves the provider secret", async () => {
+  const archive = fakeArchive();
+  const versionedEnv = {
+    ...env,
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+  };
+
+  const original = await writeDestinationCredential(
+    archive,
+    versionedEnv,
+    {
+      projectId: "project-rewrap",
+      destination: "posthog",
+      secret: "same-provider-secret",
+      credentialId: "credential-v1",
+      now: new Date("2026-09-24T03:00:00.000Z"),
+    },
+  );
+
+  const originalBody =
+    archive.objects.get(
+      original.pointer.versionKey,
+    ).body;
+
+  const result = await rewrapDestinationCredential(
+    archive,
+    versionedEnv,
+    {
+      projectId: "project-rewrap",
+      destination: "posthog",
+      targetKeyVersion: "v2",
+      now: new Date("2026-09-24T03:01:00.000Z"),
+    },
+  );
+
+  assert.equal(result.rewrapped, true);
+  assert.equal(
+    result.previousPointer.credentialId,
+    "credential-v1",
+  );
+  assert.equal(result.pointer.keyVersion, "v2");
+  assert.notEqual(
+    result.pointer.credentialId,
+    "credential-v1",
+  );
+  assert.equal(
+    result.record.rotationKind,
+    "master_key_rewrap",
+  );
+  assert.equal(
+    result.record.supersedesCredentialId,
+    "credential-v1",
+  );
+
+  assert.equal(
+    archive.objects.get(
+      original.pointer.versionKey,
+    ).body,
+    originalBody,
+  );
+
+  const resolved = await resolveDestinationCredential(
+    archive,
+    versionedEnv,
+    "project-rewrap",
+    "posthog",
+  );
+
+  assert.equal(
+    resolved.secret,
+    "same-provider-secret",
+  );
+  assert.equal(resolved.keyVersion, "v2");
+});
+
+test("rewrap is a no-op when current credential already uses the target root", async () => {
+  const archive = fakeArchive();
+  const versionedEnv = {
+    ...env,
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+    ETLAYER_DESTINATION_SECRET_ACTIVE_VERSION:
+      "v2",
+  };
+
+  const written = await writeDestinationCredential(
+    archive,
+    versionedEnv,
+    {
+      projectId: "project-noop",
+      destination: "posthog",
+      secret: "provider-secret",
+      credentialId: "credential-v2",
+    },
+  );
+
+  const keysBefore = [...archive.objects.keys()];
+
+  const result = await rewrapDestinationCredential(
+    archive,
+    versionedEnv,
+    {
+      projectId: "project-noop",
+      destination: "posthog",
+      targetKeyVersion: "v2",
+    },
+  );
+
+  assert.equal(result.rewrapped, false);
+  assert.equal(
+    result.pointer.credentialId,
+    written.pointer.credentialId,
+  );
+  assert.deepEqual(
+    [...archive.objects.keys()],
+    keysBefore,
+  );
+});
+
+test("rewrap does not advance the pointer when the target root is unavailable", async () => {
+  const archive = fakeArchive();
+
+  const written = await writeDestinationCredential(
+    archive,
+    env,
+    {
+      projectId: "project-rewrap-failure",
+      destination: "posthog",
+      secret: "provider-secret",
+      credentialId: "credential-v1",
+    },
+  );
+
+  await assert.rejects(
+    rewrapDestinationCredential(
+      archive,
+      env,
+      {
+        projectId: "project-rewrap-failure",
+        destination: "posthog",
+        targetKeyVersion: "v2",
+      },
+    ),
+    /ETLAYER_DESTINATION_SECRET_KEY_V2 is required/,
+  );
+
+  const status = await readDestinationCredentialStatus(
+    archive,
+    "project-rewrap-failure",
+    "posthog",
+  );
+
+  assert.equal(
+    status.credentialId,
+    written.pointer.credentialId,
+  );
+  assert.equal(status.keyVersion, "v1");
 });
