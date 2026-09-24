@@ -227,6 +227,7 @@ export async function completeIdempotentOperation(
       keyFingerprint: record.keyFingerprint,
       requestFingerprint: record.requestFingerprint,
       payload: responsePayload,
+      keyVersion: record.keyVersion,
       cryptoImpl,
     },
   );
