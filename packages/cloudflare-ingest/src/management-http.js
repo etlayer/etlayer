@@ -43,6 +43,10 @@ import {
   EncryptionKeyUsageConfigurationError,
   auditEncryptionKeyUsage,
 } from "./encryption-key-usage.js";
+import {
+  EncryptionRootConfigurationError,
+  activeEncryptionRootVersion,
+} from "./encryption-roots.js";
 
 export async function handleManagementRequest(
   request,
@@ -80,6 +84,13 @@ export async function handleManagementRequest(
       env,
       options,
     );
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/_mgmt/encryption/config"
+  ) {
+    return readEncryptionConfig(request, env);
   }
 
   const onboarding = url.pathname.match(
@@ -640,6 +651,65 @@ async function disableProducer(
     );
   } catch (error) {
     return registryErrorResponse(error);
+  }
+}
+
+async function readEncryptionConfig(
+  request,
+  env,
+) {
+  const management = authenticateManagement(
+    request,
+    env,
+  );
+
+  if (!management.ok) {
+    return management.reason === "not_configured"
+      ? jsonResponse(
+          {
+            error:
+              "management credential is not configured",
+          },
+          503,
+        )
+      : jsonResponse(
+          { error: "invalid management credential" },
+          401,
+        );
+  }
+
+  try {
+    return jsonResponse(
+      {
+        destination: {
+          activeKeyVersion:
+            activeEncryptionRootVersion(
+              env,
+              "destination",
+            ),
+        },
+        idempotency: {
+          activeKeyVersion:
+            activeEncryptionRootVersion(
+              env,
+              "idempotency",
+            ),
+        },
+      },
+      200,
+    );
+  } catch (error) {
+    if (
+      error instanceof
+        EncryptionRootConfigurationError
+    ) {
+      return jsonResponse(
+        { error: error.message },
+        503,
+      );
+    }
+
+    throw error;
   }
 }
 
