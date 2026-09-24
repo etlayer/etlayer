@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 CONFIG_PATH="$INGEST_DIR/wrangler.jsonc"
 WRANGLER_ENV="${ETLAYER_WRANGLER_ENV:-ci}"
