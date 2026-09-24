@@ -1496,7 +1496,7 @@ async function runAuditedMutation(
     },
     mutate,
     {
-      now: options.now || new Date(),
+      now: options.now,
       crypto: options.crypto || globalThis.crypto,
       operationId: options.operationId,
     },
