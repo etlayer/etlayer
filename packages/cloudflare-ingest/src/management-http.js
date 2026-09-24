@@ -47,6 +47,7 @@ import {
   EncryptionRootConfigurationError,
   activeEncryptionRootVersion,
 } from "./encryption-roots.js";
+import { auditControlPlaneMutation } from "./control-plane-audit.js";
 
 export async function handleManagementRequest(
   request,
@@ -378,21 +379,39 @@ async function createProject(request, env, options) {
     );
 
   try {
-    const result = await createRegistryProject(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        operatorFingerprint,
-        now: options.now || new Date(),
+        actor: managementActor(),
+        action: "project.create",
+        target: {
+          kind: "project",
+          projectId,
+        },
+        change: {
+          status: "active",
+        },
       },
+      () =>
+        createRegistryProject(
+          env.ARCHIVE,
+          {
+            projectId,
+            operatorFingerprint,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
       {
-        project: publicProject(result.project),
+        project: publicProject(audited.value.project),
         operatorCredential,
       },
       201,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -449,17 +468,39 @@ async function provisionOnboarding(
   );
 
   try {
-    const onboarded = await ensureOnboarding(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        ...normalized,
-        credential,
-        now: options.now || new Date(),
-        crypto: cryptoImpl,
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "project.onboard",
+        target: {
+          kind: "project",
+          projectId,
+        },
+        change: {
+          producerId: normalized.producerId,
+          destinations: normalized.destinations,
+        },
       },
+      () =>
+        ensureOnboarding(
+          env.ARCHIVE,
+          {
+            projectId,
+            ...normalized,
+            credential,
+            now: options.now || new Date(),
+            crypto: cryptoImpl,
+          },
+        ),
     );
 
+    const onboarded = audited.value;
     const bundle = buildOnboardingBundle({
       requestUrl: request.url,
       projectId,
@@ -468,7 +509,11 @@ async function provisionOnboarding(
       destinations: onboarded.destinations,
     });
 
-    return jsonResponse(bundle, 201);
+    return jsonResponse(
+      bundle,
+      201,
+      operationHeaders(audited.operationId),
+    );
   } catch (error) {
     if (error instanceof OnboardingValidationError) {
       return jsonResponse(
@@ -537,23 +582,46 @@ async function createProducer(
     );
 
   try {
-    const result = await createRegistryProducer(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        producerId: input.value.id,
-        profile,
-        credentialFingerprint: fingerprint,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "producer.create",
+        target: {
+          kind: "producer",
+          projectId,
+          producerId: input.value.id,
+        },
+        change: {
+          profileId: profile.profileId,
+          producerKind: profile.producerKind,
+        },
       },
+      () =>
+        createRegistryProducer(
+          env.ARCHIVE,
+          {
+            projectId,
+            producerId: input.value.id,
+            profile,
+            credentialFingerprint: fingerprint,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
       {
-        producer: publicProducer(result.producer),
+        producer: publicProducer(audited.value.producer),
         credential,
       },
       201,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -597,22 +665,44 @@ async function rotateProducer(
     );
 
   try {
-    const result = await rotateRegistryProducer(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        producerId,
-        credentialFingerprint: fingerprint,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "producer.rotate",
+        target: {
+          kind: "producer",
+          projectId,
+          producerId,
+        },
+        change: {
+          kind: "credential_rotation",
+        },
       },
+      () =>
+        rotateRegistryProducer(
+          env.ARCHIVE,
+          {
+            projectId,
+            producerId,
+            credentialFingerprint: fingerprint,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
       {
-        producer: publicProducer(result.producer),
+        producer: publicProducer(audited.value.producer),
         credential,
       },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -636,18 +726,40 @@ async function disableProducer(
 
   try {
     validateProducerId(producerId);
-    const producer = await disableRegistryProducer(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        producerId,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "producer.disable",
+        target: {
+          kind: "producer",
+          projectId,
+          producerId,
+        },
+        change: {
+          status: "disabled",
+        },
       },
+      () =>
+        disableRegistryProducer(
+          env.ARCHIVE,
+          {
+            projectId,
+            producerId,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
-      { producer: publicProducer(producer) },
+      { producer: publicProducer(audited.value) },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
