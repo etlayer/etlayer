@@ -387,17 +387,21 @@ node -e '
   }
 ' "$BLOCK_STATUS" || die "BLOCK outcome is incorrect"
 
-say "Reading quarantined validation evidence for immutable source coordinate"
-VALIDATION_KEY="projects/$PROJECT_ID/validation/$QUARANTINE_ID.json"
-VALIDATION_EVIDENCE="$(
-  management_json     POST     "/_mgmt/evidence"     "$MANAGEMENT_KEY"     "$(node -e '
+say "Inspecting quarantined event for immutable source coordinate"
+INSPECT_STATUS="$(
+  request_json     POST     "/_ops/inspect"     "$OPERATOR_KEY"     "$(node -e '
+      const [projectId, eventId] = process.argv.slice(1);
       process.stdout.write(
-        JSON.stringify({ key: process.argv[1] }),
+        JSON.stringify({ projectId, eventId }),
       );
-    ' "$VALIDATION_KEY")"
-)" || die "Quarantine validation evidence missing"
+    ' "$PROJECT_ID" "$QUARANTINE_ID")"     "$TMP_PREFIX.inspect"
+)"
 
-SOURCE_KEY="$(json_field "$VALIDATION_EVIDENCE" sourceKey)" ||
+[ "$INSPECT_STATUS" = "200" ] ||
+  die "Quarantine inspect failed: HTTP $INSPECT_STATUS"
+
+INSPECTION="$(cat "$TMP_PREFIX.inspect")"
+SOURCE_KEY="$(json_field "$INSPECTION" sourceKey)" ||
   die "Quarantine sourceKey missing"
 
 say "Revalidating the same preserved claim without producer re-emission"
