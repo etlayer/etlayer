@@ -120,10 +120,10 @@ VS10 External Onboarding                      complete
 VS11 Project-scoped Destination Credentials   complete
 
 VS12 External Integration Contract            complete
-VS13 Versioned Encryption Roots & Safe Rotation design selected
+VS13 Versioned Encryption Roots & Safe Rotation complete
 ~~~
 
-The current live acceptance suite re-proves VS8 -> VS12 serially in an isolated Cloudflare CI environment.
+The current live acceptance suite re-proves VS8 -> VS13 serially in an isolated Cloudflare CI environment.
 
 See:
 
@@ -165,11 +165,11 @@ without knowledge of R2 paths, Wrangler, registry internals, /_mgmt or /_ops dia
 
 Secret-bearing onboarding is retry-safe through required idempotency and a bounded encrypted response replay contract. The full VS8 -> VS12 live suite and independent PostHog provider verification passed.
 
-## Next slice
+## Encryption root lifecycle
 
-**VS13 - Versioned Encryption Roots & Safe Rotation** is design-selected.
+**VS13 - Versioned Encryption Roots & Safe Rotation is complete and live-proven.**
 
-VS13 will make the existing `keyVersion` fields operationally real:
+ETLayer now treats persisted `keyVersion` as a real decryptability contract:
 
 ~~~text
 read historical v1 + v2
@@ -179,10 +179,12 @@ bounded idempotency capsules drain by expiry
 old roots retire only after machine-verifiable readiness
 ~~~
 
-The slice intentionally does not introduce a generic KMS abstraction or change the public `/api/v1` contract.
+Destination and idempotency roots remain separate security domains. VS13 does not introduce a generic KMS abstraction and does not change the public `/api/v1` contract.
+
+The full VS8 -> VS13 Cloudflare acceptance suite passed. The shared CI archive still contains historical V1 records, so an old root is not declared retirement-safe merely because current writes use V2.
 
 ## Stability
 
 ETLayer is still pre-stable.
 
-The data-plane architecture has been proven through VS11. VS12 is the first deliberate public product-contract slice, so public API naming and compatibility rules are now being formalized rather than assumed.
+The data-plane foundation is proven through VS11, the external product contract through VS12, and versioned encryption-root lifecycle through VS13. ETLayer remains pre-stable while broader hosted-product and operational surfaces are still evolving.

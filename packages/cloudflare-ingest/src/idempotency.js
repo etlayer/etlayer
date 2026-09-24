@@ -1,3 +1,9 @@
+import {
+  EncryptionRootConfigurationError,
+  activeEncryptionRootVersion,
+  resolveEncryptionRootKey,
+} from "./encryption-roots.js";
+
 export const IDEMPOTENCY_VERSION = 1;
 export const IDEMPOTENCY_KEY_VERSION = "v1";
 export const DEFAULT_IDEMPOTENCY_REPLAY_SECONDS = 24 * 60 * 60;
@@ -126,7 +132,7 @@ export async function beginIdempotentOperation(
       requestFingerprint,
       status: "processing",
       algorithm: "AES-256-GCM",
-      keyVersion: IDEMPOTENCY_KEY_VERSION,
+      keyVersion: encrypted.keyVersion,
       iv: encrypted.iv,
       ciphertext: encrypted.ciphertext,
       createdAt: timestamp.toISOString(),
@@ -221,6 +227,7 @@ export async function completeIdempotentOperation(
       keyFingerprint: record.keyFingerprint,
       requestFingerprint: record.requestFingerprint,
       payload: responsePayload,
+      keyVersion: record.keyVersion,
       cryptoImpl,
     },
   );
@@ -228,6 +235,7 @@ export async function completeIdempotentOperation(
   const completed = {
     ...record,
     status: "completed",
+    keyVersion: encrypted.keyVersion,
     iv: encrypted.iv,
     ciphertext: encrypted.ciphertext,
     updatedAt: normalizeDate(now).toISOString(),
@@ -318,12 +326,16 @@ async function encryptCapsule(
     keyFingerprint,
     requestFingerprint,
     payload,
+    keyVersion: requestedKeyVersion,
     cryptoImpl,
   },
 ) {
+  const keyVersion =
+    requestedKeyVersion ||
+    idempotencyActiveKeyVersion(env);
   const masterKey = await importMasterKey(
     env,
-    IDEMPOTENCY_KEY_VERSION,
+    keyVersion,
     cryptoImpl,
   );
   const iv = new Uint8Array(12);
@@ -333,7 +345,7 @@ async function encryptCapsule(
     operation,
     keyFingerprint,
     requestFingerprint,
-    IDEMPOTENCY_KEY_VERSION,
+    keyVersion,
   );
   const plaintext = new TextEncoder().encode(
     JSON.stringify(payload),
@@ -352,6 +364,7 @@ async function encryptCapsule(
   );
 
   return {
+    keyVersion,
     iv: base64UrlEncode(iv),
     ciphertext: base64UrlEncode(ciphertext),
   };
@@ -421,41 +434,39 @@ async function importMasterKey(
   keyVersion,
   cryptoImpl,
 ) {
-  const envName =
-    keyVersion === "v1"
-      ? "ETLAYER_IDEMPOTENCY_SECRET_KEY_V1"
-      : null;
-
-  if (!envName) {
-    throw new IdempotencyConfigurationError(
-      `unsupported idempotency key version: ${keyVersion}`,
+  try {
+    return await resolveEncryptionRootKey(
+      env,
+      {
+        domain: "idempotency",
+        version: keyVersion,
+        crypto: cryptoImpl,
+      },
     );
+  } catch (error) {
+    if (error instanceof EncryptionRootConfigurationError) {
+      throw new IdempotencyConfigurationError(
+        error.message,
+      );
+    }
+    throw error;
   }
+}
 
-  const encoded = env?.[envName];
-  if (
-    typeof encoded !== "string" ||
-    encoded.length === 0
-  ) {
-    throw new IdempotencyConfigurationError(
-      `${envName} is required for public idempotency`,
+function idempotencyActiveKeyVersion(env) {
+  try {
+    return activeEncryptionRootVersion(
+      env,
+      "idempotency",
     );
+  } catch (error) {
+    if (error instanceof EncryptionRootConfigurationError) {
+      throw new IdempotencyConfigurationError(
+        error.message,
+      );
+    }
+    throw error;
   }
-
-  const raw = decodeMasterKey(encoded);
-  if (raw.byteLength !== 32) {
-    throw new IdempotencyConfigurationError(
-      `${envName} must decode to exactly 32 bytes`,
-    );
-  }
-
-  return cryptoImpl.subtle.importKey(
-    "raw",
-    raw,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt", "decrypt"],
-  );
 }
 
 async function sha256Hex(
@@ -534,21 +545,6 @@ async function readJson(archive, key) {
       `idempotency object is not valid JSON: ${key}`,
     );
   }
-}
-
-function decodeMasterKey(value) {
-  if (/^[0-9a-fA-F]{64}$/.test(value)) {
-    const bytes = new Uint8Array(32);
-    for (let index = 0; index < 32; index += 1) {
-      bytes[index] = Number.parseInt(
-        value.slice(index * 2, index * 2 + 2),
-        16,
-      );
-    }
-    return bytes;
-  }
-
-  return base64UrlDecode(value);
 }
 
 function base64UrlEncode(bytes) {

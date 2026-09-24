@@ -19,6 +19,7 @@ const onboardingUrl =
   encodeURIComponent(projectId) +
   "/onboarding";
 const idempotencyKey =
+  process.env.ETLAYER_IDEMPOTENCY_KEY ||
   "vs12-" + crypto.randomUUID();
 const onboardingBody = {
   producerId: "backend-main",
@@ -294,6 +295,8 @@ assert(
 
 const idempotencyKeyFingerprint =
   await sha256Hex(idempotencyKey);
+const producerCredentialFingerprint =
+  await sha256Hex(firstBody.credential);
 
 process.stdout.write(
   JSON.stringify(
@@ -301,6 +304,7 @@ process.stdout.write(
       projectId,
       eventId: emitted.eventId,
       idempotencyKeyFingerprint,
+      producerCredentialFingerprint,
       idempotencyReplay: true,
       sameCredentialReplayed:
         replay.body.credential === firstBody.credential,

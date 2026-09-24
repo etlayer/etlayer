@@ -3,6 +3,12 @@ import {
   projectConfiguration,
   validateProjectId,
 } from "./project-config.js";
+import {
+  ENCRYPTION_ROOT_VERSIONS,
+  EncryptionRootConfigurationError,
+  activeEncryptionRootVersion,
+  resolveEncryptionRootKey,
+} from "./encryption-roots.js";
 
 export const DESTINATION_CREDENTIAL_VERSION = 1;
 export const DESTINATION_CREDENTIAL_KEY_VERSION = "v1";
@@ -53,6 +59,10 @@ export async function writeDestinationCredential(
     now = new Date(),
     crypto: cryptoImpl = globalThis.crypto,
     credentialId,
+    keyVersion: requestedKeyVersion,
+    rotationKind = null,
+    supersedesCredentialId = null,
+    expectedCurrentPointer = null,
   },
 ) {
   requireArchive(archive);
@@ -77,7 +87,10 @@ export async function writeDestinationCredential(
   validateCredentialId(id);
 
   const timestamp = normalizeTimestamp(now);
-  const keyVersion = DESTINATION_CREDENTIAL_KEY_VERSION;
+  const keyVersion =
+    requestedKeyVersion ||
+    destinationActiveKeyVersion(env);
+  validateEncryptionKeyVersion(keyVersion);
   const masterKey = await importMasterKey(
     env,
     keyVersion,
@@ -116,6 +129,12 @@ export async function writeDestinationCredential(
     iv: base64UrlEncode(iv),
     ciphertext: base64UrlEncode(ciphertext),
     createdAt: timestamp,
+    ...(rotationKind
+      ? { rotationKind }
+      : {}),
+    ...(supersedesCredentialId
+      ? { supersedesCredentialId }
+      : {}),
   };
 
   const versionKey = destinationCredentialVersionKey(
@@ -140,6 +159,15 @@ export async function writeDestinationCredential(
         algorithm: record.algorithm,
         key_version: keyVersion,
         created_at: timestamp,
+        ...(rotationKind
+          ? { rotation_kind: rotationKind }
+          : {}),
+        ...(supersedesCredentialId
+          ? {
+              supersedes_credential_id:
+                supersedesCredentialId,
+            }
+          : {}),
       },
     },
   );
@@ -148,6 +176,41 @@ export async function writeDestinationCredential(
     throw new DestinationCredentialConflictError(
       "destination credential version already exists",
     );
+  }
+
+  const verifiedSecret =
+    await decryptDestinationCredentialRecord(
+      env,
+      record,
+      cryptoImpl,
+    );
+  if (verifiedSecret !== secret) {
+    throw new DestinationCredentialDecryptionError(
+      `new destination credential verification failed: ${projectId}/${destination}`,
+    );
+  }
+
+  if (expectedCurrentPointer) {
+    const latest =
+      await readDestinationCredentialPointer(
+        archive,
+        projectId,
+        destination,
+      );
+
+    if (
+      !latest ||
+      latest.credentialId !==
+        expectedCurrentPointer.credentialId ||
+      latest.versionKey !==
+        expectedCurrentPointer.versionKey ||
+      latest.status !==
+        expectedCurrentPointer.status
+    ) {
+      throw new DestinationCredentialConflictError(
+        "destination credential changed during rewrap",
+      );
+    }
   }
 
   const pointer = {
@@ -183,6 +246,104 @@ export async function writeDestinationCredential(
   return {
     pointer,
     record,
+  };
+}
+
+export async function rewrapDestinationCredential(
+  archive,
+  env,
+  {
+    projectId,
+    destination,
+    targetKeyVersion,
+    now = new Date(),
+    crypto: cryptoImpl = globalThis.crypto,
+  },
+) {
+  requireArchive(archive);
+  validateCoordinates(projectId, destination);
+  validateCrypto(cryptoImpl);
+  validateEncryptionKeyVersion(targetKeyVersion);
+
+  const current =
+    await readDestinationCredentialPointer(
+      archive,
+      projectId,
+      destination,
+    );
+
+  if (!current) {
+    throw new DestinationCredentialNotFoundError(
+      `destination credential not found: ${projectId}/${destination}`,
+    );
+  }
+
+  if (current.status !== "active") {
+    throw new DestinationCredentialConflictError(
+      "destination credential must be active to rewrap",
+    );
+  }
+
+  if (current.keyVersion === targetKeyVersion) {
+    return {
+      rewrapped: false,
+      previousPointer: current,
+      pointer: current,
+      record: await readJson(
+        archive,
+        current.versionKey,
+      ),
+    };
+  }
+
+  const currentRecord = await readJson(
+    archive,
+    current.versionKey,
+  );
+
+  if (
+    !currentRecord ||
+    currentRecord.projectId !== projectId ||
+    currentRecord.destination !== destination ||
+    currentRecord.credentialId !==
+      current.credentialId ||
+    currentRecord.keyVersion !== current.keyVersion
+  ) {
+    throw new DestinationCredentialConfigurationError(
+      "active destination credential record does not match pointer",
+    );
+  }
+
+  const secret =
+    await decryptDestinationCredentialRecord(
+      env,
+      currentRecord,
+      cryptoImpl,
+    );
+
+  const written =
+    await writeDestinationCredential(
+      archive,
+      env,
+      {
+        projectId,
+        destination,
+        secret,
+        now,
+        crypto: cryptoImpl,
+        keyVersion: targetKeyVersion,
+        rotationKind: "master_key_rewrap",
+        supersedesCredentialId:
+          current.credentialId,
+        expectedCurrentPointer: current,
+      },
+    );
+
+  return {
+    rewrapped: true,
+    previousPointer: current,
+    pointer: written.pointer,
+    record: written.record,
   };
 }
 
@@ -373,37 +534,12 @@ export async function resolveDestinationCredential(
     options.crypto || globalThis.crypto;
   validateCrypto(cryptoImpl);
 
-  const masterKey = await importMasterKey(
-    env,
-    record.keyVersion,
-    cryptoImpl,
-  );
-  const iv = base64UrlDecode(record.iv);
-  const ciphertext = base64UrlDecode(record.ciphertext);
-  const additionalData = credentialAdditionalData(
-    projectId,
-    destination,
-    record.credentialId,
-    record.keyVersion,
-  );
-
-  let plaintext;
-  try {
-    plaintext = await cryptoImpl.subtle.decrypt(
-      {
-        name: "AES-GCM",
-        iv,
-        additionalData,
-        tagLength: 128,
-      },
-      masterKey,
-      ciphertext,
+  const secret =
+    await decryptDestinationCredentialRecord(
+      env,
+      record,
+      cryptoImpl,
     );
-  } catch {
-    throw new DestinationCredentialDecryptionError(
-      `destination credential could not be decrypted: ${projectId}/${destination}`,
-    );
-  }
 
   return {
     configured: true,
@@ -412,7 +548,7 @@ export async function resolveDestinationCredential(
     destination,
     credentialId: record.credentialId,
     keyVersion: record.keyVersion,
-    secret: new TextDecoder().decode(plaintext),
+    secret,
   };
 }
 
@@ -433,6 +569,56 @@ export async function readDestinationCredentialPointer(
       destination,
     ),
   );
+}
+
+async function decryptDestinationCredentialRecord(
+  env,
+  record,
+  cryptoImpl,
+) {
+  const masterKey = await importMasterKey(
+    env,
+    record.keyVersion,
+    cryptoImpl,
+  );
+  const iv = base64UrlDecode(record.iv);
+  const ciphertext = base64UrlDecode(
+    record.ciphertext,
+  );
+  const additionalData = credentialAdditionalData(
+    record.projectId,
+    record.destination,
+    record.credentialId,
+    record.keyVersion,
+  );
+
+  try {
+    const plaintext =
+      await cryptoImpl.subtle.decrypt(
+        {
+          name: "AES-GCM",
+          iv,
+          additionalData,
+          tagLength: 128,
+        },
+        masterKey,
+        ciphertext,
+      );
+
+    return new TextDecoder().decode(plaintext);
+  } catch {
+    throw new DestinationCredentialDecryptionError(
+      `destination credential could not be decrypted: ${record.projectId}/${record.destination}`,
+    );
+  }
+}
+
+function validateEncryptionKeyVersion(value) {
+  if (!ENCRYPTION_ROOT_VERSIONS.includes(value)) {
+    throw new DestinationCredentialValidationError(
+      `target key version must be one of: ${ENCRYPTION_ROOT_VERSIONS.join(", ")}`,
+    );
+  }
 }
 
 function credentialAdditionalData(
@@ -458,56 +644,39 @@ async function importMasterKey(
   keyVersion,
   cryptoImpl,
 ) {
-  const envName =
-    keyVersion === "v1"
-      ? "ETLAYER_DESTINATION_SECRET_KEY_V1"
-      : null;
-
-  if (!envName) {
-    throw new DestinationCredentialConfigurationError(
-      `unsupported destination credential key version: ${keyVersion}`,
+  try {
+    return await resolveEncryptionRootKey(
+      env,
+      {
+        domain: "destination",
+        version: keyVersion,
+        crypto: cryptoImpl,
+      },
     );
-  }
-
-  const encoded = env?.[envName];
-  if (
-    typeof encoded !== "string" ||
-    encoded.length === 0
-  ) {
-    throw new DestinationCredentialConfigurationError(
-      `${envName} is required for project-scoped destination credentials`,
-    );
-  }
-
-  const raw = decodeMasterKey(encoded);
-  if (raw.byteLength !== 32) {
-    throw new DestinationCredentialConfigurationError(
-      `${envName} must decode to exactly 32 bytes`,
-    );
-  }
-
-  return cryptoImpl.subtle.importKey(
-    "raw",
-    raw,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt", "decrypt"],
-  );
-}
-
-function decodeMasterKey(value) {
-  if (/^[0-9a-fA-F]{64}$/.test(value)) {
-    const bytes = new Uint8Array(32);
-    for (let index = 0; index < 32; index += 1) {
-      bytes[index] = Number.parseInt(
-        value.slice(index * 2, index * 2 + 2),
-        16,
+  } catch (error) {
+    if (error instanceof EncryptionRootConfigurationError) {
+      throw new DestinationCredentialConfigurationError(
+        error.message,
       );
     }
-    return bytes;
+    throw error;
   }
+}
 
-  return base64UrlDecode(value);
+function destinationActiveKeyVersion(env) {
+  try {
+    return activeEncryptionRootVersion(
+      env,
+      "destination",
+    );
+  } catch (error) {
+    if (error instanceof EncryptionRootConfigurationError) {
+      throw new DestinationCredentialConfigurationError(
+        error.message,
+      );
+    }
+    throw error;
+  }
 }
 
 function base64UrlEncode(bytes) {
