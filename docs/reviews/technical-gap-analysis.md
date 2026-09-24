@@ -191,13 +191,13 @@ This intentionally distinguishes:
 
 This review does not change the current non-goals.
 
-ETLayer should not compete on:
+ETLayer should not optimize for:
 
 - number of destinations;
 - product-analytics dashboards;
 - CDP profiles and audiences;
 - replacing OTLP;
-- replacing Kafka or becoming a general message broker;
+- becoming a general-purpose event-stream backbone or message broker;
 - an agent-specific workflow runtime.
 
 The differentiating center remains the trust transition:
