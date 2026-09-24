@@ -40,6 +40,15 @@ function fakeArchive() {
         },
       };
     },
+    async list({ prefix = "" } = {}) {
+      return {
+        objects: [...objects.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .sort()
+          .map((key) => ({ key })),
+        truncated: false,
+      };
+    },
   };
 }
 
@@ -405,4 +414,200 @@ test("management rejects static project collisions and unsupported destinations"
   );
 
   assert.equal(unsupported.status, 400);
+});
+
+
+test("global management can rewrap a destination root while project operator cannot", async () => {
+  const archive = fakeArchive();
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_MANAGEMENT_KEY: "management-key",
+    ETLAYER_DESTINATION_SECRET_KEY_V1:
+      "11".repeat(32),
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+  };
+
+  const project = await (
+    await manage(
+      env,
+      "POST",
+      "/_mgmt/projects",
+      "management-key",
+      { id: "rotation-a" },
+    )
+  ).json();
+
+  const configured = await manage(
+    env,
+    "PUT",
+    "/_mgmt/projects/rotation-a/destinations/posthog/credential",
+    project.operatorCredential,
+    { secret: "provider-secret" },
+  );
+
+  assert.equal(configured.status, 200);
+  assert.equal(
+    (await configured.json()).credential.keyVersion,
+    "v1",
+  );
+
+  const denied = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/rotation-a/destinations/posthog/credential/rewrap",
+    project.operatorCredential,
+    { targetKeyVersion: "v2" },
+  );
+  assert.equal(denied.status, 401);
+
+  const rewrapped = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/rotation-a/destinations/posthog/credential/rewrap",
+    "management-key",
+    { targetKeyVersion: "v2" },
+  );
+
+  assert.equal(rewrapped.status, 200);
+  const body = await rewrapped.json();
+  assert.equal(body.rewrapped, true);
+  assert.equal(body.previous.keyVersion, "v1");
+  assert.equal(body.credential.keyVersion, "v2");
+
+  const persisted = [...archive.objects.values()]
+    .map(({ body: storedBody }) => storedBody)
+    .join("\n");
+
+  assert.equal(
+    persisted.includes("provider-secret"),
+    false,
+  );
+});
+
+test("global key usage audit reports destination migration and idempotency drain readiness", async () => {
+  const archive = fakeArchive();
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_MANAGEMENT_KEY: "management-key",
+    ETLAYER_DESTINATION_SECRET_KEY_V1:
+      "11".repeat(32),
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+  };
+
+  const project = await (
+    await manage(
+      env,
+      "POST",
+      "/_mgmt/projects",
+      "management-key",
+      { id: "rotation-usage" },
+    )
+  ).json();
+
+  await manage(
+    env,
+    "PUT",
+    "/_mgmt/projects/rotation-usage/destinations/posthog/credential",
+    project.operatorCredential,
+    { secret: "provider-secret" },
+  );
+
+  await archive.put(
+    "registry/idempotency/rotation-usage/onboarding-v1/example.json",
+    JSON.stringify({
+      version: 1,
+      kind: "public_idempotency",
+      projectId: "rotation-usage",
+      operation: "onboarding-v1",
+      keyVersion: "v1",
+      status: "completed",
+      replayUntil: "2026-09-24T10:00:00.000Z",
+    }),
+  );
+
+  const usageRequest = new Request(
+    "https://events.test/_mgmt/encryption/key-usage",
+    {
+      method: "GET",
+      headers: {
+        authorization: "Bearer management-key",
+      },
+    },
+  );
+
+  const before = await handleManagementRequest(
+    usageRequest,
+    env,
+    new URL(usageRequest.url),
+    {
+      now: new Date("2026-09-24T09:00:00.000Z"),
+    },
+  );
+
+  assert.equal(before.status, 200);
+  const beforeBody = await before.json();
+  assert.equal(
+    beforeBody.usage.destination.versions.v1
+      .retirementSafe,
+    false,
+  );
+  assert.equal(
+    beforeBody.usage.idempotency.versions.v1
+      .retirementSafe,
+    false,
+  );
+
+  await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/rotation-usage/destinations/posthog/credential/rewrap",
+    "management-key",
+    { targetKeyVersion: "v2" },
+  );
+
+  const afterRequest = new Request(
+    "https://events.test/_mgmt/encryption/key-usage",
+    {
+      method: "GET",
+      headers: {
+        authorization: "Bearer management-key",
+      },
+    },
+  );
+
+  const after = await handleManagementRequest(
+    afterRequest,
+    env,
+    new URL(afterRequest.url),
+    {
+      now: new Date("2026-09-24T11:00:00.000Z"),
+    },
+  );
+
+  assert.equal(after.status, 200);
+  const afterBody = await after.json();
+
+  assert.deepEqual(
+    afterBody.usage.destination.versions.v1,
+    {
+      activePointers: 0,
+      retirementSafe: true,
+    },
+  );
+  assert.deepEqual(
+    afterBody.usage.destination.versions.v2,
+    {
+      activePointers: 1,
+      retirementSafe: false,
+    },
+  );
+  assert.deepEqual(
+    afterBody.usage.idempotency.versions.v1,
+    {
+      unexpiredCapsules: 0,
+      retirementSafe: true,
+    },
+  );
 });
