@@ -53,7 +53,7 @@ export async function recordDecisionHistory(
   const privacy = evaluation.privacy;
 
   const projectId = projectIdForEvent(event);
-  const outcome = decisionOutcome(validation, authority);
+  const outcome = resolveDecisionOutcome(validation, authority);
   const state = {
     version: DECISION_HISTORY_VERSION,
     projectId,
@@ -234,7 +234,7 @@ async function readJsonObject(archive, key) {
   }
 }
 
-function decisionOutcome(validation, authority) {
+export function resolveDecisionOutcome(validation, authority) {
   if (authority.status === "blocked") {
     return "block";
   }
