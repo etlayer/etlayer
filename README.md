@@ -123,6 +123,7 @@ VS12 External Integration Contract            complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
 VS14 First-class Quarantine                    complete
 VS15 Append-only Control-plane Audit Log          complete
+VS16 Contract Compatibility Checker               in progress
 ~~~
 
 The current live acceptance suite re-proves VS8 -> VS15 serially in an isolated Cloudflare CI environment.
@@ -136,6 +137,7 @@ See:
 - [VS13: Versioned Encryption Roots & Safe Rotation](docs/vertical-slices/vs13-encryption-root-rotation.md)
 - [VS14: First-class Quarantine](docs/vertical-slices/vs14-quarantine.md)
 - [VS15: Append-only Control-plane Audit Log](docs/vertical-slices/vs15-control-plane-audit.md)
+- [VS16: Contract Compatibility Checker](docs/vertical-slices/vs16-contract-compatibility.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
