@@ -132,7 +132,7 @@ export async function beginIdempotentOperation(
       requestFingerprint,
       status: "processing",
       algorithm: "AES-256-GCM",
-      keyVersion,
+      keyVersion: encrypted.keyVersion,
       iv: encrypted.iv,
       ciphertext: encrypted.ciphertext,
       createdAt: timestamp.toISOString(),
@@ -234,6 +234,7 @@ export async function completeIdempotentOperation(
   const completed = {
     ...record,
     status: "completed",
+    keyVersion: encrypted.keyVersion,
     iv: encrypted.iv,
     ciphertext: encrypted.ciphertext,
     updatedAt: normalizeDate(now).toISOString(),
@@ -324,10 +325,13 @@ async function encryptCapsule(
     keyFingerprint,
     requestFingerprint,
     payload,
+    keyVersion: requestedKeyVersion,
     cryptoImpl,
   },
 ) {
-  const keyVersion = idempotencyActiveKeyVersion(env);
+  const keyVersion =
+    requestedKeyVersion ||
+    idempotencyActiveKeyVersion(env);
   const masterKey = await importMasterKey(
     env,
     keyVersion,
@@ -359,6 +363,7 @@ async function encryptCapsule(
   );
 
   return {
+    keyVersion,
     iv: base64UrlEncode(iv),
     ciphertext: base64UrlEncode(ciphertext),
   };
