@@ -25,7 +25,7 @@ VS12 External Integration Contract            complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
 VS14 First-class Quarantine                    complete
 VS15 Append-only Control-plane Audit Log          complete
-VS16 Contract Compatibility Checker               in progress
+VS16 Contract Compatibility Checker               complete
 ~~~
 
 The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS15 together.
@@ -204,7 +204,9 @@ Live Acceptance #93 proved VS8 -> VS14 serially in the isolated Cloudflare CI en
 
 Live Acceptance #95 proved VS8 -> VS15 serially in the isolated Cloudflare CI environment.
 
-**VS16 - Contract Compatibility Checker is the selected next slice.**\n\nIt defines backward, forward, and full compatibility over ETLayer's actual contract language and provides a deterministic CLI/CI gate. Because the capability is pure governance logic with no runtime dependency, normal CI is its authoritative executable acceptance rather than Cloudflare deployment.
+**VS16 - Contract Compatibility Checker is complete and CI-proven.**\n\nIt defines backward, forward, and full compatibility over ETLayer's actual contract language and provides a deterministic CLI/CI gate. Because the capability is pure governance logic with no runtime dependency, normal CI is its authoritative executable acceptance rather than Cloudflare deployment.
+
+The next sequencing candidate is `etlayer plan`: simulate proposed contract/policy changes against preserved historical evidence before publication. It does not become VS17 until its risk, invariant, executable acceptance, and smallest useful scope are explicit.
 
 The milestone backlog is:
 
