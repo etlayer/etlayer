@@ -585,3 +585,50 @@ test("rewrap does not advance the pointer when the target root is unavailable", 
   );
   assert.equal(status.keyVersion, "v1");
 });
+
+
+test("rewrapped destination remains usable when v1 root is omitted", async () => {
+  const archive = fakeArchive();
+  const bothRoots = {
+    ...env,
+    ETLAYER_DESTINATION_SECRET_KEY_V2:
+      "22".repeat(32),
+  };
+
+  await writeDestinationCredential(
+    archive,
+    bothRoots,
+    {
+      projectId: "project-retired-v1",
+      destination: "posthog",
+      secret: "provider-secret",
+      credentialId: "credential-v1",
+    },
+  );
+
+  await rewrapDestinationCredential(
+    archive,
+    bothRoots,
+    {
+      projectId: "project-retired-v1",
+      destination: "posthog",
+      targetKeyVersion: "v2",
+    },
+  );
+
+  const resolved = await resolveDestinationCredential(
+    archive,
+    {
+      ETLAYER_DESTINATION_SECRET_KEY_V2:
+        "22".repeat(32),
+      ETLAYER_DESTINATION_SECRET_ACTIVE_VERSION:
+        "v2",
+      POSTHOG_PROJECT_TOKEN: "static-posthog",
+    },
+    "project-retired-v1",
+    "posthog",
+  );
+
+  assert.equal(resolved.keyVersion, "v2");
+  assert.equal(resolved.secret, "provider-secret");
+});
