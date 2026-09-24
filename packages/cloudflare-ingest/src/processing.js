@@ -106,10 +106,7 @@ export async function processPersistedEvent(
     },
   );
 
-  if (
-    validation.status === "blocked" ||
-    authority.status === "blocked"
-  ) {
+  if (!decisionRecord.state.routeEligible) {
     return {
       validation,
       authority: authorityRecord.state,
