@@ -29,7 +29,7 @@ export async function recordValidationState(
 
   const projectId = projectIdForEvent(event);
   const state = {
-    version: 2,
+    version: 3,
     projectId,
     eventId: event.id,
     eventName: event.eventName,
@@ -139,7 +139,7 @@ function validateResult(validation) {
     !validation ||
     !Number.isSafeInteger(validation.validatorVersion) ||
     validation.validatorVersion < 1 ||
-    !["valid", "blocked", "unmanaged"].includes(validation.status)
+    !["valid", "quarantined", "blocked", "unmanaged"].includes(validation.status)
   ) {
     throw new ValidationStateConfigurationError(
       "validation result has an unsupported status",
