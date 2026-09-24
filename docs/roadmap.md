@@ -24,9 +24,10 @@ Phase 2 - Product Contract
 VS12 External Integration Contract            complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
 VS14 First-class Quarantine                    complete
+VS15 Append-only Control-plane Audit Log          complete
 ~~~
 
-The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS14 together.
+The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS15 together.
 
 See:
 
@@ -36,7 +37,8 @@ See:
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
 - [VS14: First-class Quarantine](vertical-slices/vs14-quarantine.md)
-- GitHub issues #43 and #48
+- [VS15: Append-only Control-plane Audit Log](vertical-slices/vs15-control-plane-audit.md)
+- GitHub issues #43, #48, and #50
 
 ## Phase 2 - Product Contract
 
@@ -196,7 +198,11 @@ Routing occurs only for ALLOW, and BLOCK takes precedence over QUARANTINE when b
 
 Live Acceptance #93 proved VS8 -> VS14 serially in the isolated Cloudflare CI environment.
 
-The next sequencing candidate is Control-plane Audit Log, but it does not receive a VS number until its risk, invariant, executable acceptance, and smallest useful scope are explicit.
+**VS15 - Append-only Control-plane Audit Log is complete and live-proven.**\n\nIts target invariant is:\n\n~~~text\nno authenticated internal management mutation\n  proceeds without durable audit intent\n\nsuccess -> requested + applied\nfailure -> requested + failed\n~~~\n\nThe audit is append-only, actor/target attributable, and secret-safe.
+
+Live Acceptance #95 proved VS8 -> VS15 serially in the isolated Cloudflare CI environment.
+
+The next sequencing candidate is Contract Compatibility Checker. Per the roadmap rule it does not become VS16 until its risk, invariant, executable acceptance, and smallest useful scope are explicit.
 
 The milestone backlog is:
 

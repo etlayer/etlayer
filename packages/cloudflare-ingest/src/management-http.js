@@ -47,6 +47,7 @@ import {
   EncryptionRootConfigurationError,
   activeEncryptionRootVersion,
 } from "./encryption-roots.js";
+import { auditControlPlaneMutation } from "./control-plane-audit.js";
 
 export async function handleManagementRequest(
   request,
@@ -378,21 +379,39 @@ async function createProject(request, env, options) {
     );
 
   try {
-    const result = await createRegistryProject(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        operatorFingerprint,
-        now: options.now || new Date(),
+        actor: managementActor(),
+        action: "project.create",
+        target: {
+          kind: "project",
+          projectId,
+        },
+        change: {
+          status: "active",
+        },
       },
+      () =>
+        createRegistryProject(
+          env.ARCHIVE,
+          {
+            projectId,
+            operatorFingerprint,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
       {
-        project: publicProject(result.project),
+        project: publicProject(audited.value.project),
         operatorCredential,
       },
       201,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -449,17 +468,39 @@ async function provisionOnboarding(
   );
 
   try {
-    const onboarded = await ensureOnboarding(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        ...normalized,
-        credential,
-        now: options.now || new Date(),
-        crypto: cryptoImpl,
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "project.onboard",
+        target: {
+          kind: "project",
+          projectId,
+        },
+        change: {
+          producerId: normalized.producerId,
+          destinations: normalized.destinations,
+        },
       },
+      () =>
+        ensureOnboarding(
+          env.ARCHIVE,
+          {
+            projectId,
+            ...normalized,
+            credential,
+            now: options.now || new Date(),
+            crypto: cryptoImpl,
+          },
+        ),
     );
 
+    const onboarded = audited.value;
     const bundle = buildOnboardingBundle({
       requestUrl: request.url,
       projectId,
@@ -468,7 +509,11 @@ async function provisionOnboarding(
       destinations: onboarded.destinations,
     });
 
-    return jsonResponse(bundle, 201);
+    return jsonResponse(
+      bundle,
+      201,
+      operationHeaders(audited.operationId),
+    );
   } catch (error) {
     if (error instanceof OnboardingValidationError) {
       return jsonResponse(
@@ -537,23 +582,46 @@ async function createProducer(
     );
 
   try {
-    const result = await createRegistryProducer(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        producerId: input.value.id,
-        profile,
-        credentialFingerprint: fingerprint,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "producer.create",
+        target: {
+          kind: "producer",
+          projectId,
+          producerId: input.value.id,
+        },
+        change: {
+          profileId: profile.profileId,
+          producerKind: profile.producerKind,
+        },
       },
+      () =>
+        createRegistryProducer(
+          env.ARCHIVE,
+          {
+            projectId,
+            producerId: input.value.id,
+            profile,
+            credentialFingerprint: fingerprint,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
       {
-        producer: publicProducer(result.producer),
+        producer: publicProducer(audited.value.producer),
         credential,
       },
       201,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -597,22 +665,44 @@ async function rotateProducer(
     );
 
   try {
-    const result = await rotateRegistryProducer(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        producerId,
-        credentialFingerprint: fingerprint,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "producer.rotate",
+        target: {
+          kind: "producer",
+          projectId,
+          producerId,
+        },
+        change: {
+          kind: "credential_rotation",
+        },
       },
+      () =>
+        rotateRegistryProducer(
+          env.ARCHIVE,
+          {
+            projectId,
+            producerId,
+            credentialFingerprint: fingerprint,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
       {
-        producer: publicProducer(result.producer),
+        producer: publicProducer(audited.value.producer),
         credential,
       },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -636,18 +726,40 @@ async function disableProducer(
 
   try {
     validateProducerId(producerId);
-    const producer = await disableRegistryProducer(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        producerId,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "producer.disable",
+        target: {
+          kind: "producer",
+          projectId,
+          producerId,
+        },
+        change: {
+          status: "disabled",
+        },
       },
+      () =>
+        disableRegistryProducer(
+          env.ARCHIVE,
+          {
+            projectId,
+            producerId,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
-      { producer: publicProducer(producer) },
+      { producer: publicProducer(audited.value) },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -831,20 +943,40 @@ async function rewrapProjectDestinationCredential(
   }
 
   try {
-    const result =
-      await rewrapDestinationCredential(
-        env.ARCHIVE,
-        env,
-        {
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
+      {
+        actor: managementActor(),
+        action: "destination_credential.rewrap",
+        target: {
+          kind: "destination_credential",
           projectId,
           destination,
+        },
+        change: {
           targetKeyVersion:
             input.value.targetKeyVersion,
-          now: options.now || new Date(),
-          crypto:
-            options.crypto || globalThis.crypto,
         },
-      );
+      },
+      () =>
+        rewrapDestinationCredential(
+          env.ARCHIVE,
+          env,
+          {
+            projectId,
+            destination,
+            targetKeyVersion:
+              input.value.targetKeyVersion,
+            now: options.now || new Date(),
+            crypto:
+              options.crypto || globalThis.crypto,
+          },
+        ),
+    );
+
+    const result = audited.value;
 
     return jsonResponse(
       {
@@ -863,6 +995,7 @@ async function rewrapProjectDestinationCredential(
           ),
       },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return destinationCredentialErrorResponse(error);
@@ -911,16 +1044,38 @@ async function configureDestinationCredential(
   }
 
   try {
-    await writeDestinationCredential(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
       env,
+      options,
       {
-        projectId,
-        destination,
-        secret: input.value.secret,
-        now: options.now || new Date(),
-        crypto: options.crypto || globalThis.crypto,
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "destination_credential.configure",
+        target: {
+          kind: "destination_credential",
+          projectId,
+          destination,
+        },
+        change: {
+          state: "configured",
+        },
       },
+      () =>
+        writeDestinationCredential(
+          env.ARCHIVE,
+          env,
+          {
+            projectId,
+            destination,
+            secret: input.value.secret,
+            now: options.now || new Date(),
+            crypto:
+              options.crypto || globalThis.crypto,
+          },
+        ),
     );
 
     return jsonResponse(
@@ -933,6 +1088,7 @@ async function configureDestinationCredential(
           ),
       },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return destinationCredentialErrorResponse(error);
@@ -1003,13 +1159,34 @@ async function disableProjectDestinationCredential(
   if (dynamicError) return dynamicError;
 
   try {
-    await disableDestinationCredential(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        destination,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "destination_credential.disable",
+        target: {
+          kind: "destination_credential",
+          projectId,
+          destination,
+        },
+        change: {
+          status: "disabled",
+        },
       },
+      () =>
+        disableDestinationCredential(
+          env.ARCHIVE,
+          {
+            projectId,
+            destination,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
@@ -1022,6 +1199,7 @@ async function disableProjectDestinationCredential(
           ),
       },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return destinationCredentialErrorResponse(error);
@@ -1099,16 +1277,36 @@ async function bootstrapRuntimeDestinationCredential(
   }
 
   try {
-    await writeDestinationCredential(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
       env,
+      options,
       {
-        projectId,
-        destination,
-        secret: runtime.secret,
-        now: options.now || new Date(),
-        crypto: options.crypto || globalThis.crypto,
+        actor: managementActor(),
+        action:
+          "destination_credential.bootstrap_runtime_default",
+        target: {
+          kind: "destination_credential",
+          projectId,
+          destination,
+        },
+        change: {
+          source: "runtime_default",
+        },
       },
+      () =>
+        writeDestinationCredential(
+          env.ARCHIVE,
+          env,
+          {
+            projectId,
+            destination,
+            secret: runtime.secret,
+            now: options.now || new Date(),
+            crypto:
+              options.crypto || globalThis.crypto,
+          },
+        ),
     );
 
     return jsonResponse(
@@ -1122,6 +1320,7 @@ async function bootstrapRuntimeDestinationCredential(
           ),
       },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return destinationCredentialErrorResponse(error);
@@ -1164,23 +1363,45 @@ async function configureDestination(
   }
 
   try {
-    const project = await setRegistryDestination(
-      env.ARCHIVE,
+    const audited = await runAuditedMutation(
+      request,
+      env,
+      options,
       {
-        projectId,
-        destination,
-        enabled: input.value.enabled,
-        now: options.now || new Date(),
+        actor: operatorActor(
+          projectId,
+          auth.authentication,
+        ),
+        action: "destination.configure",
+        target: {
+          kind: "destination",
+          projectId,
+          destination,
+        },
+        change: {
+          enabled: input.value.enabled,
+        },
       },
+      () =>
+        setRegistryDestination(
+          env.ARCHIVE,
+          {
+            projectId,
+            destination,
+            enabled: input.value.enabled,
+            now: options.now || new Date(),
+          },
+        ),
     );
 
     return jsonResponse(
       {
-        project: publicProject(project),
+        project: publicProject(audited.value),
         destination,
         enabled: input.value.enabled,
       },
       200,
+      operationHeaders(audited.operationId),
     );
   } catch (error) {
     return registryErrorResponse(error);
@@ -1250,6 +1471,56 @@ async function projectAuth(
       },
       401,
     ),
+  };
+}
+
+async function runAuditedMutation(
+  request,
+  env,
+  options,
+  descriptor,
+  mutate,
+) {
+  const audit =
+    options.auditControlPlaneMutation ||
+    auditControlPlaneMutation;
+
+  return audit(
+    env.ARCHIVE,
+    {
+      ...descriptor,
+      request: {
+        method: request.method,
+        path: new URL(request.url).pathname,
+      },
+    },
+    mutate,
+    {
+      now: options.now,
+      crypto: options.crypto || globalThis.crypto,
+      operationId: options.operationId,
+    },
+  );
+}
+
+function managementActor() {
+  return {
+    kind: "management",
+    scope: "global",
+  };
+}
+
+function operatorActor(projectId, authentication) {
+  return {
+    kind: "project_operator",
+    projectId,
+    source: authentication?.source || "unknown",
+  };
+}
+
+function operationHeaders(operationId) {
+  return {
+    "x-etlayer-operation-id": operationId,
   };
 }
 
@@ -1444,13 +1715,18 @@ function isJsonContentType(contentType) {
   );
 }
 
-function jsonResponse(body, status) {
+function jsonResponse(
+  body,
+  status,
+  extraHeaders = {},
+) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "content-type":
         "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...extraHeaders,
     },
   });
 }

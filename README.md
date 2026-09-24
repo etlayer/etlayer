@@ -122,9 +122,10 @@ VS11 Project-scoped Destination Credentials   complete
 VS12 External Integration Contract            complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
 VS14 First-class Quarantine                    complete
+VS15 Append-only Control-plane Audit Log          complete
 ~~~
 
-The current live acceptance suite re-proves VS8 -> VS14 serially in an isolated Cloudflare CI environment.
+The current live acceptance suite re-proves VS8 -> VS15 serially in an isolated Cloudflare CI environment.
 
 See:
 
@@ -134,6 +135,7 @@ See:
 - [VS12: External Integration Contract](docs/vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](docs/vertical-slices/vs13-encryption-root-rotation.md)
 - [VS14: First-class Quarantine](docs/vertical-slices/vs14-quarantine.md)
+- [VS15: Append-only Control-plane Audit Log](docs/vertical-slices/vs15-control-plane-audit.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
@@ -189,4 +191,4 @@ The full VS8 -> VS13 Cloudflare acceptance suite passed. The shared CI archive s
 
 ETLayer is still pre-stable.
 
-The data-plane foundation is proven through VS11, the external product contract through VS12, versioned encryption-root lifecycle through VS13, and explicit ALLOW / QUARANTINE / BLOCK trust outcomes through VS14. ETLayer remains pre-stable while broader hosted-product and operational surfaces are still evolving.
+The data-plane foundation is proven through VS11, the external product contract through VS12, versioned encryption-root lifecycle through VS13, explicit ALLOW / QUARANTINE / BLOCK trust outcomes through VS14, and append-only internal control-plane audit evidence through VS15. ETLayer remains pre-stable while broader hosted-product and operational surfaces are still evolving.
