@@ -122,15 +122,22 @@ deploy_worker() {
 wait_for_active_versions() {
   local expected_destination="$1"
   local expected_idempotency="$2"
+  local stable_observations=0
+  local required_stable_observations=5
 
-  for attempt in $(seq 1 30); do
+  for attempt in $(seq 1 45); do
     local status
     status="$(
-      curl --silent --show-error         -o "$TMP_PREFIX.encryption-config"         -w '%{http_code}'         -X GET         "$INGEST_URL/_mgmt/encryption/config"         -H "authorization: Bearer $MANAGEMENT_KEY"
+      curl --silent --show-error \
+        -o "$TMP_PREFIX.encryption-config" \
+        -w '%{http_code}' \
+        -X GET \
+        "$INGEST_URL/_mgmt/encryption/config?rollout_probe=$attempt" \
+        -H "authorization: Bearer $MANAGEMENT_KEY"
     )"
 
-    if [ "$status" = "200" ]; then
-      if node -e '
+    if [ "$status" = "200" ] &&
+      node -e '
         const value = JSON.parse(process.argv[1]);
         const destination = process.argv[2];
         const idempotency = process.argv[3];
@@ -141,10 +148,21 @@ wait_for_active_versions() {
             ? 0
             : 1,
         );
-      '         "$(cat "$TMP_PREFIX.encryption-config")"         "$expected_destination"         "$expected_idempotency"; then
-        printf 'active encryption config observed: destination=%s idempotency=%s\n'           "$expected_destination"           "$expected_idempotency"
+      ' \
+        "$(cat "$TMP_PREFIX.encryption-config")" \
+        "$expected_destination" \
+        "$expected_idempotency"; then
+      stable_observations=$((stable_observations + 1))
+
+      if [ "$stable_observations" -ge "$required_stable_observations" ]; then
+        printf 'active encryption config stable across %s observations: destination=%s idempotency=%s\n' \
+          "$required_stable_observations" \
+          "$expected_destination" \
+          "$expected_idempotency"
         return 0
       fi
+    else
+      stable_observations=0
     fi
 
     sleep 1
@@ -153,7 +171,7 @@ wait_for_active_versions() {
   printf 'last encryption config response:\n' >&2
   cat "$TMP_PREFIX.encryption-config" >&2 || true
   printf '\n' >&2
-  die "Worker did not converge to active encryption config destination=$expected_destination idempotency=$expected_idempotency"
+  die "Worker did not stably converge to active encryption config destination=$expected_destination idempotency=$expected_idempotency"
 }
 
 json_field() {
