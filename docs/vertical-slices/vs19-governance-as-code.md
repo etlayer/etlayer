@@ -1,6 +1,6 @@
 # VS19: Governance-as-Code Manifest and Deterministic Plan
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #69.
 
@@ -231,3 +231,47 @@ VS19 does not include:
 - dashboard/UI.
 
 The next useful capability after VS19 can use manifestDigest as the exact proposal identity for guarded publication rather than inventing another representation.
+
+
+---
+
+# Completion evidence
+
+VS19 completed with:
+
+~~~text
+implementation PR              #70
+merged main commit             8181f059b3d3497880b1bf5faca7ebc892142526
+PR CI                          green
+fast slice live acceptance     green
+slice acceptance run           #36174174876
+slice duration                 ~1m12s
+post-merge main CI             green
+post-merge CI run              #36174408881
+full VS8 -> VS19 regression    green
+full regression run            #36174408793
+~~~
+
+The fast PR acceptance proved the VS19 slice on the exact PR head:
+
+~~~text
+d96ff6816ff69db53f58eaabf75e33879704ae34
+~~~
+
+The post-merge full regression then re-proved the accumulated Cloudflare runtime sequence through VS19 on:
+
+~~~text
+8181f059b3d3497880b1bf5faca7ebc892142526
+~~~
+
+The acceptance workflow was also split into two explicit modes:
+
+~~~text
+PR / live-acceptance label
+  -> current slice only
+
+main / schedule / manual full
+  -> VS8 -> current slice full regression
+~~~
+
+This preserves a fast PR feedback loop without losing serial runtime regression proof.

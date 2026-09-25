@@ -28,9 +28,10 @@ VS15 Append-only Control-plane Audit Log          complete
 VS16 Contract Compatibility Checker               complete
 VS17 Historical Contract Plan                     complete
 VS18 First-class Delivery + Append-only Attempts   complete
+VS19 Governance-as-Code Manifest + Plan             complete
 ~~~
 
-The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS18 together.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS19 serially.
 
 See:
 
@@ -45,7 +46,8 @@ See:
 - [VS16: Contract Compatibility Checker](vertical-slices/vs16-contract-compatibility.md)
 - [VS17: Contract Plan Against Historical Events](vertical-slices/vs17-contract-plan.md)
 - [VS18: First-class Delivery and Append-only Attempts](vertical-slices/vs18-delivery-attempts.md)
-- GitHub issues #43, #48, #50, #52, #54, and #56
+- [VS19: Governance-as-Code Manifest and Deterministic Plan](vertical-slices/vs19-governance-as-code.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, and #69
 
 ## Phase 2 - Product Contract
 
@@ -219,7 +221,11 @@ Live Acceptance #98 attempt 2 proved the runtime foundation plus VS17 on the sam
 
 Live Acceptance run #36165478804 proved VS8 -> VS18 serially on the same PR head, and post-merge main CI run #36168432326 remained green.
 
-The next sequencing candidate is Governance-as-Code, using the existing contract, decision, audit, planning, and delivery evidence foundations rather than starting from dashboard implementation.
+**VS19 - Governance-as-Code Manifest and Deterministic Plan is complete and live-proven.** It adds a reviewable ProjectGovernance/v1 artifact, deterministic normalization, stable manifestDigest, local/CI compatibility checking, and read-only historical planning over preserved events.
+
+PR #70 proved the current slice in ~1 minute using the fast acceptance path. After merge, full regression run #36174408793 re-proved VS8 -> VS19 serially on main.
+
+The next sequencing candidate is guarded governance publication: applying exactly the manifest that was planned, identified by manifestDigest, without inventing a second proposal representation.
 
 The milestone backlog is:
 
@@ -251,13 +257,14 @@ Quarantine
   -> Compatibility
   -> etlayer plan
   -> Delivery / Attempt
+  -> Governance-as-Code
 ~~~
 
 The current sequencing hypothesis is:
 
 ~~~text
-Delivery / Attempt
-  -> Governance-as-Code
+Governance-as-Code
+  -> guarded publication
 ~~~
 
 This sequence is deliberately revisable. The invariant/acceptance proof for the next slice remains authoritative over the ordering hypothesis.
