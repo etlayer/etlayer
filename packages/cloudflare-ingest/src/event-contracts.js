@@ -1,6 +1,6 @@
 import { findContract } from "../contracts/index.js";
 
-export const CONTRACT_VALIDATOR_VERSION = 1;
+export const CONTRACT_VALIDATOR_VERSION = 2;
 
 export function validateEventContract(event, options = {}) {
   validateManagedEvent(event);
@@ -43,10 +43,50 @@ export function validateEventContract(event, options = {}) {
     ]);
   }
 
-  return validateEventAgainstContract(
-    event,
-    contract,
-  );
+  const contractStatus =
+    normalizeContractStatus(
+      options.contractStatus,
+    );
+  const governanceManifestDigest =
+    normalizeOptionalDigest(
+      options.governanceManifestDigest,
+    );
+
+  if (contractStatus === "retired") {
+    return {
+      ...quarantined(
+        contract.version,
+        contract.id || null,
+        [
+          {
+            code: "contract_retired",
+            eventName:
+              event.eventName,
+            schemaVersion:
+              contract.version,
+          },
+        ],
+      ),
+      contractStatus,
+      governanceManifestDigest,
+    };
+  }
+
+  const result =
+    validateEventAgainstContract(
+      event,
+      contract,
+    );
+
+  if (!contractStatus) {
+    return result;
+  }
+
+  return {
+    ...result,
+    contractStatus,
+    governanceManifestDigest,
+  };
 }
 
 export function validateEventAgainstContract(
@@ -144,6 +184,37 @@ function quarantined(schemaVersion, contractId, errors) {
     contractId,
     errors,
   };
+}
+
+function normalizeContractStatus(value) {
+  if (value == null) return null;
+
+  if (
+    value === "published" ||
+    value === "deprecated" ||
+    value === "retired"
+  ) {
+    return value;
+  }
+
+  throw new ContractValidationError(
+    "contractStatus must be published, deprecated, or retired",
+  );
+}
+
+function normalizeOptionalDigest(value) {
+  if (value == null) return null;
+
+  if (
+    typeof value !== "string" ||
+    !/^[0-9a-f]{64}$/.test(value)
+  ) {
+    throw new ContractValidationError(
+      "governanceManifestDigest must be sha256 hex",
+    );
+  }
+
+  return value;
 }
 
 function normalizeSchemaVersion(value) {
