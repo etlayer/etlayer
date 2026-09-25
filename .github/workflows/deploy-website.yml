@@ -51,3 +51,34 @@ jobs:
 
       - name: Deploy website to Cloudflare Workers
         run: npx --yes wrangler@4.135.0 deploy --config website/wrangler.jsonc
+
+      - name: Production acceptance
+        shell: bash
+        env:
+          SITE_URL: https://etlayer-web.sergii-ponomarov.workers.dev
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..10}; do
+            if curl --fail --silent --show-error --location --max-time 15 "$SITE_URL/" -o /tmp/etlayer-index.html; then
+              break
+            fi
+
+            if [ "$attempt" -eq 10 ]; then
+              echo "::error::Website did not become reachable after 10 attempts"
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          grep -Fq "<title>ETLayer - Own your event data plane</title>" /tmp/etlayer-index.html
+          grep -Fq "Emit once." /tmp/etlayer-index.html
+
+          curl --fail --silent --show-error --location --max-time 15 "$SITE_URL/styles.css" -o /tmp/etlayer-styles.css
+          curl --fail --silent --show-error --location --max-time 15 "$SITE_URL/app.js" -o /tmp/etlayer-app.js
+
+          test -s /tmp/etlayer-styles.css
+          test -s /tmp/etlayer-app.js
+
+          echo "Production acceptance passed: $SITE_URL"
