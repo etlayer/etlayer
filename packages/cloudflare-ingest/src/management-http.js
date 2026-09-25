@@ -63,7 +63,15 @@ import {
   GovernancePublicationDigestMismatchError,
   GovernancePublicationValidationError,
   publishGovernanceManifest,
+  readPublishedContract,
 } from "./governance-publication.js";
+import {
+  ContractLifecycleConfigurationError,
+  ContractLifecycleNotFoundError,
+  ContractLifecycleTransitionError,
+  ContractLifecycleValidationError,
+  transitionContractLifecycle,
+} from "./contract-lifecycle.js";
 
 export async function handleManagementRequest(
   request,
@@ -135,6 +143,31 @@ export async function handleManagementRequest(
       decodeURIComponent(
         governancePublish[1],
       ),
+      options,
+    );
+  }
+
+  const contractLifecycleAction =
+    url.pathname.match(
+      /^\/_mgmt\/projects\/([^/]+)\/contracts\/([^/]+)\/(\d+)\/(deprecate|retire)$/,
+    );
+  if (
+    request.method === "POST" &&
+    contractLifecycleAction
+  ) {
+    return changeProjectContractLifecycle(
+      request,
+      env,
+      decodeURIComponent(
+        contractLifecycleAction[1],
+      ),
+      decodeURIComponent(
+        contractLifecycleAction[2],
+      ),
+      Number(
+        contractLifecycleAction[3],
+      ),
+      contractLifecycleAction[4],
       options,
     );
   }
@@ -608,6 +641,146 @@ async function publishProjectGovernance(
     );
   } catch (error) {
     return governancePublicationErrorResponse(
+      error,
+    );
+  }
+}
+
+async function changeProjectContractLifecycle(
+  request,
+  env,
+  projectId,
+  eventName,
+  contractVersion,
+  action,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const body = await readJsonBody(request);
+  if (body.response) return body.response;
+
+  let published;
+
+  try {
+    published =
+      await readPublishedContract(
+        env.ARCHIVE,
+        projectId,
+        eventName,
+        contractVersion,
+      );
+  } catch (error) {
+    return contractLifecycleErrorResponse(
+      error,
+    );
+  }
+
+  if (!published) {
+    return jsonResponse(
+      {
+        error:
+          "published contract was not found",
+      },
+      404,
+    );
+  }
+
+  const toStatus =
+    action === "deprecate"
+      ? "deprecated"
+      : "retired";
+
+  try {
+    const audited =
+      await runAuditedMutation(
+        request,
+        env,
+        options,
+        {
+          actor: operatorActor(
+            projectId,
+            auth.authentication,
+          ),
+          action:
+            "contract." + action,
+          target: {
+            kind: "contract",
+            projectId,
+            eventName,
+            contractVersion,
+            contractId:
+              published.contract.id,
+          },
+          change: {
+            from:
+              published.contractStatus,
+            to: toStatus,
+          },
+        },
+        () =>
+          transitionContractLifecycle(
+            env.ARCHIVE,
+            {
+              projectId,
+              eventName,
+              contractVersion,
+              contractId:
+                published.contract.id,
+              manifestDigest:
+                published.manifestDigest,
+              publishedAt:
+                published.publishedAt,
+              toStatus,
+            },
+            {
+              now:
+                options.now ||
+                new Date(),
+            },
+          ),
+      );
+
+    return jsonResponse(
+      {
+        changed:
+          audited.value.changed,
+        contract: {
+          projectId,
+          eventName,
+          version:
+            contractVersion,
+          contractId:
+            published.contract.id,
+          status:
+            audited.value.state.status,
+          publishedAt:
+            audited.value.state
+              .publishedAt,
+          deprecatedAt:
+            audited.value.state
+              .deprecatedAt,
+          retiredAt:
+            audited.value.state
+              .retiredAt,
+          manifestDigest:
+            audited.value.state
+              .manifestDigest,
+        },
+      },
+      200,
+      operationHeaders(
+        audited.operationId,
+      ),
+    );
+  } catch (error) {
+    return contractLifecycleErrorResponse(
       error,
     );
   }
@@ -1818,6 +1991,56 @@ function dynamicProjectOnly(projectId) {
   }
 
   return null;
+}
+
+function contractLifecycleErrorResponse(
+  error,
+) {
+  if (
+    error instanceof
+      ContractLifecycleValidationError ||
+    error instanceof
+      GovernancePublicationValidationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  if (
+    error instanceof
+      ContractLifecycleNotFoundError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      404,
+    );
+  }
+
+  if (
+    error instanceof
+      ContractLifecycleTransitionError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      409,
+    );
+  }
+
+  if (
+    error instanceof
+      ContractLifecycleConfigurationError ||
+    error instanceof
+      GovernancePublicationConfigurationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      503,
+    );
+  }
+
+  throw error;
 }
 
 function governancePublicationErrorResponse(

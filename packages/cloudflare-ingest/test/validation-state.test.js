@@ -68,7 +68,7 @@ test("records quarantined validation evidence durably", async () => {
   );
 
   assert.deepEqual(state, {
-    version: 3,
+    version: 4,
     projectId: "etlayer-default",
     eventId: "evt/quarantined",
     eventName: "account.created",
@@ -76,6 +76,8 @@ test("records quarantined validation evidence durably", async () => {
     schemaVersion: 1,
     status: "quarantined",
     contractId: "account.created@1",
+    contractStatus: null,
+    governanceManifestDigest: null,
     errors: [
       {
         code: "required_attribute_missing",
@@ -120,3 +122,46 @@ test("validation state key is deterministic", () => {
     "projects/etlayer-default/validation/event%201.json",
   );
 });
+
+test("records project-published contract lifecycle evidence", async () => {
+  const archive = fakeArchive();
+  const event = {
+    id: "evt_lifecycle",
+    eventName: "account.created",
+  };
+
+  const result = await recordValidationState(
+    archive,
+    event,
+    {
+      status: "valid",
+      validatorVersion: 2,
+      schemaVersion: 2,
+      contractId: "account.created@2",
+      contractStatus: "deprecated",
+      governanceManifestDigest:
+        "a".repeat(64),
+      errors: [],
+    },
+    {
+      now: new Date(
+        "2026-09-25T20:00:00.000Z",
+      ),
+    },
+  );
+
+  assert.equal(
+    result.state.version,
+    4,
+  );
+  assert.equal(
+    result.state.contractStatus,
+    "deprecated",
+  );
+  assert.equal(
+    result.state
+      .governanceManifestDigest,
+    "a".repeat(64),
+  );
+});
+

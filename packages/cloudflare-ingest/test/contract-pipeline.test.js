@@ -121,7 +121,7 @@ test("queue preserves an invalid event in quarantine without destination routing
   );
 
   assert.equal(decision.validation.status, "quarantined");
-  assert.equal(decision.validation.validatorVersion, 1);
+  assert.equal(decision.validation.validatorVersion, 2);
   assert.equal(decision.authority.policyVersion, 1);
   assert.equal(decision.privacy.policyVersion, 1);
   assert.equal(decision.outcome, "quarantine");

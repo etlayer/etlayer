@@ -8,6 +8,10 @@ import {
 import {
   projectIdForEvent,
 } from "./project-scope.js";
+import {
+  ensureContractLifecycle,
+  readContractLifecycle,
+} from "./contract-lifecycle.js";
 
 export const GOVERNANCE_PUBLICATION_VERSION = 1;
 
@@ -143,6 +147,27 @@ export async function publishGovernanceManifest(
       record,
       created: true,
     });
+  }
+
+  for (const item of contractRecords) {
+    await ensureContractLifecycle(
+      archive,
+      {
+        projectId:
+          item.record.projectId,
+        eventName:
+          item.record.contract.eventName,
+        contractVersion:
+          item.record.contract.version,
+        contractId:
+          item.record.contract.id,
+        manifestDigest:
+          item.record.manifestDigest,
+        publishedAt:
+          item.record.publishedAt,
+      },
+      { now },
+    );
   }
 
   const publicationKey =
@@ -299,12 +324,25 @@ export async function readPublishedContract(
     );
   }
 
+  const lifecycle =
+    await readContractLifecycle(
+      archive,
+      projectId,
+      eventName,
+      version,
+    );
+
   return {
     contract: record.contract,
     manifestDigest:
       record.manifestDigest,
     publishedAt:
       record.publishedAt,
+    contractStatus:
+      lifecycle?.status ||
+      "published",
+    lifecycle:
+      lifecycle || null,
   };
 }
 

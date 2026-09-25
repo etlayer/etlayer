@@ -5,6 +5,9 @@ import {
   governanceManifestDigest,
 } from "../src/governance-manifest.js";
 import {
+  contractLifecycleKey,
+} from "../src/contract-lifecycle.js";
+import {
   GovernancePublicationBreakingChangeError,
   GovernancePublicationDigestMismatchError,
   governanceContractKey,
@@ -202,9 +205,20 @@ test("publishes immutable contracts and one idempotent publication record", asyn
     store.objects.has(publicationKey),
     true,
   );
+  const lifecycleKey =
+    contractLifecycleKey(
+      "project-a",
+      "account.created",
+      2,
+    );
+
+  assert.equal(
+    store.objects.has(lifecycleKey),
+    true,
+  );
   assert.equal(
     store.objects.size,
-    2,
+    3,
   );
 
   const publication =
@@ -238,6 +252,10 @@ test("publishes immutable contracts and one idempotent publication record", asyn
   assert.equal(
     published.manifestDigest,
     input.manifestDigest,
+  );
+  assert.equal(
+    published.contractStatus,
+    "published",
   );
 });
 
