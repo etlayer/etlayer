@@ -1,39 +1,64 @@
 name: Live Acceptance
 
 on:
-  workflow_dispatch:
   pull_request:
     types:
       - labeled
       - synchronize
       - reopened
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/cloudflare-ingest/**"
+      - "scripts/**"
+      - ".github/workflows/live-acceptance.yml"
+      - "package.json"
+  schedule:
+    - cron: "37 2 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Acceptance mode
+        required: true
+        default: full
+        type: choice
+        options:
+          - slice
+          - full
 
 concurrency:
   group: etlayer-live-acceptance
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
+env:
+  CI: "1"
+  ETLAYER_WRANGLER_ENV: ci
+  ETLAYER_INGEST_URL: https://etlayer-ingest-ci.sergii-ponomarov.workers.dev
+  ETLAYER_ARCHIVE_BUCKET: etlayer-events-archive-ci
+
 jobs:
-  vs8:
-    name: Cloudflare acceptance suite
+  slice:
+    name: Current slice acceptance
     if: >-
-      github.event_name == 'workflow_dispatch' ||
       (
+        github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository &&
         contains(github.event.pull_request.labels.*.name, 'live-acceptance')
+      ) ||
+      (
+        github.event_name == 'workflow_dispatch' &&
+        inputs.mode == 'slice'
       )
     runs-on: ubuntu-latest
     environment: ci
-    timeout-minutes: 20
+    timeout-minutes: 7
     env:
-      CI: "1"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      ETLAYER_WRANGLER_ENV: ci
-      ETLAYER_INGEST_URL: https://etlayer-ingest-ci.sergii-ponomarov.workers.dev
-      ETLAYER_ARCHIVE_BUCKET: etlayer-events-archive-ci
 
     steps:
       - name: Checkout
@@ -60,60 +85,75 @@ jobs:
       - name: Install pinned Wrangler
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Run live acceptance suite
+      - name: Run current slice acceptance
         shell: bash
         run: |
           set -o pipefail
+          bash ./scripts/live-acceptance/current-slice.sh |
+            tee "$RUNNER_TEMP/current-slice-live-acceptance.log"
 
-          ./scripts/once/vs8-project-isolation.sh |
-            tee "$RUNNER_TEMP/vs8-live-acceptance.log"
-
-          ./scripts/once/vs9-dynamic-management.sh |
-            tee "$RUNNER_TEMP/vs9-live-acceptance.log"
-
-          ./scripts/once/vs10-first-external-onboarding.sh |
-            tee "$RUNNER_TEMP/vs10-live-acceptance.log"
-
-          ./scripts/once/vs11-project-destination-credentials.sh |
-            tee "$RUNNER_TEMP/vs11-live-acceptance.log"
-
-          bash ./scripts/once/vs12-external-integration-contract.sh |
-            tee "$RUNNER_TEMP/vs12-live-acceptance.log"
-
-          bash ./scripts/once/vs13-encryption-root-rotation.sh |
-            tee "$RUNNER_TEMP/vs13-live-acceptance.log"
-
-          bash ./scripts/once/vs14-quarantine.sh |
-            tee "$RUNNER_TEMP/vs14-live-acceptance.log"
-
-          bash ./scripts/once/vs15-control-plane-audit.sh |
-            tee "$RUNNER_TEMP/vs15-live-acceptance.log"
-
-          bash ./scripts/once/vs17-contract-plan.sh |
-            tee "$RUNNER_TEMP/vs17-live-acceptance.log"
-
-          bash ./scripts/once/vs18-delivery-attempts.sh |
-            tee "$RUNNER_TEMP/vs18-live-acceptance.log"
-
-          bash ./scripts/once/vs19-governance-as-code.sh |
-            tee "$RUNNER_TEMP/vs19-live-acceptance.log"
-
-      - name: Upload acceptance logs
+      - name: Upload slice acceptance log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: live-acceptance-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/vs8-live-acceptance.log
-            ${{ runner.temp }}/vs9-live-acceptance.log
-            ${{ runner.temp }}/vs10-live-acceptance.log
-            ${{ runner.temp }}/vs11-live-acceptance.log
-            ${{ runner.temp }}/vs12-live-acceptance.log
-            ${{ runner.temp }}/vs13-live-acceptance.log
-            ${{ runner.temp }}/vs14-live-acceptance.log
-            ${{ runner.temp }}/vs15-live-acceptance.log
-            ${{ runner.temp }}/vs17-live-acceptance.log
-            ${{ runner.temp }}/vs18-live-acceptance.log
-            ${{ runner.temp }}/vs19-live-acceptance.log
+          name: slice-live-acceptance-${{ github.run_id }}
+          path: ${{ runner.temp }}/current-slice-live-acceptance.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  full:
+    name: Full Cloudflare regression
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (
+        github.event_name == 'workflow_dispatch' &&
+        inputs.mode == 'full'
+      )
+    runs-on: ubuntu-latest
+    environment: ci
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Verify GitHub repository secrets
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Missing ci environment variable CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+
+      - name: Install pinned Wrangler
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run full live regression
+        shell: bash
+        env:
+          ETLAYER_ACCEPTANCE_LOG_DIR: ${{ runner.temp }}/full-live-regression
+        run: |
+          bash ./scripts/live-acceptance/full-regression.sh
+
+      - name: Upload full regression logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-live-regression-${{ github.run_id }}
+          path: ${{ runner.temp }}/full-live-regression/*.log
           if-no-files-found: ignore
           retention-days: 7
