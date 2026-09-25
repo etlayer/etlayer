@@ -8,6 +8,7 @@ import { handleEventInspect } from "./inspect-http.js";
 import { handleManagementRequest } from "./management-http.js";
 import { handlePublicApiRequest } from "./public-api.js";
 import { handleContractPlan } from "./contract-plan-http.js";
+import { handleGovernancePlan } from "./governance-plan-http.js";
 
 export default {
   async fetch(request, env) {
@@ -61,6 +62,13 @@ export default {
       url.pathname === "/_ops/plan/contract"
     ) {
       return handleContractPlan(request, env);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/_ops/plan/governance"
+    ) {
+      return handleGovernancePlan(request, env);
     }
 
     if (url.pathname.startsWith("/api/v1/")) {
