@@ -1,4 +1,8 @@
 import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
+import {
+  nextDeliveryAttemptNumber,
+  recordDeliveryAttempt,
+} from "./delivery-attempt.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
 import { projectConfiguration, resolveProjectDestinations, validateProjectId } from "./project-config.js";
@@ -64,6 +68,8 @@ export async function replayDestinationRange(
 
   const readState = options.readState || readDeliveryState;
   const recordState = options.recordState || recordDeliveryState;
+  const recordAttempt =
+    options.recordAttempt || recordDeliveryAttempt;
   const credential =
     !options.deliver &&
     !projectConfiguration(range.projectId)
@@ -107,6 +113,28 @@ export async function replayDestinationRange(
       continue;
     }
 
+    const attemptNumber =
+      options.nextAttemptNumber
+        ? await options.nextAttemptNumber(
+            env.ARCHIVE,
+            item.event.id,
+            destination,
+            {
+              projectId: range.projectId,
+              previousState: previous,
+            },
+          )
+        : await nextDeliveryAttemptNumber(
+            env.ARCHIVE,
+            item.event.id,
+            destination,
+            {
+              projectId: range.projectId,
+              previousState: previous,
+            },
+          );
+
+    const startedAt = replayTimestamp(options.now);
     const exportOptions = {
       fetch: options.fetch,
       crypto: options.crypto,
@@ -118,28 +146,56 @@ export async function replayDestinationRange(
       ),
     };
 
-    const result = await exporter(
-      item.event,
-      env,
-      exportOptions,
-    );
-
-    if (!result || result.status !== "exported") {
-      throw new ReplayConfigurationError(
-        `${destination} did not export replayed event ${item.event.id}`,
+    let result;
+    try {
+      result = await exporter(
+        item.event,
+        env,
+        exportOptions,
       );
+    } catch (error) {
+      result = {
+        status: "failed",
+        error,
+      };
     }
 
-    if (
-      options.recordState ||
-      typeof env.ARCHIVE.put === "function"
-    ) {
+    const shouldRecord =
+      Boolean(options.recordState) ||
+      typeof env.ARCHIVE.put === "function";
+    let attempt = null;
+
+    if (shouldRecord) {
+      attempt = await recordAttempt(
+        env.ARCHIVE,
+        item.event,
+        destination,
+        result,
+        {
+          attemptNumber,
+          startedAt,
+          completedAt: replayTimestamp(options.now),
+          delivery,
+          crypto: options.crypto,
+        },
+      );
+
       await recordState(
         env.ARCHIVE,
         item.event,
         destination,
         result,
-        { delivery },
+        {
+          now: options.now,
+          delivery,
+          attempt: attempt.state,
+        },
+      );
+    }
+
+    if (!result || result.status !== "exported") {
+      throw new ReplayConfigurationError(
+        `${destination} did not export replayed event ${item.event.id}`,
       );
     }
 
@@ -150,6 +206,13 @@ export async function replayDestinationRange(
       sourceKey: item.key,
       status: result.status,
       ...(result.uuid ? { uuid: result.uuid } : {}),
+      ...(attempt
+        ? {
+            deliveryId: attempt.state.deliveryId,
+            attemptId: attempt.state.attemptId,
+            attemptNumber: attempt.state.attemptNumber,
+          }
+        : {}),
     });
     exported += 1;
   }
@@ -165,6 +228,21 @@ export async function replayDestinationRange(
     skipped,
     deliveries,
   };
+}
+
+function replayTimestamp(value) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value || Date.now());
+
+  if (Number.isNaN(date.getTime())) {
+    throw new ReplayConfigurationError(
+      "replay delivery timestamp is invalid",
+    );
+  }
+
+  return date;
 }
 
 function destinationExporter(destination) {
