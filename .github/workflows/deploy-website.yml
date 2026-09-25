@@ -20,9 +20,9 @@ jobs:
   deploy:
     name: Deploy etlayer-web
     runs-on: ubuntu-latest
-    environment: ci
+    environment: website-production
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_DEPLOY_PRODUCTION_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
@@ -38,13 +38,16 @@ jobs:
         shell: bash
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::Missing CLOUDFLARE_API_TOKEN"
+            echo "::error::Missing CLOUDFLARE_WORKERS_DEPLOY_PRODUCTION_TOKEN in website-production"
             exit 1
           fi
           if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::Missing CLOUDFLARE_ACCOUNT_ID"
+            echo "::error::Missing CLOUDFLARE_ACCOUNT_ID in website-production"
             exit 1
           fi
+
+      - name: Verify scoped Worker access
+        run: npx --yes wrangler@4.135.0 deployments list --name etlayer-web
 
       - name: Deploy website to Cloudflare Workers
         run: npx --yes wrangler@4.135.0 deploy --config website/wrangler.jsonc
