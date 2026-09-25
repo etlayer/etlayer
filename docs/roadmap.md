@@ -29,9 +29,10 @@ VS16 Contract Compatibility Checker               complete
 VS17 Historical Contract Plan                     complete
 VS18 First-class Delivery + Append-only Attempts   complete
 VS19 Governance-as-Code Manifest + Plan             complete
+VS20 Guarded Governance Publication                  complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS19 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS20 serially.
 
 See:
 
@@ -47,7 +48,8 @@ See:
 - [VS17: Contract Plan Against Historical Events](vertical-slices/vs17-contract-plan.md)
 - [VS18: First-class Delivery and Append-only Attempts](vertical-slices/vs18-delivery-attempts.md)
 - [VS19: Governance-as-Code Manifest and Deterministic Plan](vertical-slices/vs19-governance-as-code.md)
-- GitHub issues #43, #48, #50, #52, #54, #56, and #69
+- [VS20: Guarded Governance Publication by Manifest Digest](vertical-slices/vs20-governance-publication.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, #69, and #72
 
 ## Phase 2 - Product Contract
 
@@ -225,7 +227,11 @@ Live Acceptance run #36165478804 proved VS8 -> VS18 serially on the same PR head
 
 PR #70 proved the current slice in ~1 minute using the fast acceptance path. After merge, full regression run #36174408793 re-proved VS8 -> VS19 serially on main.
 
-The next sequencing candidate is guarded governance publication: applying exactly the manifest that was planned, identified by manifestDigest, without inventing a second proposal representation.
+**VS20 - Guarded Governance Publication is complete and live-proven.** It applies exactly the normalized ProjectGovernance/v1 manifest identified by manifestDigest, requires explicit acknowledgement for breaking publication, records the mutation through the append-only control-plane audit, stores immutable project-scoped contract versions, and makes those exact versions available to runtime validation without rewriting historical decisions.
+
+Fast acceptance run #36177195839 proved the VS20 slice on the PR head. After merge, full regression run #36177462836 re-proved VS8 -> VS20 serially on main.
+
+The next sequencing candidate is Contract Lifecycle: give published contract versions explicit Published -> Deprecated -> Retired state without adding draft/review workflow machinery that Git/Governance-as-Code already covers.
 
 The milestone backlog is:
 
@@ -258,13 +264,16 @@ Quarantine
   -> etlayer plan
   -> Delivery / Attempt
   -> Governance-as-Code
+  -> guarded publication
 ~~~
 
 The current sequencing hypothesis is:
 
 ~~~text
-Governance-as-Code
-  -> guarded publication
+guarded publication
+  -> Contract Lifecycle
+  -> Ownership Metadata
+  -> Governance Metrics
 ~~~
 
 This sequence is deliberately revisable. The invariant/acceptance proof for the next slice remains authoritative over the ordering hypothesis.
