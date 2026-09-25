@@ -93,14 +93,14 @@ export async function routeEventDestinations(
             },
           );
 
-    const delivery = {
-      ...(options.delivery || {}),
-      ...(destinationOptions.delivery || {}),
-      mode:
-        destinationOptions.delivery?.mode ||
-        options.delivery?.mode ||
-        "live",
-    };
+    const delivery =
+      options.delivery ||
+      destinationOptions.delivery
+        ? {
+            ...(options.delivery || {}),
+            ...(destinationOptions.delivery || {}),
+          }
+        : null;
     const startedAt = normalizeTimestamp(
       options.now,
     );
@@ -127,9 +127,9 @@ export async function routeEventDestinations(
         destinationOptions = {
           ...destinationOptions,
           credential: credential.secret,
-          delivery,
+          ...(delivery ? { delivery } : {}),
         };
-      } else {
+      } else if (delivery) {
         destinationOptions = {
           ...destinationOptions,
           delivery,
