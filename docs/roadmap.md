@@ -237,6 +237,15 @@ Expanded meanings:
 
 These are milestone capabilities, not pre-assigned VS numbers. Preserve the roadmap rule: promote one capability into the next vertical slice only after its risk, invariant, executable acceptance, and smallest useful scope are explicit.
 
+Additional semantic/trust candidates exposed by the agent-control-plane comparison are:
+
+- **Canonical Evidence Envelope V1:** make the independent actor, delegation, provenance, correlation, causation, workflow, decision, action/resource, and outcome dimensions explicit without inventing a replacement transport.
+- **Authority / Delegation Chain:** preserve immediate actor, represented principal, credential source, policy decision, and authority scope as distinct evidence.
+- **Causal Evidence Graph Projection:** reconstruct event-to-event causation and additional typed contributors without inferring causality from timestamp order.
+- **MCP adapter:** support MCP-derived activity as one producer/transport adapter only when a concrete integration requires it; do not make ETLayer MCP-centric.
+
+These are roadmap candidates, not assigned vertical slices. Each still requires a concrete invariant and executable acceptance proof before promotion.
+
 A useful sequencing hypothesis is:
 
 ~~~text
