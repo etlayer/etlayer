@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="ETLayer is an OpenTelemetry-native event data plane for product and business events. Emit once, own the event, route and replay it anywhere.">
+  <title>ETLayer - Own your event data plane</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="shell">
+    <aside class="sidebar" aria-label="Primary">
+      <div class="brand">
+        <a class="brand-mark" href="#" aria-label="ETLayer home">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M5.5 8.5 16 3l10.5 5.5L16 14 5.5 8.5Z"/>
+            <path d="M5.5 15.3 16 20.8l10.5-5.5"/>
+            <path d="M5.5 21.6 16 27l10.5-5.4"/>
+          </svg>
+        </a>
+        <span>ETLayer</span>
+      </div>
+
+      <nav class="nav">
+        <a class="nav-item active" href="#overview">
+          <span class="nav-icon">◌</span>
+          Overview
+        </a>
+        <a class="nav-item" href="#evidence">
+          <span class="nav-icon">▱</span>
+          Evidence
+          <span class="nav-count">17</span>
+        </a>
+        <a class="nav-item" href="#contracts">
+          <span class="nav-icon">◇</span>
+          Contracts
+        </a>
+        <a class="nav-item" href="#routing">
+          <span class="nav-icon">↗</span>
+          Routing
+        </a>
+      </nav>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Destinations</div>
+        <div class="destination-row">
+          <span class="destination-dot posthog"></span>
+          PostHog
+          <span class="state-dot" title="Healthy"></span>
+        </div>
+        <div class="destination-row">
+          <span class="destination-dot statsig"></span>
+          Statsig
+          <span class="state-dot" title="Healthy"></span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Runtime</div>
+        <div class="runtime-card">
+          <div class="runtime-title">Cloudflare</div>
+          <div class="runtime-meta">Worker · Queue · R2</div>
+          <div class="runtime-status"><span></span> Live proven</div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <a href="https://github.com/etlayer/etlayer" target="_blank" rel="noreferrer">GitHub</a>
+        <span>Pre-stable</span>
+      </div>
+    </aside>
+
+    <main id="main">
+      <header class="topbar">
+        <div class="eyebrow">Event data plane</div>
+        <div class="top-actions">
+          <a class="ghost-button" href="https://github.com/etlayer/etlayer" target="_blank" rel="noreferrer">Read the docs</a>
+          <a class="primary-button" href="#quickstart">Quickstart <span>↗</span></a>
+        </div>
+      </header>
+
+      <section class="hero" id="overview">
+        <div class="hero-copy">
+          <div class="status-pill"><span></span> OTel-native · vendor-neutral</div>
+          <h1>Emit once.<br><span>Own the event.</span></h1>
+          <p>
+            ETLayer receives OpenTelemetry events, applies business semantics and policy,
+            preserves replayable evidence, then routes clean projections to the tools you already use.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-button large" href="#quickstart">See the integration</a>
+            <a class="text-link" href="#evidence">Why canonical evidence matters <span>→</span></a>
+          </div>
+        </div>
+
+        <div class="hero-panel" aria-label="Live event flow preview">
+          <div class="panel-head">
+            <div>
+              <div class="mono-label">LIVE FLOW</div>
+              <div class="panel-title">checkout.completed</div>
+            </div>
+            <div class="live-chip"><span></span> 42 ms</div>
+          </div>
+
+          <div class="trace">
+            <div class="trace-node input">
+              <div class="trace-kicker">OTLP / HTTP</div>
+              <div class="trace-title">Producer</div>
+              <code>web.checkout</code>
+            </div>
+
+            <div class="trace-line"><span></span></div>
+
+            <div class="trace-node core">
+              <div class="trace-kicker">ETLAYER</div>
+              <div class="trace-title">Canonical evidence</div>
+              <div class="policy-row"><span>Provenance</span><b>trusted</b></div>
+              <div class="policy-row"><span>Authority</span><b>allow</b></div>
+              <div class="policy-row"><span>Privacy</span><b>clean</b></div>
+            </div>
+
+            <div class="trace-line split"><span></span></div>
+
+            <div class="trace-destinations">
+              <div class="trace-node destination">
+                <span class="destination-dot posthog"></span>
+                <div><div class="trace-title">PostHog</div><div class="trace-kicker">delivered</div></div>
+                <span class="check">✓</span>
+              </div>
+              <div class="trace-node destination">
+                <span class="destination-dot statsig"></span>
+                <div><div class="trace-title">Statsig</div><div class="trace-kicker">delivered</div></div>
+                <span class="check">✓</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-foot">
+            <span>subject ≠ actor</span>
+            <span>producer ≠ actor</span>
+            <span>payload ≠ provenance</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="ETLayer foundation">
+        <article>
+          <div class="metric-kicker">FOUNDATION</div>
+          <div class="metric-value">17 <small>slices</small></div>
+          <div class="metric-copy">Proven through contract history planning</div>
+          <div class="mini-bars" aria-hidden="true">
+            <span style="--i:0"></span><span style="--i:1"></span><span style="--i:2"></span><span style="--i:3"></span><span style="--i:4"></span><span style="--i:5"></span><span style="--i:6"></span><span style="--i:7"></span><span style="--i:8"></span><span style="--i:9"></span><span style="--i:10"></span><span style="--i:11"></span><span style="--i:12"></span><span style="--i:13"></span><span style="--i:14"></span><span style="--i:15"></span><span style="--i:16"></span>
+          </div>
+        </article>
+        <article>
+          <div class="metric-kicker">TRUST OUTCOME</div>
+          <div class="metric-value">3 <small>states</small></div>
+          <div class="metric-copy">ALLOW · QUARANTINE · BLOCK</div>
+          <div class="outcome-track"><i></i><i></i><i></i></div>
+        </article>
+        <article>
+          <div class="metric-kicker">APPLICATION CONTRACT</div>
+          <div class="metric-value">1× <small>emit</small></div>
+          <div class="metric-copy">Route and replay without vendor SDK coupling</div>
+          <div class="route-track"><span></span><span></span><span></span></div>
+        </article>
+        <article>
+          <div class="metric-kicker">RUNTIME</div>
+          <div class="metric-value">Edge <small>first</small></div>
+          <div class="metric-copy">Cloudflare today, semantics stay portable</div>
+          <div class="edge-badge">Worker → Queue → R2</div>
+        </article>
+      </section>
+
+      <section class="section-grid" id="evidence">
+        <div class="section-copy">
+          <div class="eyebrow">Canonical evidence</div>
+          <h2>Keep the truth before the projection.</h2>
+          <p>
+            Analytics destinations are lossy by design. ETLayer stores policy-clean canonical evidence first,
+            so replay, revalidation, inspection, and migration remain possible later.
+          </p>
+          <div class="principles">
+            <div><span>01</span><p><b>Trusted provenance</b><br>Identity is established at the ingest boundary, not accepted from payload claims.</p></div>
+            <div><span>02</span><p><b>Explicit authority</b><br>A producer may submit a valid event and still be forbidden to assert it.</p></div>
+            <div><span>03</span><p><b>Replayable history</b><br>Policy decisions and event evidence remain inspectable and append-only.</p></div>
+          </div>
+        </div>
+
+        <div class="evidence-card">
+          <div class="evidence-toolbar">
+            <span class="mono-label">EVIDENCE / EVT_01J...</span>
+            <button type="button" class="copy-button" data-copy="event-json">Copy JSON</button>
+          </div>
+          <pre id="event-json"><code>{
+  <span class="json-key">"event"</span>: <span class="json-string">"checkout.completed"</span>,
+  <span class="json-key">"project"</span>: <span class="json-string">"acme-web"</span>,
+  <span class="json-key">"subject"</span>: { <span class="json-key">"id"</span>: <span class="json-string">"usr_842"</span> },
+  <span class="json-key">"actor"</span>: { <span class="json-key">"type"</span>: <span class="json-string">"user"</span> },
+  <span class="json-key">"producer"</span>: { <span class="json-key">"id"</span>: <span class="json-string">"web.checkout"</span> },
+  <span class="json-key">"trust"</span>: {
+    <span class="json-key">"provenance"</span>: <span class="json-string">"trusted"</span>,
+    <span class="json-key">"authority"</span>: <span class="json-string">"allow"</span>,
+    <span class="json-key">"privacy"</span>: <span class="json-string">"clean"</span>
+  }
+}</code></pre>
+          <div class="evidence-footer">
+            <span><i class="ok"></i> policy-clean</span>
+            <span>sha256:4d7…b12</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="contracts-section" id="contracts">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">Semantic model</div>
+            <h2>Separate the dimensions<br>vendors usually collapse.</h2>
+          </div>
+          <p>ETLayer keeps identity, authority, tenancy and causality explicit so automation can reason from evidence instead of conventions.</p>
+        </div>
+
+        <div class="dimension-grid">
+          <div class="dimension-card"><span>subject</span><p>Who the product journey is about.</p></div>
+          <div class="dimension-card"><span>actor</span><p>Who or what directly acted.</p></div>
+          <div class="dimension-card"><span>delegation</span><p>On whose behalf the action occurred.</p></div>
+          <div class="dimension-card"><span>producer</span><p>Which authenticated system supplied the evidence.</p></div>
+          <div class="dimension-card"><span>authority</span><p>What that producer is allowed to assert.</p></div>
+          <div class="dimension-card"><span>provenance</span><p>Trusted identity established by ingest.</p></div>
+          <div class="dimension-card"><span>causation</span><p>The direct causal predecessor.</p></div>
+          <div class="dimension-card"><span>correlation</span><p>The larger activity or journey.</p></div>
+        </div>
+      </section>
+
+      <section class="quickstart" id="quickstart">
+        <div>
+          <div class="eyebrow">External integration contract</div>
+          <h2>Your app only needs OTLP.</h2>
+          <p>Send standard OpenTelemetry events with an issued project credential. ETLayer owns policy, evidence and routing behind the boundary.</p>
+        </div>
+        <div class="code-window">
+          <div class="code-window-head">
+            <span>OTLP / HTTP</span>
+            <button type="button" class="copy-button" data-copy="curl-code">Copy</button>
+          </div>
+          <pre id="curl-code"><code>curl https://&lt;your-etlayer-ingest&gt;/v1/logs \
+  -H <span class="json-string">"Authorization: Bearer $ETLAYER_TOKEN"</span> \
+  -H <span class="json-string">"Content-Type: application/json"</span> \
+  --data @otlp-event.json</code></pre>
+        </div>
+      </section>
+
+      <footer>
+        <div class="brand footer-brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M5.5 8.5 16 3l10.5 5.5L16 14 5.5 8.5Z"/><path d="M5.5 15.3 16 20.8l10.5-5.5"/><path d="M5.5 21.6 16 27l10.5-5.4"/></svg>
+          </span>
+          <span>ETLayer</span>
+        </div>
+        <p>Emit once. Own the event. Route and replay it anywhere.</p>
+        <a href="https://github.com/etlayer/etlayer" target="_blank" rel="noreferrer">github.com/etlayer/etlayer ↗</a>
+      </footer>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
