@@ -6,6 +6,9 @@ import {
   readDeliveryState,
   recordDeliveryState,
 } from "../src/delivery-state.js";
+import {
+  deliveryResourceId,
+} from "../src/delivery-attempt.js";
 
 function fakeArchive() {
   const writes = [];
@@ -45,9 +48,18 @@ test("records exported destination state separately from canonical events", asyn
   assert.equal(archive.writes.length, 1);
 
   const body = JSON.parse(archive.writes[0].body);
+  assert.equal(body.version, 3);
   assert.equal(body.eventId, "evt/1");
   assert.equal(body.destination, "posthog");
   assert.equal(body.status, "exported");
+  assert.equal(
+    body.deliveryId,
+    deliveryResourceId(
+      "evt/1",
+      "posthog",
+      "etlayer-default",
+    ),
+  );
   assert.equal(body.destinationEventId, "uuid-1");
   assert.equal(body.updatedAt, "2026-09-22T10:00:00.000Z");
 });
@@ -130,3 +142,59 @@ test("returns null when delivery state does not exist", async () => {
     null,
   );
 });
+
+test("delivery v3 summary points to the latest immutable attempt", async () => {
+  const archive = fakeArchive();
+  const managedEvent = {
+    id: "evt_4",
+    eventName: "checkout.completed",
+  };
+  const deliveryId = deliveryResourceId(
+    managedEvent.id,
+    "posthog",
+    "etlayer-default",
+  );
+
+  await recordDeliveryState(
+    archive,
+    managedEvent,
+    "posthog",
+    {
+      status: "exported",
+      uuid: "ph-evt-4",
+    },
+    {
+      now: new Date(
+        "2026-09-22T10:03:00.000Z",
+      ),
+      delivery: {
+        mode: "revalidation",
+      },
+      attempt: {
+        deliveryId,
+        attemptId: "attempt-2",
+        attemptNumber: 2,
+        completedAt:
+          "2026-09-22T10:03:00.000Z",
+      },
+    },
+  );
+
+  const body = JSON.parse(
+    archive.writes[0].body,
+  );
+
+  assert.equal(body.deliveryId, deliveryId);
+  assert.equal(body.attemptCount, 2);
+  assert.equal(body.latestAttemptId, "attempt-2");
+  assert.equal(body.latestAttemptNumber, 2);
+  assert.equal(
+    body.lastAttemptAt,
+    "2026-09-22T10:03:00.000Z",
+  );
+  assert.equal(
+    body.deliveryMode,
+    "revalidation",
+  );
+});
+
