@@ -1,6 +1,6 @@
 # VS20: Guarded Governance Publication by Manifest Digest
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #72.
 
@@ -193,3 +193,59 @@ VS20 does not include:
 - dashboard/UI.
 
 The next slice should be chosen from a real operational/product need over this now-published governance substrate, rather than adding workflow machinery speculatively.
+
+
+---
+
+# Completion evidence
+
+VS20 completed with:
+
+~~~text
+implementation PR              #73
+merged main commit             0d7e4feb5bc14af468f00615e6033b557a4e68fb
+PR CI                          green
+fast slice live acceptance     green
+slice acceptance run           #36177195839
+post-merge main CI             green
+post-merge CI run              #36177462819
+full VS8 -> VS20 regression    green
+full regression run            #36177462836
+~~~
+
+Fast live proof:
+
+~~~text
+correlationId
+vs20-20260925-190232-eb48063b
+
+projectId
+vs20-20260925-190232-eb48063b
+
+manifestDigest
+1c7e4406be10084f0a9edd14516fb38834c24a06a416205cc95ad12b534c4cc5
+
+publicationOperationId
+a1285759-48c8-41e9-8f8c-24bdb53510fc
+
+v1EventId
+ddb4be33-b400-4623-a8f4-dd3d2c8d55ef
+
+v2AllowEventId
+436e52f5-c8f1-41c7-bbd7-7fb23d2b3901
+
+v2QuarantineEventId
+fceda2c4-7b24-429e-98ee-c7e027aff3b8
+~~~
+
+The proof established:
+
+~~~text
+wrongDigestRejected                  true
+breakingAcknowledgementRequired      true
+publishedContractId                  account.created@2
+historicalDecisionLineageMutated     false
+idempotentRepublish                  true
+~~~
+
+The post-merge full regression then re-proved the accumulated Cloudflare runtime sequence through VS20 on main.
