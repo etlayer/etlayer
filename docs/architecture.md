@@ -216,3 +216,41 @@ Therefore:
 Global ordering is not assumed.
 
 Ordering-sensitive analysis should use event timestamps, causal identifiers, and domain sequence information where available.
+
+## Append-only persistence invariant
+
+The durable source of truth is an append-only history.
+
+For every accepted occurrence ETLayer preserves a unique persistence/receipt identity even when the producer repeats an existing logical event ID or sends byte-for-byte equivalent content.
+
+Conceptually:
+
+~~~text
+producer logical event E
+  -> receipt R1
+  -> append
+
+retry of logical event E
+  -> receipt R2
+  -> append
+
+retry of logical event E
+  -> receipt R3
+  -> append
+~~~
+
+All three receipts remain queryable evidence.
+
+Derived state may expose:
+
+- duplicate groups;
+- canonical/logical event projections;
+- latest-state views;
+- deduplicated analytics projections;
+- idempotent destination delivery state.
+
+Those projections are disposable and rebuildable. They do not authorize mutation or deletion of the underlying accepted records.
+
+A downstream exporter may suppress repeated side effects for the same logical event, but ETLayer still records each accepted delivery/processing attempt as historical evidence.
+
+Where retention, privacy, or legal requirements require destructive handling of protected payload bytes, the architecture should preserve the append-only audit relationship and deletion/redaction action where legally permitted rather than silently pretending the prior record never existed.
