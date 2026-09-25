@@ -467,6 +467,16 @@ test("public event status is project-scoped and strips internal source keys", as
     ),
     false,
   );
+  assert.equal(
+    JSON.stringify(body).includes(
+      "attempt-public-1",
+    ),
+    false,
+  );
+  assert.equal(
+    body.deliveries[0].state?.attemptCount,
+    undefined,
+  );
 
   const crossProject = await handlePublicApiRequest(
     eventStatusRequest(
