@@ -72,6 +72,12 @@ import {
   ContractLifecycleValidationError,
   transitionContractLifecycle,
 } from "./contract-lifecycle.js";
+import {
+  ContractOwnershipConfigurationError,
+  ContractOwnershipValidationError,
+  readContractOwnership,
+  writeContractOwnership,
+} from "./contract-ownership.js";
 
 export async function handleManagementRequest(
   request,
@@ -145,6 +151,41 @@ export async function handleManagementRequest(
       ),
       options,
     );
+  }
+
+  const contractOwnership =
+    url.pathname.match(
+      /^\/_mgmt\/projects\/([^/]+)\/contracts\/([^/]+)\/ownership$/,
+    );
+  if (contractOwnership) {
+    const projectId =
+      decodeURIComponent(
+        contractOwnership[1],
+      );
+    const eventName =
+      decodeURIComponent(
+        contractOwnership[2],
+      );
+
+    if (request.method === "PUT") {
+      return configureProjectContractOwnership(
+        request,
+        env,
+        projectId,
+        eventName,
+        options,
+      );
+    }
+
+    if (request.method === "GET") {
+      return getProjectContractOwnership(
+        request,
+        env,
+        projectId,
+        eventName,
+        options,
+      );
+    }
   }
 
   const contractLifecycleAction =
@@ -641,6 +682,161 @@ async function publishProjectGovernance(
     );
   } catch (error) {
     return governancePublicationErrorResponse(
+      error,
+    );
+  }
+}
+
+async function configureProjectContractOwnership(
+  request,
+  env,
+  projectId,
+  eventName,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  const contactKinds = Array.isArray(
+    input.value?.contacts,
+  )
+    ? [
+        ...new Set(
+          input.value.contacts
+            .map((contact) =>
+              contact?.kind,
+            )
+            .filter(
+              (kind) =>
+                typeof kind === "string",
+            ),
+        ),
+      ].sort()
+    : [];
+
+  try {
+    const audited =
+      await runAuditedMutation(
+        request,
+        env,
+        options,
+        {
+          actor: operatorActor(
+            projectId,
+            auth.authentication,
+          ),
+          action:
+            "contract.ownership.configure",
+          target: {
+            kind:
+              "contract_ownership",
+            projectId,
+            eventName,
+          },
+          change: {
+            team:
+              input.value?.team ||
+              null,
+            domain:
+              input.value?.domain ||
+              null,
+            contactCount:
+              Array.isArray(
+                input.value?.contacts,
+              )
+                ? input.value.contacts
+                    .length
+                : 0,
+            contactKinds,
+          },
+        },
+        () =>
+          writeContractOwnership(
+            env.ARCHIVE,
+            {
+              projectId,
+              eventName,
+              team:
+                input.value?.team,
+              domain:
+                input.value?.domain,
+              contacts:
+                input.value?.contacts,
+            },
+            {
+              now:
+                options.now ||
+                new Date(),
+            },
+          ),
+      );
+
+    return jsonResponse(
+      {
+        changed:
+          audited.value.changed,
+        ownership:
+          audited.value.state,
+      },
+      200,
+      operationHeaders(
+        audited.operationId,
+      ),
+    );
+  } catch (error) {
+    return contractOwnershipErrorResponse(
+      error,
+    );
+  }
+}
+
+async function getProjectContractOwnership(
+  request,
+  env,
+  projectId,
+  eventName,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  try {
+    const ownership =
+      await readContractOwnership(
+        env.ARCHIVE,
+        projectId,
+        eventName,
+      );
+
+    if (!ownership) {
+      return jsonResponse(
+        {
+          error:
+            "contract ownership was not found",
+        },
+        404,
+      );
+    }
+
+    return jsonResponse(
+      { ownership },
+      200,
+    );
+  } catch (error) {
+    return contractOwnershipErrorResponse(
       error,
     );
   }
@@ -1991,6 +2187,32 @@ function dynamicProjectOnly(projectId) {
   }
 
   return null;
+}
+
+function contractOwnershipErrorResponse(
+  error,
+) {
+  if (
+    error instanceof
+      ContractOwnershipValidationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  if (
+    error instanceof
+      ContractOwnershipConfigurationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      503,
+    );
+  }
+
+  throw error;
 }
 
 function contractLifecycleErrorResponse(
