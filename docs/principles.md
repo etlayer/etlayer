@@ -94,3 +94,29 @@ Do not overwrite the actor with the user or service on whose behalf it acts, and
 ETLayer may ingest, preserve, route, and replay evidence about identity, policy, security, tool calls, and outcomes.
 
 It is not therefore required to become an MCP gateway, agent IAM product, or runtime-security enforcement plane. Those systems should integrate as producers and consumers.
+
+## 16. Accepted data is append-only, including duplicates
+
+Every accepted new fact, event, evidence item, decision, action, delivery attempt, or receipt is appended as a new immutable record.
+
+Do not overwrite or physically deduplicate historical source data merely because the logical payload, source event ID, idempotency key, or content hash matches an earlier record.
+
+Keep these concepts separate:
+
+~~~text
+logical identity
+  says which business/event fact a producer intended
+
+record / receipt identity
+  says which concrete occurrence ETLayer accepted and persisted
+
+deduplication
+  is a read/projection/side-effect concern
+  and never a reason to erase an accepted occurrence
+~~~
+
+A retried delivery may therefore preserve the same logical event identity while receiving a new append-only receipt/record identity.
+
+Idempotency protects downstream effects. It must not destroy evidence that a duplicate delivery actually occurred.
+
+Corrections, supersession, revocation, reclassification, and deletion intent are represented by later records that reference earlier records. They do not rewrite history.

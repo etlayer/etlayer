@@ -359,3 +359,26 @@ A new vertical slice should answer all four questions before implementation:
 4. Why is this the smallest slice that proves it?
 
 If those answers are weak, keep the item as research/backlog rather than assigning the next VS number.
+
+## Append-only evidence follow-up
+
+Treat append-only persistence as a cross-cutting invariant for all future slices.
+
+A future executable acceptance proof should demonstrate:
+
+~~~text
+same logical event submitted N times
+  -> N immutable accepted receipt records
+  -> one logical grouping when applicable
+  -> no historical overwrite
+  -> downstream side effects remain idempotent
+~~~
+
+Required capabilities include:
+
+- separate logical event identity from receipt/persistence identity;
+- immutable processing and delivery attempts;
+- duplicate grouping as a projection rather than destructive deduplication;
+- correction/supersession/revocation records instead of in-place mutation;
+- replay from raw append-only history;
+- explicit retention/redaction records when destructive privacy handling is unavoidable.
