@@ -401,8 +401,6 @@ function assertSameContractRecord(
   if (
     existing.projectId !==
       expected.projectId ||
-    existing.manifestDigest !==
-      expected.manifestDigest ||
     canonicalJson(existing.contract) !==
       canonicalJson(expected.contract)
   ) {
