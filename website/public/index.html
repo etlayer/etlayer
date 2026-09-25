@@ -93,7 +93,7 @@
             preserves replayable evidence, then routes clean projections to the tools you already use.
           </p>
           <div class="hero-actions">
-            <a class="primary-button large" href="#quickstart">See the integration</a>
+            <a class="primary-button large" href="#demo">See it happen</a>
             <a class="text-link" href="#evidence">Why canonical evidence matters <span>→</span></a>
           </div>
         </div>
@@ -145,6 +145,87 @@
             <span>producer ≠ actor</span>
             <span>payload ≠ provenance</span>
           </div>
+        </div>
+      </section>
+
+      <section class="flow-demo" id="demo" aria-labelledby="demo-title">
+        <div class="demo-heading">
+          <div>
+            <div class="eyebrow">How it works</div>
+            <h2 id="demo-title">One event in. Clean evidence and projections out.</h2>
+          </div>
+          <p>
+            Pick a source and emit an example event. This demo runs in your browser and shows the
+            shape of the ETLayer journey without requiring an account.
+          </p>
+        </div>
+
+        <div class="demo-stage">
+          <div class="demo-source">
+            <div class="demo-label">01 · Source</div>
+            <div class="source-tabs" role="tablist" aria-label="Example event source">
+              <button class="source-tab active" type="button" data-demo-source="browser">Browser</button>
+              <button class="source-tab" type="button" data-demo-source="backend">Backend</button>
+              <button class="source-tab" type="button" data-demo-source="agent">Agent</button>
+            </div>
+            <div class="source-card">
+              <div class="source-card-head">
+                <span class="source-icon" id="demo-source-icon">B</span>
+                <div>
+                  <strong id="demo-source-title">Browser checkout</strong>
+                  <span id="demo-source-meta">OTLP / HTTP · web.checkout</span>
+                </div>
+              </div>
+              <button class="emit-button" type="button" id="emit-demo-event">
+                Emit example event <span>→</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="demo-arrow" aria-hidden="true">→</div>
+
+          <div class="demo-core">
+            <div class="demo-label">02 · ETLayer</div>
+            <div class="core-card">
+              <div class="core-step" data-demo-step="receive"><span>1</span><div><b>Receive</b><small>trusted ingest boundary</small></div><i></i></div>
+              <div class="core-step" data-demo-step="normalize"><span>2</span><div><b>Normalize</b><small>source · actor · session</small></div><i></i></div>
+              <div class="core-step" data-demo-step="policy"><span>3</span><div><b>Apply policy</b><small>authority · privacy</small></div><i></i></div>
+              <div class="core-step" data-demo-step="evidence"><span>4</span><div><b>Preserve evidence</b><small>canonical · replayable</small></div><i></i></div>
+            </div>
+          </div>
+
+          <div class="demo-arrow" aria-hidden="true">→</div>
+
+          <div class="demo-destinations">
+            <div class="demo-label">03 · Destinations</div>
+            <div class="destination-card" data-demo-destination="posthog">
+              <span class="destination-dot posthog"></span>
+              <div><b>PostHog</b><small>analytics projection</small></div>
+              <i>waiting</i>
+            </div>
+            <div class="destination-card" data-demo-destination="statsig">
+              <span class="destination-dot statsig"></span>
+              <div><b>Statsig</b><small>experiment projection</small></div>
+              <i>waiting</i>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-json-grid">
+          <div class="demo-json-card">
+            <div class="demo-json-head"><span>INPUT</span><b id="demo-input-label">browser event</b></div>
+            <pre><code id="demo-input-json"></code></pre>
+          </div>
+          <div class="demo-json-arrow" aria-hidden="true">→</div>
+          <div class="demo-json-card canonical">
+            <div class="demo-json-head"><span>CANONICAL EVIDENCE</span><b id="demo-output-status">ready</b></div>
+            <pre><code id="demo-output-json"></code></pre>
+          </div>
+        </div>
+
+        <div class="demo-note">
+          <span>Example only</span>
+          <p>ETLayer keeps producer identity, actor/delegation, privacy state and routing evidence explicit instead of hiding them inside vendor-specific payloads.</p>
         </div>
       </section>
 
