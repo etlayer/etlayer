@@ -94,8 +94,6 @@ ETLayer is not initially:
 - a replacement for the OpenTelemetry Collector;
 - a general-purpose message broker;
 - a full customer data platform;
-- an identity graph platform;
-- an MCP gateway or agent-control plane;
-- an agent IAM or runtime-security enforcement product.
+- an identity graph platform.
 
 Some of those capabilities may integrate with ETLayer. They are not the core product.
