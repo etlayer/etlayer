@@ -92,6 +92,29 @@ export function normalizeGovernanceManifest(
     );
   });
 
+  const totalMaxEvents = contracts.reduce(
+    (total, change) =>
+      total + change.maxEvents,
+    0,
+  );
+  const totalMaxExamples = contracts.reduce(
+    (total, change) =>
+      total + change.maxExamples,
+    0,
+  );
+
+  if (totalMaxEvents > 5000) {
+    throw new GovernanceManifestValidationError(
+      "aggregate maxEvents across contracts must not exceed 5000",
+    );
+  }
+
+  if (totalMaxExamples > 100) {
+    throw new GovernanceManifestValidationError(
+      "aggregate maxExamples across contracts must not exceed 100",
+    );
+  }
+
   return {
     version: GOVERNANCE_MANIFEST_VERSION,
     apiVersion: GOVERNANCE_MANIFEST_API_VERSION,
