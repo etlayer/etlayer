@@ -75,3 +75,22 @@ Avoid building a custom distributed system until a proven requirement demands it
 ## 12. Delete ETLayer conventions when standards catch up
 
 If OpenTelemetry standardizes something ETLayer previously defined, migrate toward the upstream standard and deprecate the custom convention.
+
+
+## 13. Protocols are adapters, not ontology
+
+OTLP, HTTP/JSON, CloudEvents, MCP, queues, and future RPC transports describe how information crosses a boundary.
+
+They must not define the canonical meaning of actor, delegation, causation, workflow, authority, action, or outcome.
+
+## 14. Keep authority and delegation explicit
+
+The immediate actor, represented principal, credential source, policy decision, and authority scope are different facts.
+
+Do not overwrite the actor with the user or service on whose behalf it acts, and do not trust producer-supplied delegation merely because the field name is familiar.
+
+## 15. Record control decisions without becoming the control plane
+
+ETLayer may ingest, preserve, route, and replay evidence about identity, policy, security, tool calls, and outcomes.
+
+It is not therefore required to become an MCP gateway, agent IAM product, or runtime-security enforcement plane. Those systems should integrate as producers and consumers.
