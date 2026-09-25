@@ -1,6 +1,6 @@
 # VS18: First-class Delivery and Append-only Attempts
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #56.
 
@@ -196,3 +196,65 @@ VS18 does not add:
 - generalized workflow orchestration.
 
 Those can build on the Delivery/Attempt primitive when needed.
+
+
+---
+
+# Completion evidence
+
+VS18 completed with:
+
+~~~text
+PR #67 CI                    green
+Live Acceptance              green
+Live Acceptance run          #36165478804
+tested PR head               a836dceb7d7d57227dc149c99f57c6137b21296e
+merged main commit           d8ebcb8799d644b8fe0016ddb21de0bd9fda8740
+post-merge main CI           green
+post-merge CI run            #36168432326
+~~~
+
+Final VS18 live correlation:
+
+~~~text
+vs18-20260925-172237-d22f41cb
+~~~
+
+Project:
+
+~~~text
+vs18-20260925-172237-d22f41cb
+~~~
+
+Event:
+
+~~~text
+3ca39b0c-0501-4705-80a7-c9446f817d81
+~~~
+
+Stable Delivery:
+
+~~~text
+delivery:vs18-20260925-172237-d22f41cb:posthog:3ca39b0c-0501-4705-80a7-c9446f817d81
+~~~
+
+Observed history:
+
+~~~text
+Attempt #1
+status  skipped
+reason  posthog_not_configured
+mode    live
+
+Attempt #2
+status  exported
+mode    revalidation
+
+attemptCount                       2
+alreadyExportedCreatedAttempt3     false
+publicAttemptHistoryExposed        false
+~~~
+
+The full serial Cloudflare acceptance suite remained green through VS18.
+
+Therefore ETLayer now has a stable logical Delivery per project × event × destination and append-only immutable Attempt evidence for each real destination invocation, while preserving the existing already-exported idempotency gate and public API boundary.
