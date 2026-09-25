@@ -273,3 +273,100 @@ test("validates subagent delegation chain explicitly", () => {
     errors: [],
   });
 });
+
+test("deprecated published contract still validates and exposes lifecycle metadata", () => {
+  const contract = {
+    id: "account.created@2",
+    eventName: "account.created",
+    version: 2,
+    required: {
+      "account.id": {
+        type: "string",
+      },
+    },
+    forbidden: [],
+  };
+
+  const result = validateEventContract(
+    event("account.created", {
+      "etlayer.schema.version": 2,
+      "account.id": "account_1",
+    }),
+    {
+      findContract() {
+        return contract;
+      },
+      contractStatus: "deprecated",
+      governanceManifestDigest:
+        "a".repeat(64),
+    },
+  );
+
+  assert.equal(result.status, "valid");
+  assert.equal(
+    result.contractId,
+    "account.created@2",
+  );
+  assert.equal(
+    result.contractStatus,
+    "deprecated",
+  );
+  assert.equal(
+    result.governanceManifestDigest,
+    "a".repeat(64),
+  );
+});
+
+test("retired published contract quarantines without evaluating payload fields", () => {
+  const contract = {
+    id: "account.created@2",
+    eventName: "account.created",
+    version: 2,
+    required: {
+      "account.id": {
+        type: "string",
+      },
+      "plan.id": {
+        type: "string",
+      },
+    },
+    forbidden: [],
+  };
+
+  const result = validateEventContract(
+    event("account.created", {
+      "etlayer.schema.version": 2,
+      "account.id": "account_1",
+      "plan.id": "pro",
+    }),
+    {
+      findContract() {
+        return contract;
+      },
+      contractStatus: "retired",
+      governanceManifestDigest:
+        "b".repeat(64),
+    },
+  );
+
+  assert.equal(
+    result.status,
+    "quarantined",
+  );
+  assert.equal(
+    result.contractId,
+    "account.created@2",
+  );
+  assert.equal(
+    result.contractStatus,
+    "retired",
+  );
+  assert.deepEqual(result.errors, [
+    {
+      code: "contract_retired",
+      eventName: "account.created",
+      schemaVersion: 2,
+    },
+  ]);
+});
+
