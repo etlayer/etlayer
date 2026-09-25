@@ -1,6 +1,6 @@
 # VS21: Contract Lifecycle - Published, Deprecated, Retired
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #75.
 
@@ -257,3 +257,60 @@ VS21 does not include:
 Git + Governance-as-Code remain the reviewable pre-publication workflow.
 
 VS21 only defines the operational lifecycle of a contract after publication.
+
+
+---
+
+# Completion evidence
+
+VS21 completed with:
+
+~~~text
+implementation PR              #76
+merged main commit             f02cd5e3b3b1222f8381ad3f518218e72479f42e
+PR CI                          green
+fast slice live acceptance     green
+slice acceptance run           #36180682715
+post-merge main CI             green
+post-merge CI run              #36181006389
+full VS8 -> VS21 regression    green
+full regression run            #36181006381
+~~~
+
+Fast live proof:
+
+~~~text
+correlationId
+vs21-20260925-193624-2222c086
+
+projectId
+vs21-20260925-193624-2222c086
+
+manifestDigest
+7f21bdaffc9a0cf691e205fdf4bb075300139a4e30b04276c6114a9b393f770a
+
+publicationOperationId
+56a887de-f7f4-43c3-abf0-afbe2b87a236
+
+deprecateOperationId
+393ecdcd-4676-4dde-894c-34c671bf5c7f
+
+retireOperationId
+1f42e61f-fbb0-4dcc-a635-56f87f7b7bac
+~~~
+
+Observed lifecycle proof:
+
+~~~text
+Published   -> valid / allow
+Deprecated  -> valid / allow
+Retired     -> quarantined / contract_retired
+
+deprecatedStillAllowed             true
+retiredQuarantined                 true
+resurrectionRejected               true
+idempotentRetire                   true
+historicalDecisionLineageMutated   false
+~~~
+
+The post-merge full regression re-proved the accumulated Cloudflare runtime sequence through VS21 on main.
