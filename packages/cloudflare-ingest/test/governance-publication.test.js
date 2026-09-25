@@ -108,13 +108,15 @@ async function publicationInput(
 
 test("rejects publication when supplied digest does not match normalized manifest", async () => {
   const store = archive();
+  const input =
+    await publicationInput();
 
   await assert.rejects(
     () =>
       publishGovernanceManifest(
         store,
         {
-          ...(await publicationInput()),
+          ...input,
           manifestDigest:
             "0".repeat(64),
         },
@@ -130,14 +132,16 @@ test("rejects publication when supplied digest does not match normalized manifes
 
 test("requires explicit acknowledgement for a breaking plan", async () => {
   const store = archive();
+  const input =
+    await publicationInput({
+      acknowledgeBreaking: false,
+    });
 
   await assert.rejects(
     () =>
       publishGovernanceManifest(
         store,
-        await publicationInput({
-          acknowledgeBreaking: false,
-        }),
+        input,
       ),
     GovernancePublicationBreakingChangeError,
   );
