@@ -102,6 +102,9 @@ const demoExamples = {
       session: {
         id: "ses_84f"
       },
+      correlation: {
+        id: "checkout_591"
+      },
       privacy: {
         email: "redacted"
       },
@@ -174,6 +177,9 @@ const demoExamples = {
       delegation: {
         delegated_by: "usr_842"
       },
+      correlation: {
+        id: "checkout_591"
+      },
       trust: {
         provenance: "trusted",
         authority: "allow"
@@ -194,6 +200,15 @@ const demoSourceMeta = document.getElementById("demo-source-meta");
 const emitDemoButton = document.getElementById("emit-demo-event");
 const demoSteps = [...document.querySelectorAll("[data-demo-step]")];
 const demoDestinations = [...document.querySelectorAll("[data-demo-destination]")];
+const demoJsonGrid = document.getElementById("demo-json-grid");
+const inspectDemoEvidence = document.getElementById("inspect-demo-evidence");
+const demoCoreCard = document.querySelector(".demo-core .core-card");
+const demoPassageDot = document.getElementById("demo-passage-dot");
+const demoProgressState = document.getElementById("demo-progress-state");
+const demoProgressDetail = document.getElementById("demo-progress-detail");
+const linkDemoSources = document.getElementById("link-demo-sources");
+const demoJourneyMap = document.getElementById("demo-journey-map");
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let activeDemoSource = "browser";
 let demoRunId = 0;
@@ -215,9 +230,19 @@ function renderDemoSource(source) {
   demoInputLabel.textContent = example.label;
   demoInput.textContent = JSON.stringify(example.input, null, 2);
   demoOutput.textContent = JSON.stringify(example.output, null, 2);
-  demoOutputStatus.textContent = "ready";
+  demoOutputStatus.textContent = "waiting";
   emitDemoButton.disabled = false;
   emitDemoButton.firstChild.textContent = "Emit example event ";
+
+  demoJsonGrid?.classList.remove("revealed");
+  demoJsonGrid?.classList.add("concealed");
+  inspectDemoEvidence.disabled = true;
+  inspectDemoEvidence.classList.remove("ready");
+  inspectDemoEvidence.firstChild.textContent = "Inspect resulting evidence ";
+  demoCoreCard?.classList.remove("running");
+  if (demoPassageDot) demoPassageDot.style.transform = "translate(-50%, 0)";
+  demoProgressState.textContent = "Ready";
+  demoProgressDetail.textContent = "Press emit to follow the event";
 
   demoSteps.forEach((step) => step.classList.remove("active", "done"));
   demoDestinations.forEach((destination) => {
@@ -232,35 +257,74 @@ function delay(milliseconds) {
 
 async function runDemo() {
   const runId = ++demoRunId;
+  const stepDelay = reducedMotion ? 90 : 680;
+  const routeDelay = reducedMotion ? 80 : 320;
+
+  const progress = [
+    ["Received", "Authenticated source accepted"],
+    ["Normalized", "Actor, subject and session resolved"],
+    ["Policy allowed", "Authority checked, private fields cleaned"],
+    ["Evidence sealed", "Canonical record is replayable"]
+  ];
 
   emitDemoButton.disabled = true;
   emitDemoButton.firstChild.textContent = "Emitting ";
+  inspectDemoEvidence.disabled = true;
+  inspectDemoEvidence.classList.remove("ready");
+  demoJsonGrid?.classList.remove("revealed");
+  demoJsonGrid?.classList.add("concealed");
+  demoCoreCard?.classList.add("running");
 
   demoSteps.forEach((step) => step.classList.remove("active", "done"));
   demoDestinations.forEach((destination) => {
     destination.classList.remove("delivered");
     destination.querySelector("i").textContent = "waiting";
   });
-  demoOutputStatus.textContent = "processing";
 
-  for (const step of demoSteps) {
+  demoOutputStatus.textContent = "processing";
+  demoProgressState.textContent = "In flight";
+  demoProgressDetail.textContent = "Event entered ETLayer";
+
+  for (const [index, step] of demoSteps.entries()) {
     if (runId !== demoRunId) return;
+
+    if (demoPassageDot) {
+      demoPassageDot.style.transform = `translate(-50%, ${index * 52}px)`;
+    }
+
     step.classList.add("active");
-    await delay(260);
+    demoProgressState.textContent = progress[index][0];
+    demoProgressDetail.textContent = progress[index][1];
+
+    await delay(stepDelay);
+
     if (runId !== demoRunId) return;
     step.classList.remove("active");
     step.classList.add("done");
+
+    if (!reducedMotion) await delay(140);
   }
+
+  demoProgressState.textContent = "Routing";
+  demoProgressDetail.textContent = "Projecting the same evidence for each destination";
 
   for (const destination of demoDestinations) {
     if (runId !== demoRunId) return;
     destination.classList.add("delivered");
     destination.querySelector("i").textContent = "delivered";
-    await delay(150);
+    await delay(routeDelay);
   }
 
   if (runId !== demoRunId) return;
-  demoOutputStatus.textContent = "routed";
+
+  await delay(reducedMotion ? 60 : 420);
+
+  demoCoreCard?.classList.remove("running");
+  demoOutputStatus.textContent = "ready to inspect";
+  demoProgressState.textContent = "Complete";
+  demoProgressDetail.textContent = "Evidence preserved · projections delivered";
+  inspectDemoEvidence.disabled = false;
+  inspectDemoEvidence.classList.add("ready");
   emitDemoButton.disabled = false;
   emitDemoButton.firstChild.textContent = "Emit again ";
 }
@@ -270,5 +334,24 @@ demoSourceTabs.forEach((tab) => {
 });
 
 emitDemoButton?.addEventListener("click", runDemo);
+
+inspectDemoEvidence?.addEventListener("click", () => {
+  const revealed = demoJsonGrid?.classList.toggle("revealed");
+  demoJsonGrid?.classList.toggle("concealed", !revealed);
+  inspectDemoEvidence.firstChild.textContent = revealed ? "Hide evidence " : "Inspect resulting evidence ";
+  inspectDemoEvidence.setAttribute("aria-expanded", String(Boolean(revealed)));
+});
+
+linkDemoSources?.addEventListener("click", () => {
+  const willShow = demoJourneyMap?.hasAttribute("hidden");
+  if (willShow) {
+    demoJourneyMap.removeAttribute("hidden");
+    linkDemoSources.firstChild.textContent = "Hide linked journey ";
+  } else {
+    demoJourneyMap?.setAttribute("hidden", "");
+    linkDemoSources.firstChild.textContent = "Link three sources ";
+  }
+  linkDemoSources.setAttribute("aria-expanded", String(Boolean(willShow)));
+});
 
 renderDemoSource(activeDemoSource);

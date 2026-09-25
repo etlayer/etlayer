@@ -186,7 +186,12 @@
 
           <div class="demo-core">
             <div class="demo-label">02 · ETLayer</div>
+            <div class="demo-progress-copy" aria-live="polite">
+              <span id="demo-progress-state">Ready</span>
+              <b id="demo-progress-detail">Press emit to follow the event</b>
+            </div>
             <div class="core-card">
+              <div class="core-passage" aria-hidden="true"><span id="demo-passage-dot"></span></div>
               <div class="core-step" data-demo-step="receive"><span>1</span><div><b>Receive</b><small>trusted ingest boundary</small></div><i></i></div>
               <div class="core-step" data-demo-step="normalize"><span>2</span><div><b>Normalize</b><small>source · actor · session</small></div><i></i></div>
               <div class="core-step" data-demo-step="policy"><span>3</span><div><b>Apply policy</b><small>authority · privacy</small></div><i></i></div>
@@ -211,21 +216,47 @@
           </div>
         </div>
 
-        <div class="demo-json-grid">
-          <div class="demo-json-card">
-            <div class="demo-json-head"><span>INPUT</span><b id="demo-input-label">browser event</b></div>
-            <pre><code id="demo-input-json"></code></pre>
+        <div class="demo-json-wrap">
+          <div class="demo-json-grid concealed" id="demo-json-grid">
+            <div class="demo-json-card">
+              <div class="demo-json-head"><span>INPUT</span><b id="demo-input-label">browser event</b></div>
+              <pre><code id="demo-input-json"></code></pre>
+              <div class="demo-json-veil"><span>payload captured</span></div>
+            </div>
+            <div class="demo-json-arrow" aria-hidden="true">→</div>
+            <div class="demo-json-card canonical">
+              <div class="demo-json-head"><span>CANONICAL EVIDENCE</span><b id="demo-output-status">waiting</b></div>
+              <pre><code id="demo-output-json"></code></pre>
+              <div class="demo-json-veil"><span>evidence not inspected</span></div>
+            </div>
           </div>
-          <div class="demo-json-arrow" aria-hidden="true">→</div>
-          <div class="demo-json-card canonical">
-            <div class="demo-json-head"><span>CANONICAL EVIDENCE</span><b id="demo-output-status">ready</b></div>
-            <pre><code id="demo-output-json"></code></pre>
-          </div>
+          <button class="inspect-evidence-button" type="button" id="inspect-demo-evidence" disabled>
+            Inspect resulting evidence <span>↗</span>
+          </button>
         </div>
 
         <div class="demo-note">
           <span>Example only</span>
           <p>ETLayer keeps producer identity, actor/delegation, privacy state and routing evidence explicit instead of hiding them inside vendor-specific payloads.</p>
+        </div>
+
+        <div class="journey-linker">
+          <div>
+            <span class="demo-label">Link the journey</span>
+            <p>Browser, backend and agent events can remain separate evidence while sharing one subject and one correlation context.</p>
+          </div>
+          <button class="journey-link-button" type="button" id="link-demo-sources">Link three sources <span>→</span></button>
+          <div class="journey-map" id="demo-journey-map" hidden>
+            <div class="journey-node"><span>B</span><b>checkout.completed</b><small>browser · web.checkout</small></div>
+            <div class="journey-connector">→</div>
+            <div class="journey-node"><span>S</span><b>order.paid</b><small>backend · orders-api</small></div>
+            <div class="journey-connector">→</div>
+            <div class="journey-node"><span>A</span><b>checkout.recovery.started</b><small>agent · checkout-helper</small></div>
+            <div class="journey-context">
+              <span>subject usr_842</span>
+              <span>correlation checkout_591</span>
+            </div>
+          </div>
         </div>
       </section>
 
