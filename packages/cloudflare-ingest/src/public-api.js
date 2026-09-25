@@ -304,6 +304,8 @@ async function publicEventStatus(
           sanitizePublicEvidence(inspected.identity),
         decision:
           sanitizePublicEvidence(inspected.decision),
+        ownership:
+          sanitizePublicEvidence(inspected.ownership),
         deliveries:
           sanitizePublicDeliveries(inspected.deliveries),
       },
