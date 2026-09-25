@@ -27,9 +27,10 @@ VS14 First-class Quarantine                    complete
 VS15 Append-only Control-plane Audit Log          complete
 VS16 Contract Compatibility Checker               complete
 VS17 Historical Contract Plan                     complete
+VS18 First-class Delivery + Append-only Attempts   complete
 ~~~
 
-The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS15 together.
+The serial Cloudflare live acceptance suite currently re-proves VS8 -> VS18 together.
 
 See:
 
@@ -43,7 +44,8 @@ See:
 - [VS15: Append-only Control-plane Audit Log](vertical-slices/vs15-control-plane-audit.md)
 - [VS16: Contract Compatibility Checker](vertical-slices/vs16-contract-compatibility.md)
 - [VS17: Contract Plan Against Historical Events](vertical-slices/vs17-contract-plan.md)
-- GitHub issues #43, #48, #50, #52, and #54
+- [VS18: First-class Delivery and Append-only Attempts](vertical-slices/vs18-delivery-attempts.md)
+- GitHub issues #43, #48, #50, #52, #54, and #56
 
 ## Phase 2 - Product Contract
 
@@ -213,7 +215,11 @@ Live Acceptance #95 proved VS8 -> VS15 serially in the isolated Cloudflare CI en
 
 Live Acceptance #98 attempt 2 proved the runtime foundation plus VS17 on the same immutable PR SHA.
 
-The next sequencing candidate is Delivery + Attempt: make logical delivery and append-only delivery attempts first-class before building a dashboard over delivery state.
+**VS18 - First-class Delivery + Append-only Attempts is complete and live-proven.** It introduces one stable logical Delivery per project × event × destination plus immutable Attempt evidence for each real destination invocation. Live, replay, and revalidation paths now preserve attempt history; already-exported short-circuits create no fake attempt; internal inspection can reconstruct the history while the public event-status boundary stays intentionally smaller.
+
+Live Acceptance run #36165478804 proved VS8 -> VS18 serially on the same PR head, and post-merge main CI run #36168432326 remained green.
+
+The next sequencing candidate is Governance-as-Code, using the existing contract, decision, audit, planning, and delivery evidence foundations rather than starting from dashboard implementation.
 
 The milestone backlog is:
 
@@ -237,7 +243,7 @@ Expanded meanings:
 
 These are milestone capabilities, not pre-assigned VS numbers. Preserve the roadmap rule: promote one capability into the next vertical slice only after its risk, invariant, executable acceptance, and smallest useful scope are explicit.
 
-A useful sequencing hypothesis is:
+The completed sequence is now:
 
 ~~~text
 Quarantine
@@ -245,6 +251,12 @@ Quarantine
   -> Compatibility
   -> etlayer plan
   -> Delivery / Attempt
+~~~
+
+The current sequencing hypothesis is:
+
+~~~text
+Delivery / Attempt
   -> Governance-as-Code
 ~~~
 
