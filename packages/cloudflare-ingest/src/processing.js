@@ -58,6 +58,10 @@ export async function processPersistedEvent(
           published.contract.version
           ? published.contract
           : null;
+      validationOptions.contractStatus =
+        published.contractStatus;
+      validationOptions.governanceManifestDigest =
+        published.manifestDigest;
     }
   }
 
