@@ -237,15 +237,6 @@ Expanded meanings:
 
 These are milestone capabilities, not pre-assigned VS numbers. Preserve the roadmap rule: promote one capability into the next vertical slice only after its risk, invariant, executable acceptance, and smallest useful scope are explicit.
 
-Additional semantic/trust candidates exposed by the agent-control-plane comparison are:
-
-- **Canonical Evidence Envelope V1:** make the independent actor, delegation, provenance, correlation, causation, workflow, decision, action/resource, and outcome dimensions explicit without inventing a replacement transport.
-- **Authority / Delegation Chain:** preserve immediate actor, represented principal, credential source, policy decision, and authority scope as distinct evidence.
-- **Causal Evidence Graph Projection:** reconstruct event-to-event causation and additional typed contributors without inferring causality from timestamp order.
-- **MCP adapter:** support MCP-derived activity as one producer/transport adapter only when a concrete integration requires it; do not make ETLayer MCP-centric.
-
-These are roadmap candidates, not assigned vertical slices. Each still requires a concrete invariant and executable acceptance proof before promotion.
-
 A useful sequencing hypothesis is:
 
 ~~~text
@@ -359,26 +350,3 @@ A new vertical slice should answer all four questions before implementation:
 4. Why is this the smallest slice that proves it?
 
 If those answers are weak, keep the item as research/backlog rather than assigning the next VS number.
-
-## Append-only evidence follow-up
-
-Treat append-only persistence as a cross-cutting invariant for all future slices.
-
-A future executable acceptance proof should demonstrate:
-
-~~~text
-same logical event submitted N times
-  -> N immutable accepted receipt records
-  -> one logical grouping when applicable
-  -> no historical overwrite
-  -> downstream side effects remain idempotent
-~~~
-
-Required capabilities include:
-
-- separate logical event identity from receipt/persistence identity;
-- immutable processing and delivery attempts;
-- duplicate grouping as a projection rather than destructive deduplication;
-- correction/supersession/revocation records instead of in-place mutation;
-- replay from raw append-only history;
-- explicit retention/redaction records when destructive privacy handling is unavoidable.
