@@ -29,7 +29,7 @@ export async function recordValidationState(
 
   const projectId = projectIdForEvent(event);
   const state = {
-    version: 3,
+    version: 4,
     projectId,
     eventId: event.id,
     eventName: event.eventName,
@@ -37,6 +37,10 @@ export async function recordValidationState(
     schemaVersion: validation.schemaVersion,
     status: validation.status,
     contractId: validation.contractId,
+    contractStatus:
+      validation.contractStatus || null,
+    governanceManifestDigest:
+      validation.governanceManifestDigest || null,
     errors: validation.errors || [],
     sourceKey:
       typeof options.sourceKey === "string" && options.sourceKey.length > 0
@@ -62,6 +66,10 @@ export async function recordValidationState(
           ? ""
           : String(validation.schemaVersion),
       contract_id: validation.contractId || "",
+      contract_status:
+        state.contractStatus || "",
+      governance_manifest_digest:
+        state.governanceManifestDigest || "",
       source_key: state.sourceKey || "",
       updated_at: state.updatedAt,
     },
