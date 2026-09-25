@@ -56,6 +56,37 @@ request_json() {
   curl --silent --show-error     -o "$output"     -w '%{http_code}'     -X "$method" "$INGEST_URL$path"     -H "authorization: Bearer $token"     -H "content-type: application/json"     --data "$body"
 }
 
+request_json_after_deploy() {
+  local method="$1"
+  local path="$2"
+  local token="$3"
+  local body="$4"
+  local output="$5"
+  local status=""
+
+  for attempt in $(seq 1 20); do
+    status="$(
+      request_json \
+        "$method" \
+        "$path" \
+        "$token" \
+        "$body" \
+        "$output"
+    )"
+
+    if [ "$status" != "401" ]; then
+      printf '%s' "$status"
+      return 0
+    fi
+
+    if [ "$attempt" -lt 20 ]; then
+      sleep 1
+    fi
+  done
+
+  printf '%s' "$status"
+}
+
 json_field() {
   local json="$1"
   local path="$2"
@@ -231,7 +262,7 @@ say "Deploying current contract-plan Worker"
 
 say "Creating isolated project with no destinations"
 STATUS="$(
-  request_json     POST     "/_mgmt/projects"     "$MANAGEMENT_KEY"     "$(node -e '
+  request_json_after_deploy     POST     "/_mgmt/projects"     "$MANAGEMENT_KEY"     "$(node -e '
       process.stdout.write(
         JSON.stringify({ id: process.argv[1] }),
       );
