@@ -132,6 +132,83 @@ Therefore:
 - if workflow identity becomes common enough to deserve normalized fields, that change requires its own contract decision.
 - replay must preserve the original causal context rather than reconstructing it from timestamps.
 
+## Evidence plane versus agent control plane
+
+A useful adjacent-market signal is the emergence of agent control planes that combine gateway routing with identity, delegated access, policy, runtime security, audit, and observability.
+
+Runlayer's current product describes this explicitly:
+
+- platform/control plane: https://www.runlayer.com/platform
+- Agent IAM and delegated identity: https://www.runlayer.com/identity-policy
+- MCP gateway: https://www.runlayer.com/mcp-gateway
+
+The architectural lesson for ETLayer is separation, not imitation.
+
+An agent-control product answers questions such as:
+
+~~~text
+who or what may act?
+under whose authority?
+through which client/tool?
+under which policy?
+should the action be allowed?
+~~~
+
+ETLayer's durable event/evidence plane answers a different set:
+
+~~~text
+what happened?
+who or what produced the evidence?
+how trustworthy is the source?
+what caused what?
+which workflow/delegation context applies?
+what decision/action/outcome should be preserved and replayable?
+~~~
+
+Therefore an agent control plane should be modeled as a producer and/or consumer of ETLayer evidence rather than as ETLayer's product identity.
+
+MCP is likewise one possible transport/adapter. A future MCP integration may map activity into a semantic transport attribute such as `mcp`, but ETLayer's actor, authority, causation, workflow, and outcome semantics must remain protocol-neutral.
+
+## Relationship model
+
+The durable model should keep at least five relationship classes separate:
+
+~~~text
+trace       = technical execution relationship
+correlation = same longer logical conversation
+causation   = B happened because of A
+workflow    = same durable business/orchestration process
+delegation  = B acted with authority from or on behalf of A
+~~~
+
+A sixth dimension, provenance, answers why ETLayer believes a claim came from the producer/source it attributes it to.
+
+These dimensions may all be present on one event and still carry different values and lifecycles.
+
+## Authority chain
+
+Where meaningful, ETLayer should be able to preserve:
+
+~~~text
+principal
+  -> immediate actor
+  -> client/runtime
+  -> connector/adapter
+  -> action
+  -> resource
+~~~
+
+with independent evidence for:
+
+- `on_behalf_of` / delegated principal;
+- credential source;
+- policy or authorization decision;
+- authority scope;
+- action and resource;
+- eventual outcome.
+
+This is a semantic target, not a committed wire schema. Producer claims about this chain remain subject to trusted provenance and authority validation.
+
 ## Trust and provenance implications
 
 Producer-supplied workflow/correlation claims are not automatically trusted merely because they use familiar field names.
