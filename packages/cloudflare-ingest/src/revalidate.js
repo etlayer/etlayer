@@ -58,7 +58,14 @@ export async function revalidateArchivedEvent(
       decisionId: options.decisionId,
       evaluationKind: "revalidation",
       route: options.route,
-      routing: options.routing,
+      routing: {
+        ...(options.routing || {}),
+        delivery: {
+          ...(options.routing?.delivery || {}),
+          mode: "revalidation",
+          sourceKey,
+        },
+      },
     },
   );
 

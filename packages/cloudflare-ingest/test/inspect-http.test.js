@@ -7,6 +7,10 @@ import {
   latestDecisionKey,
 } from "../src/decision-history.js";
 import { deliveryStateKey } from "../src/delivery-state.js";
+import {
+  deliveryAttemptKey,
+  deliveryResourceId,
+} from "../src/delivery-attempt.js";
 import { handleEventInspect } from "../src/inspect-http.js";
 import { identityStateKey } from "../src/identity-state.js";
 import { privacyStateKey } from "../src/privacy-state.js";
@@ -45,6 +49,15 @@ function fakeArchive() {
         async text() {
           return stored.body;
         },
+      };
+    },
+    async list({ prefix }) {
+      return {
+        objects: [...objects.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .sort()
+          .map((key) => ({ key })),
+        truncated: false,
       };
     },
   };
@@ -285,6 +298,64 @@ test("assembles complete event evidence by projectId and eventId only", async ()
     },
   );
 
+  const deliveryId = deliveryResourceId(
+    eventId,
+    "posthog",
+    projectId,
+  );
+
+  await putJson(
+    archive,
+    deliveryAttemptKey(
+      "posthog",
+      eventId,
+      1,
+      "attempt-1",
+      projectId,
+    ),
+    {
+      version: 1,
+      projectId,
+      deliveryId,
+      attemptId: "attempt-1",
+      attemptNumber: 1,
+      eventId,
+      eventName: "account.created",
+      destination: "posthog",
+      mode: "live",
+      status: "skipped",
+      reason: "posthog_not_configured",
+      startedAt: "2026-09-23T04:01:00.000Z",
+      completedAt: "2026-09-23T04:01:00.100Z",
+    },
+  );
+
+  await putJson(
+    archive,
+    deliveryAttemptKey(
+      "posthog",
+      eventId,
+      2,
+      "attempt-2",
+      projectId,
+    ),
+    {
+      version: 1,
+      projectId,
+      deliveryId,
+      attemptId: "attempt-2",
+      attemptNumber: 2,
+      eventId,
+      eventName: "account.created",
+      destination: "posthog",
+      mode: "revalidation",
+      status: "exported",
+      destinationEventId: "ph-event-1",
+      startedAt: "2026-09-23T04:01:01.000Z",
+      completedAt: "2026-09-23T04:01:01.100Z",
+    },
+  );
+
   await putJson(
     archive,
     deliveryStateKey(
@@ -293,13 +364,18 @@ test("assembles complete event evidence by projectId and eventId only", async ()
       projectId,
     ),
     {
-      version: 2,
+      version: 3,
       projectId,
+      deliveryId,
       eventId,
       eventName: "account.created",
       destination: "posthog",
       status: "exported",
-      updatedAt: "2026-09-23T04:01:01.000Z",
+      attemptCount: 2,
+      latestAttemptId: "attempt-2",
+      latestAttemptNumber: 2,
+      lastAttemptAt: "2026-09-23T04:01:01.100Z",
+      updatedAt: "2026-09-23T04:01:01.100Z",
     },
   );
 
@@ -337,6 +413,23 @@ test("assembles complete event evidence by projectId and eventId only", async ()
       ],
     ),
     [["posthog", "exported"]],
+  );
+  assert.equal(
+    body.deliveries[0].state.deliveryId,
+    deliveryId,
+  );
+  assert.deepEqual(
+    body.deliveries[0].attempts.map(
+      ({ attemptNumber, status, mode }) => [
+        attemptNumber,
+        status,
+        mode,
+      ],
+    ),
+    [
+      [1, "skipped", "live"],
+      [2, "exported", "revalidation"],
+    ],
   );
 });
 

@@ -4,6 +4,7 @@ import {
   readLatestDecisionPointer,
 } from "./decision-history.js";
 import { readDeliveryState } from "./delivery-state.js";
+import { listDeliveryAttempts } from "./delivery-attempt.js";
 import { readIdentityState } from "./identity-state.js";
 import { readPrivacyState } from "./privacy-state.js";
 import { resolveProjectDestinations } from "./project-config.js";
@@ -69,15 +70,28 @@ export async function inspectEventState(
     : null;
 
   const deliveryStates = await Promise.all(
-    destinations.map(async (destination) => ({
-      destination,
-      state: await readDeliveryState(
-        archive,
-        eventId,
+    destinations.map(async (destination) => {
+      const [state, attempts] = await Promise.all([
+        readDeliveryState(
+          archive,
+          eventId,
+          destination,
+          { projectId },
+        ),
+        listDeliveryAttempts(
+          archive,
+          eventId,
+          destination,
+          { projectId },
+        ),
+      ]);
+
+      return {
         destination,
-        { projectId },
-      ),
-    })),
+        state,
+        attempts,
+      };
+    }),
   );
 
   const known = Boolean(
@@ -95,7 +109,7 @@ export async function inspectEventState(
       : null;
 
   const deliveries = deliveryStates.map(
-    ({ destination, state }) => ({
+    ({ destination, state, attempts }) => ({
       destination,
       status:
         state?.status ||
@@ -103,6 +117,7 @@ export async function inspectEventState(
           ? "not_routed"
           : "pending"),
       state,
+      attempts,
     }),
   );
 

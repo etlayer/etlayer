@@ -5,8 +5,16 @@ import { handlePublicApiRequest } from "../src/public-api.js";
 import {
   createRegistryProject,
   credentialFingerprint,
+  setRegistryDestination,
 } from "../src/registry.js";
 import { validationStateKey } from "../src/validation-state.js";
+import {
+  deliveryStateKey,
+} from "../src/delivery-state.js";
+import {
+  deliveryAttemptKey,
+  deliveryResourceId,
+} from "../src/delivery-attempt.js";
 
 function fakeArchive() {
   const objects = new Map();
@@ -36,6 +44,15 @@ function fakeArchive() {
         async text() {
           return stored.body;
         },
+      };
+    },
+    async list({ prefix }) {
+      return {
+        objects: [...objects.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .sort()
+          .map((key) => ({ key })),
+        truncated: false,
       };
     },
   };
@@ -324,6 +341,15 @@ test("public event status is project-scoped and strips internal source keys", as
     "etl_op_project-b",
   );
 
+  await setRegistryDestination(archive, {
+    projectId: "project-a",
+    destination: "posthog",
+    enabled: true,
+    now: new Date(
+      "2026-09-24T01:09:00.000Z",
+    ),
+  });
+
   await archive.put(
     validationStateKey("evt-public-1", "project-a"),
     JSON.stringify({
@@ -336,6 +362,66 @@ test("public event status is project-scoped and strips internal source keys", as
       sourceKey:
         "projects/project-a/events/secret-internal-path.json",
       updatedAt: "2026-09-24T01:10:00.000Z",
+    }),
+  );
+
+  const deliveryId = deliveryResourceId(
+    "evt-public-1",
+    "posthog",
+    "project-a",
+  );
+
+  await archive.put(
+    deliveryAttemptKey(
+      "posthog",
+      "evt-public-1",
+      1,
+      "attempt-public-1",
+      "project-a",
+    ),
+    JSON.stringify({
+      version: 1,
+      projectId: "project-a",
+      deliveryId,
+      attemptId: "attempt-public-1",
+      attemptNumber: 1,
+      eventId: "evt-public-1",
+      eventName: "account.created",
+      destination: "posthog",
+      mode: "live",
+      status: "failed",
+      error: {
+        name: "Error",
+        message: "private provider failure",
+      },
+      startedAt:
+        "2026-09-24T01:10:01.000Z",
+      completedAt:
+        "2026-09-24T01:10:01.100Z",
+    }),
+  );
+
+  await archive.put(
+    deliveryStateKey(
+      "posthog",
+      "evt-public-1",
+      "project-a",
+    ),
+    JSON.stringify({
+      version: 3,
+      projectId: "project-a",
+      deliveryId,
+      eventId: "evt-public-1",
+      eventName: "account.created",
+      destination: "posthog",
+      status: "failed",
+      attemptCount: 1,
+      latestAttemptId: "attempt-public-1",
+      latestAttemptNumber: 1,
+      lastAttemptAt:
+        "2026-09-24T01:10:01.100Z",
+      updatedAt:
+        "2026-09-24T01:10:01.100Z",
     }),
   );
 
@@ -365,6 +451,31 @@ test("public event status is project-scoped and strips internal source keys", as
       "secret-internal-path",
     ),
     false,
+  );
+  assert.equal(body.deliveries.length, 1);
+  assert.equal(
+    body.deliveries[0].status,
+    "failed",
+  );
+  assert.equal(
+    "attempts" in body.deliveries[0],
+    false,
+  );
+  assert.equal(
+    JSON.stringify(body).includes(
+      "private provider failure",
+    ),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(body).includes(
+      "attempt-public-1",
+    ),
+    false,
+  );
+  assert.equal(
+    body.deliveries[0].state?.attemptCount,
+    undefined,
   );
 
   const crossProject = await handlePublicApiRequest(

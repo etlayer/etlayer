@@ -1,8 +1,20 @@
-import { readDeliveryState, recordDeliveryState } from "./delivery-state.js";
+import {
+  readDeliveryState,
+  recordDeliveryState,
+} from "./delivery-state.js";
+import {
+  nextDeliveryAttemptNumber,
+  recordDeliveryAttempt,
+} from "./delivery-attempt.js";
 import { exportToPostHog } from "./posthog.js";
 import { exportToStatsig } from "./statsig.js";
-import { projectConfiguration, resolveProjectDestinations } from "./project-config.js";
-import { resolveDestinationCredential } from "./destination-credentials.js";
+import {
+  projectConfiguration,
+  resolveProjectDestinations,
+} from "./project-config.js";
+import {
+  resolveDestinationCredential,
+} from "./destination-credentials.js";
 import { projectIdForEvent } from "./project-scope.js";
 
 const DEFAULT_DESTINATIONS = [
@@ -16,17 +28,26 @@ const DEFAULT_DESTINATIONS = [
   },
 ];
 
-export async function routeEventDestinations(event, env, options = {}) {
+export async function routeEventDestinations(
+  event,
+  env,
+  options = {},
+) {
   const projectId = projectIdForEvent(event);
-  const usesProjectConfiguration = !options.destinations;
+  const usesProjectConfiguration =
+    !options.destinations;
   const destinations =
     options.destinations ||
     await configuredDestinationsForProject(
       env.ARCHIVE,
       projectId,
     );
-  const readState = options.readState || readDeliveryState;
-  const recordState = options.recordState || recordDeliveryState;
+  const readState =
+    options.readState || readDeliveryState;
+  const recordState =
+    options.recordState || recordDeliveryState;
+  const recordAttempt =
+    options.recordAttempt || recordDeliveryAttempt;
   const results = [];
 
   for (const destination of destinations) {
@@ -51,6 +72,38 @@ export async function routeEventDestinations(event, env, options = {}) {
       continue;
     }
 
+    const attemptNumber =
+      options.nextAttemptNumber
+        ? await options.nextAttemptNumber(
+            env.ARCHIVE,
+            event.id,
+            destination.name,
+            {
+              projectId,
+              previousState: previous,
+            },
+          )
+        : await nextDeliveryAttemptNumber(
+            env.ARCHIVE,
+            event.id,
+            destination.name,
+            {
+              projectId,
+              previousState: previous,
+            },
+          );
+
+    const delivery =
+      options.delivery ||
+      destinationOptions.delivery
+        ? {
+            ...(options.delivery || {}),
+            ...(destinationOptions.delivery || {}),
+          }
+        : null;
+    const startedAt = normalizeTimestamp(
+      options.now,
+    );
     let result;
 
     try {
@@ -74,6 +127,12 @@ export async function routeEventDestinations(event, env, options = {}) {
         destinationOptions = {
           ...destinationOptions,
           credential: credential.secret,
+          ...(delivery ? { delivery } : {}),
+        };
+      } else if (delivery) {
+        destinationOptions = {
+          ...destinationOptions,
+          delivery,
         };
       }
 
@@ -89,6 +148,31 @@ export async function routeEventDestinations(event, env, options = {}) {
       };
     }
 
+    const completedAt = normalizeTimestamp(
+      options.now,
+    );
+    const shouldRecordAttempt =
+      Boolean(options.recordAttempt) ||
+      typeof env.ARCHIVE?.put === "function";
+
+    const attempt = shouldRecordAttempt
+      ? await recordAttempt(
+          env.ARCHIVE,
+          event,
+          destination.name,
+          result,
+          {
+            attemptNumber,
+            startedAt,
+            completedAt,
+            delivery,
+            crypto:
+              destinationOptions.crypto ||
+              options.crypto,
+          },
+        )
+      : null;
+
     await recordState(
       env.ARCHIVE,
       event,
@@ -96,17 +180,43 @@ export async function routeEventDestinations(event, env, options = {}) {
       result,
       {
         now: options.now,
-        delivery: destinationOptions.delivery,
+        delivery,
+        attempt: attempt?.state,
       },
     );
 
     results.push({
       destination: destination.name,
       ...result,
+      ...(attempt
+        ? {
+            deliveryId:
+              attempt.state.deliveryId,
+            attemptId:
+              attempt.state.attemptId,
+            attemptNumber:
+              attempt.state.attemptNumber,
+          }
+        : {}),
     });
   }
 
   return results;
+}
+
+function normalizeTimestamp(value) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value || Date.now());
+
+  if (Number.isNaN(date.getTime())) {
+    throw new DestinationRouterConfigurationError(
+      "delivery timestamp is invalid",
+    );
+  }
+
+  return date;
 }
 
 function validateDestination(destination) {
@@ -123,7 +233,6 @@ function validateDestination(destination) {
 }
 
 export class DestinationRouterConfigurationError extends Error {}
-
 
 async function configuredDestinationsForProject(
   archive,

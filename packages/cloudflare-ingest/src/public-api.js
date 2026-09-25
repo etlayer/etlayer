@@ -305,7 +305,7 @@ async function publicEventStatus(
         decision:
           sanitizePublicEvidence(inspected.decision),
         deliveries:
-          sanitizePublicEvidence(inspected.deliveries),
+          sanitizePublicDeliveries(inspected.deliveries),
       },
       200,
     );
@@ -459,6 +459,30 @@ function idempotencyError(error) {
   }
 
   return unexpectedError(error);
+}
+
+function sanitizePublicDeliveries(deliveries) {
+  if (!Array.isArray(deliveries)) return [];
+
+  return deliveries.map((delivery) => {
+    const state = sanitizePublicEvidence(
+      delivery.state,
+    );
+
+    if (state && typeof state === "object") {
+      delete state.deliveryId;
+      delete state.attemptCount;
+      delete state.latestAttemptId;
+      delete state.latestAttemptNumber;
+      delete state.lastAttemptAt;
+    }
+
+    return {
+      destination: delivery.destination,
+      status: delivery.status,
+      state,
+    };
+  });
 }
 
 function sanitizePublicEvidence(value) {
