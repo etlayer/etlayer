@@ -6,6 +6,9 @@ import {
   routeEventDestinations,
 } from "../src/destinations.js";
 import {
+  listDeliveryAttempts,
+} from "../src/delivery-attempt.js";
+import {
   createRegistryProject,
   credentialFingerprint,
   setRegistryDestination,
@@ -447,3 +450,144 @@ test("dynamic project without credential never falls back to Worker-global PostH
     "posthog_not_configured",
   );
 });
+
+function deliveryArchive() {
+  const objects = new Map();
+
+  return {
+    objects,
+    async put(key, body, options = {}) {
+      if (
+        options.onlyIf?.etagDoesNotMatch === "*" &&
+        objects.has(key)
+      ) {
+        return null;
+      }
+
+      objects.set(key, body);
+      return { key };
+    },
+    async get(key) {
+      const body = objects.get(key);
+      if (body == null) return null;
+      return {
+        async text() {
+          return body;
+        },
+      };
+    },
+    async list({ prefix }) {
+      return {
+        objects: [...objects.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .sort()
+          .map((key) => ({ key })),
+        truncated: false,
+      };
+    },
+  };
+}
+
+test("records append-only attempts and does not create one for already_exported short-circuit", async () => {
+  const archive = deliveryArchive();
+  const managedEvent = {
+    id: "evt_attempt_history",
+    eventName: "checkout.completed",
+  };
+  let phase = "not-configured";
+  let exportCalls = 0;
+
+  const destination = {
+    name: "posthog",
+    async exportEvent() {
+      exportCalls += 1;
+
+      if (phase === "not-configured") {
+        return {
+          status: "skipped",
+          reason: "posthog_not_configured",
+        };
+      }
+
+      return {
+        status: "exported",
+        uuid: "ph_evt_attempt_history",
+      };
+    },
+  };
+
+  const first = await routeEventDestinations(
+    managedEvent,
+    { ARCHIVE: archive },
+    {
+      destinations: [destination],
+      now: new Date(
+        "2026-09-25T17:10:00.000Z",
+      ),
+    },
+  );
+
+  phase = "configured";
+
+  const second = await routeEventDestinations(
+    managedEvent,
+    { ARCHIVE: archive },
+    {
+      destinations: [destination],
+      now: new Date(
+        "2026-09-25T17:11:00.000Z",
+      ),
+      delivery: {
+        mode: "revalidation",
+      },
+    },
+  );
+
+  const third = await routeEventDestinations(
+    managedEvent,
+    { ARCHIVE: archive },
+    {
+      destinations: [destination],
+      now: new Date(
+        "2026-09-25T17:12:00.000Z",
+      ),
+      delivery: {
+        mode: "revalidation",
+      },
+    },
+  );
+
+  assert.equal(first[0].attemptNumber, 1);
+  assert.equal(first[0].status, "skipped");
+  assert.equal(second[0].attemptNumber, 2);
+  assert.equal(second[0].status, "exported");
+  assert.deepEqual(third, [
+    {
+      destination: "posthog",
+      status: "skipped",
+      reason: "already_exported",
+    },
+  ]);
+  assert.equal(exportCalls, 2);
+
+  const attempts = await listDeliveryAttempts(
+    archive,
+    managedEvent.id,
+    "posthog",
+  );
+
+  assert.deepEqual(
+    attempts.map(
+      ({ attemptNumber, status, mode }) => [
+        attemptNumber,
+        status,
+        mode,
+      ],
+    ),
+    [
+      [1, "skipped", "live"],
+      [2, "exported", "revalidation"],
+    ],
+  );
+});
+
