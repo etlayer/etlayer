@@ -7,6 +7,9 @@ import { recordPrivacyState } from "./privacy-state.js";
 import { recordDecisionHistory } from "./decision-history.js";
 import { routeEventDestinations } from "./destinations.js";
 import { validateEventContract } from "./event-contracts.js";
+import {
+  resolvePublishedContractForEvent,
+} from "./governance-publication.js";
 import { recordValidationState } from "./validation-state.js";
 
 export async function processPersistedEvent(
@@ -33,7 +36,35 @@ export async function processPersistedEvent(
     options.recordDecisionHistory || recordDecisionHistory;
   const route = options.route || routeEventDestinations;
 
-  const validation = validate(event, options.validation || {});
+  const validationOptions = {
+    ...(options.validation || {}),
+  };
+
+  if (!validationOptions.findContract) {
+    const published =
+      await resolvePublishedContractForEvent(
+        env.ARCHIVE,
+        event,
+      );
+
+    if (published?.contract) {
+      validationOptions.findContract = (
+        eventName,
+        version,
+      ) =>
+        eventName ===
+          published.contract.eventName &&
+        version ===
+          published.contract.version
+          ? published.contract
+          : null;
+    }
+  }
+
+  const validation = await validate(
+    event,
+    validationOptions,
+  );
 
   await recordState(
     env.ARCHIVE,

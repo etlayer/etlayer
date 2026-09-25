@@ -10,6 +10,13 @@ import {
   operatorCredentialKey,
   producerCredentialKey,
 } from "../src/registry.js";
+import {
+  governanceContractKey,
+  governancePublicationKey,
+} from "../src/governance-publication.js";
+import {
+  governanceManifestDigest,
+} from "../src/governance-manifest.js";
 
 function fakeArchive() {
   const objects = new Map();
@@ -933,3 +940,228 @@ test("control-plane mutations emit append-only attributable audit evidence", asy
     );
   }
 });
+
+test("project operator publishes exactly the planned governance manifest with audit evidence", async () => {
+  const archive = fakeArchive();
+  const env = {
+    ARCHIVE: archive,
+    ETLAYER_MANAGEMENT_KEY:
+      "management-key",
+  };
+
+  const created = await (
+    await manage(
+      env,
+      "POST",
+      "/_mgmt/projects",
+      "management-key",
+      { id: "governance-a" },
+    )
+  ).json();
+
+  const manifest = {
+    apiVersion: "etlayer.dev/v1",
+    kind: "ProjectGovernance",
+    projectId: "governance-a",
+    contracts: [
+      {
+        eventName:
+          "account.created",
+        currentVersion: 1,
+        compatibilityMode:
+          "backward",
+        proposedContract: {
+          id: "account.created@2",
+          eventName:
+            "account.created",
+          version: 2,
+          required: {
+            "actor.anonymous.id": {
+              type: "string",
+            },
+            "account.id": {
+              type: "string",
+            },
+            "correlation.id": {
+              type: "string",
+            },
+            "causation.id": {
+              type: "string",
+            },
+            "plan.id": {
+              type: "string",
+            },
+            "etlayer.producer.kind": {
+              type: "string",
+              const: "backend",
+            },
+            "etlayer.authority.kind": {
+              type: "string",
+              const:
+                "business_state",
+            },
+          },
+          forbidden: [
+            "experiment.id",
+            "experiment.variant",
+          ],
+        },
+        from:
+          "2026-09-25T10:00:00Z",
+        to:
+          "2026-09-25T11:00:00Z",
+      },
+    ],
+  };
+
+  const digest =
+    await governanceManifestDigest(
+      manifest,
+    );
+
+  const wrongDigest = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/governance-a/governance/publish",
+    created.operatorCredential,
+    {
+      manifest,
+      manifestDigest:
+        "0".repeat(64),
+      acknowledgeBreaking: true,
+    },
+  );
+
+  assert.equal(
+    wrongDigest.status,
+    409,
+  );
+  assert.equal(
+    archive.objects.has(
+      governancePublicationKey(
+        "governance-a",
+        digest,
+      ),
+    ),
+    false,
+  );
+
+  const notAcknowledged =
+    await manage(
+      env,
+      "POST",
+      "/_mgmt/projects/governance-a/governance/publish",
+      created.operatorCredential,
+      {
+        manifest,
+        manifestDigest: digest,
+      },
+    );
+
+  assert.equal(
+    notAcknowledged.status,
+    409,
+  );
+
+  const published = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/governance-a/governance/publish",
+    created.operatorCredential,
+    {
+      manifest,
+      manifestDigest: digest,
+      acknowledgeBreaking: true,
+    },
+  );
+
+  assert.equal(published.status, 201);
+  const operationId =
+    published.headers.get(
+      "x-etlayer-operation-id",
+    );
+  assert.ok(operationId);
+
+  const body = await published.json();
+  assert.equal(body.created, true);
+  assert.equal(
+    body.publication.manifestDigest,
+    digest,
+  );
+  assert.equal(
+    body.publication.compatible,
+    false,
+  );
+  assert.equal(
+    archive.objects.has(
+      governanceContractKey(
+        "governance-a",
+        "account.created",
+        2,
+      ),
+    ),
+    true,
+  );
+  assert.equal(
+    archive.objects.has(
+      governancePublicationKey(
+        "governance-a",
+        digest,
+      ),
+    ),
+    true,
+  );
+
+  const requested =
+    await manage(
+      env,
+      "POST",
+      "/_mgmt/evidence",
+      "management-key",
+      {
+        key: controlPlaneAuditKey(
+          operationId,
+          "requested",
+        ),
+      },
+    );
+
+  assert.equal(requested.status, 200);
+  const audit =
+    await requested.json();
+  assert.equal(
+    audit.action,
+    "governance.publish",
+  );
+  assert.equal(
+    audit.actor.kind,
+    "project_operator",
+  );
+  assert.equal(
+    audit.target.projectId,
+    "governance-a",
+  );
+  assert.equal(
+    audit.target.manifestDigest,
+    digest,
+  );
+
+  const repeated = await manage(
+    env,
+    "POST",
+    "/_mgmt/projects/governance-a/governance/publish",
+    created.operatorCredential,
+    {
+      manifest,
+      manifestDigest: digest,
+      acknowledgeBreaking: true,
+    },
+  );
+
+  assert.equal(repeated.status, 200);
+  assert.equal(
+    (await repeated.json()).created,
+    false,
+  );
+});
+

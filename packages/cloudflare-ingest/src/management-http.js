@@ -48,6 +48,22 @@ import {
   activeEncryptionRootVersion,
 } from "./encryption-roots.js";
 import { auditControlPlaneMutation } from "./control-plane-audit.js";
+import {
+  GovernanceManifestConfigurationError,
+  GovernanceManifestValidationError,
+  GovernancePlanArchiveError,
+  GovernancePlanConfigurationError,
+  GovernancePlanValidationError,
+  planGovernanceManifest,
+} from "./governance-plan.js";
+import {
+  GovernancePublicationBreakingChangeError,
+  GovernancePublicationConfigurationError,
+  GovernancePublicationConflictError,
+  GovernancePublicationDigestMismatchError,
+  GovernancePublicationValidationError,
+  publishGovernanceManifest,
+} from "./governance-publication.js";
 
 export async function handleManagementRequest(
   request,
@@ -102,6 +118,23 @@ export async function handleManagementRequest(
       request,
       env,
       decodeURIComponent(onboarding[1]),
+      options,
+    );
+  }
+
+  const governancePublish = url.pathname.match(
+    /^\/_mgmt\/projects\/([^/]+)\/governance\/publish$/,
+  );
+  if (
+    request.method === "POST" &&
+    governancePublish
+  ) {
+    return publishProjectGovernance(
+      request,
+      env,
+      decodeURIComponent(
+        governancePublish[1],
+      ),
       options,
     );
   }
@@ -415,6 +448,168 @@ async function createProject(request, env, options) {
     );
   } catch (error) {
     return registryErrorResponse(error);
+  }
+}
+
+async function publishProjectGovernance(
+  request,
+  env,
+  projectId,
+  options,
+) {
+  const auth = await projectAuth(
+    request,
+    env,
+    projectId,
+    options,
+  );
+  if (auth.response) return auth.response;
+
+  const input = await readJsonBody(request);
+  if (input.response) return input.response;
+
+  const manifest = input.value?.manifest;
+
+  if (
+    !manifest ||
+    manifest.projectId !== projectId
+  ) {
+    return jsonResponse(
+      {
+        error:
+          "manifest projectId must match the requested project",
+      },
+      400,
+    );
+  }
+
+  let plan;
+
+  try {
+    const planGovernance =
+      options.planGovernanceManifest ||
+      planGovernanceManifest;
+
+    plan = await planGovernance(
+      env,
+      manifest,
+      options,
+    );
+  } catch (error) {
+    return governancePublicationErrorResponse(
+      error,
+    );
+  }
+
+  try {
+    const audited =
+      await runAuditedMutation(
+        request,
+        env,
+        options,
+        {
+          actor: operatorActor(
+            projectId,
+            auth.authentication,
+          ),
+          action:
+            "governance.publish",
+          target: {
+            kind:
+              "governance_manifest",
+            projectId,
+            manifestDigest:
+              input.value?.manifestDigest ||
+              null,
+          },
+          change: {
+            compatible:
+              plan.compatible,
+            selected:
+              plan.selected,
+            changed:
+              plan.changed,
+            acknowledgeBreaking:
+              input.value
+                ?.acknowledgeBreaking ===
+              true,
+          },
+        },
+        () =>
+          publishGovernanceManifest(
+            env.ARCHIVE,
+            {
+              manifest,
+              manifestDigest:
+                input.value
+                  ?.manifestDigest,
+              acknowledgeBreaking:
+                input.value
+                  ?.acknowledgeBreaking,
+              plan,
+            },
+            {
+              now:
+                options.now ||
+                new Date(),
+              crypto:
+                options.crypto ||
+                globalThis.crypto,
+            },
+          ),
+      );
+
+    const publication =
+      audited.value.publication;
+
+    return jsonResponse(
+      {
+        created:
+          audited.value.created,
+        publication: {
+          version:
+            publication.version,
+          projectId:
+            publication.projectId,
+          manifestDigest:
+            publication.manifestDigest,
+          publishedAt:
+            publication.publishedAt,
+          compatible:
+            publication.compatible,
+          selected:
+            publication.selected,
+          changed:
+            publication.changed,
+          contracts:
+            publication.manifest
+              .contracts.map(
+                (change) => ({
+                  eventName:
+                    change.eventName,
+                  version:
+                    change
+                      .proposedContract
+                      .version,
+                  contractId:
+                    change
+                      .proposedContract
+                      .id,
+                }),
+              ),
+        },
+      },
+      audited.value.created
+        ? 201
+        : 200,
+      operationHeaders(
+        audited.operationId,
+      ),
+    );
+  } catch (error) {
+    return governancePublicationErrorResponse(
+      error,
+    );
   }
 }
 
@@ -1623,6 +1818,64 @@ function dynamicProjectOnly(projectId) {
   }
 
   return null;
+}
+
+function governancePublicationErrorResponse(
+  error,
+) {
+  if (
+    error instanceof
+      GovernanceManifestValidationError ||
+    error instanceof
+      GovernancePlanValidationError ||
+    error instanceof
+      GovernancePublicationValidationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      400,
+    );
+  }
+
+  if (
+    error instanceof
+      GovernancePublicationDigestMismatchError ||
+    error instanceof
+      GovernancePublicationBreakingChangeError ||
+    error instanceof
+      GovernancePublicationConflictError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      409,
+    );
+  }
+
+  if (
+    error instanceof
+      GovernanceManifestConfigurationError ||
+    error instanceof
+      GovernancePlanConfigurationError ||
+    error instanceof
+      GovernancePublicationConfigurationError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      503,
+    );
+  }
+
+  if (
+    error instanceof
+      GovernancePlanArchiveError
+  ) {
+    return jsonResponse(
+      { error: error.message },
+      500,
+    );
+  }
+
+  throw error;
 }
 
 function destinationCredentialErrorResponse(error) {
