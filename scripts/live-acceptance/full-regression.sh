@@ -29,5 +29,6 @@ run_slice vs18 scripts/once/vs18-delivery-attempts.sh
 run_slice vs19 scripts/once/vs19-governance-as-code.sh
 run_slice vs20 scripts/once/vs20-governance-publication.sh
 run_slice vs21 scripts/once/vs21-contract-lifecycle.sh
+run_slice vs22 scripts/once/vs22-ownership-metadata.sh
 
-printf '\nFull live regression passed: VS8 -> VS21\n'
+printf '\nFull live regression passed: VS8 -> VS22\n'

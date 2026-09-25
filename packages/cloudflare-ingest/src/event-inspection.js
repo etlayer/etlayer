@@ -9,6 +9,9 @@ import { readIdentityState } from "./identity-state.js";
 import { readPrivacyState } from "./privacy-state.js";
 import { resolveProjectDestinations } from "./project-config.js";
 import { readValidationState } from "./validation-state.js";
+import {
+  readContractOwnership,
+} from "./contract-ownership.js";
 
 export async function inspectEventState(
   archive,
@@ -68,6 +71,15 @@ export async function inspectEventState(
         { projectId },
       )
     : null;
+
+  const ownership =
+    validation?.eventName
+      ? await readContractOwnership(
+          archive,
+          projectId,
+          validation.eventName,
+        )
+      : null;
 
   const deliveryStates = await Promise.all(
     destinations.map(async (destination) => {
@@ -152,6 +164,7 @@ export async function inspectEventState(
     privacy,
     identity,
     decision,
+    ownership,
     deliveries,
   };
 }
