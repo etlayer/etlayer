@@ -13,7 +13,7 @@ jobs:
         with:
           node-version: 22
       - run: npm test
-      - run: bash -n scripts/once/*.sh
+      - run: bash -n scripts/once/*.sh scripts/live-acceptance/*.sh
       - name: Run VS16 contract compatibility acceptance
         run: bash ./scripts/once/vs16-contract-compatibility.sh
       - name: Validate ingest CI Wrangler config
