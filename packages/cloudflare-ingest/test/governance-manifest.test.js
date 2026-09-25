@@ -168,3 +168,37 @@ test("rejects duplicate contract changes", () => {
     /duplicate contract change/,
   );
 });
+
+test("bounds aggregate historical planning work", () => {
+  const first = manifest().contracts[0];
+  const second = {
+    ...first,
+    eventName: "landing.hero.exposed",
+    proposedContract: {
+      eventName: "landing.hero.exposed",
+      version: 2,
+      required: {},
+      forbidden: [],
+    },
+  };
+
+  assert.throws(
+    () =>
+      normalizeGovernanceManifest(
+        manifest({
+          contracts: [
+            {
+              ...first,
+              maxEvents: 3000,
+            },
+            {
+              ...second,
+              maxEvents: 3000,
+            },
+          ],
+        }),
+      ),
+    /aggregate maxEvents/,
+  );
+});
+
