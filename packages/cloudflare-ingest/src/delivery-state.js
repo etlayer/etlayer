@@ -1,5 +1,6 @@
 import { DEFAULT_PROJECT_ID } from "./project-config.js";
 import { projectIdForEvent, scopedProjectKey } from "./project-scope.js";
+import { deliveryResourceId } from "./delivery-attempt.js";
 
 export async function readDeliveryState(
   archive,
@@ -82,8 +83,13 @@ export async function recordDeliveryState(
 
   const projectId = projectIdForEvent(event);
   const state = {
-    version: 2,
+    version: 3,
     projectId,
+    deliveryId: deliveryResourceId(
+      event.id,
+      destination,
+      projectId,
+    ),
     eventId: event.id,
     eventName: event.eventName,
     destination,
@@ -91,16 +97,35 @@ export async function recordDeliveryState(
     updatedAt: now.toISOString(),
   };
 
-  if (typeof result?.reason === "string" && result.reason.length > 0) {
+  if (
+    typeof result?.reason === "string" &&
+    result.reason.length > 0
+  ) {
     state.reason = result.reason;
   }
 
-  if (typeof result?.uuid === "string" && result.uuid.length > 0) {
+  if (
+    typeof result?.uuid === "string" &&
+    result.uuid.length > 0
+  ) {
     state.destinationEventId = result.uuid;
   }
 
   if (result?.error) {
     state.error = serializeError(result.error);
+  }
+
+  if (options.attempt) {
+    validateAttempt(options.attempt, state.deliveryId);
+
+    state.attemptCount =
+      options.attempt.attemptNumber;
+    state.latestAttemptId =
+      options.attempt.attemptId;
+    state.latestAttemptNumber =
+      options.attempt.attemptNumber;
+    state.lastAttemptAt =
+      options.attempt.completedAt;
   }
 
   if (options.delivery?.mode) {
@@ -123,10 +148,17 @@ export async function recordDeliveryState(
     },
     customMetadata: {
       project_id: projectId,
+      delivery_id: state.deliveryId,
       event_id: event.id,
       event_name: event.eventName,
       destination,
       status: state.status,
+      attempt_count:
+        state.attemptCount == null
+          ? "0"
+          : String(state.attemptCount),
+      latest_attempt_id:
+        state.latestAttemptId || "",
       updated_at: state.updatedAt,
     },
   });
@@ -141,7 +173,10 @@ export function deliveryStateKey(
 ) {
   validateDestination(destination);
 
-  if (typeof eventId !== "string" || eventId.trim() === "") {
+  if (
+    typeof eventId !== "string" ||
+    eventId.trim() === ""
+  ) {
     throw new DeliveryStateConfigurationError(
       "event id must be a non-empty string",
     );
@@ -153,8 +188,28 @@ export function deliveryStateKey(
   );
 }
 
+function validateAttempt(attempt, deliveryId) {
+  if (
+    !attempt ||
+    attempt.deliveryId !== deliveryId ||
+    typeof attempt.attemptId !== "string" ||
+    attempt.attemptId.trim() === "" ||
+    !Number.isSafeInteger(attempt.attemptNumber) ||
+    attempt.attemptNumber < 1 ||
+    typeof attempt.completedAt !== "string"
+  ) {
+    throw new DeliveryStateConfigurationError(
+      "delivery attempt does not match delivery summary",
+    );
+  }
+}
+
 function normalizeStatus(status) {
-  if (status === "exported" || status === "skipped" || status === "failed") {
+  if (
+    status === "exported" ||
+    status === "skipped" ||
+    status === "failed"
+  ) {
     return status;
   }
 
@@ -198,7 +253,10 @@ function validateEvent(event) {
 }
 
 function validateDestination(destination) {
-  if (typeof destination !== "string" || destination.trim() === "") {
+  if (
+    typeof destination !== "string" ||
+    destination.trim() === ""
+  ) {
     throw new DeliveryStateConfigurationError(
       "destination must be a non-empty string",
     );
