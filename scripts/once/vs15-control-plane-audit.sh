@@ -53,6 +53,32 @@ request() {
   curl --silent --show-error     -D "$headers_file"     -o "$body_file"     -w '%{http_code}'     -X "$method"     "$INGEST_URL$path"     -H "authorization: Bearer $token"     -H "content-type: application/json"     --data "$body"
 }
 
+request_after_deploy() {
+  local method="$1"
+  local path="$2"
+  local token="$3"
+  local body="$4"
+  local name="$5"
+  local status=""
+
+  for attempt in $(seq 1 20); do
+    status="$(
+      request         "$method"         "$path"         "$token"         "$body"         "$name"
+    )"
+
+    if [ "$status" != "401" ]; then
+      printf '%s' "$status"
+      return 0
+    fi
+
+    if [ "$attempt" -lt 20 ]; then
+      sleep 1
+    fi
+  done
+
+  printf '%s' "$status"
+}
+
 body() {
   cat "$TMP_PREFIX.$1.body"
 }
@@ -178,7 +204,7 @@ say "Deploying current Worker"
 
 say "Creating audited project"
 STATUS="$(
-  request     POST     "/_mgmt/projects"     "$MANAGEMENT_KEY"     "$(node -e '
+  request_after_deploy     POST     "/_mgmt/projects"     "$MANAGEMENT_KEY"     "$(node -e '
       process.stdout.write(
         JSON.stringify({ id: process.argv[1] }),
       );
