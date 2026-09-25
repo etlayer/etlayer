@@ -127,6 +127,81 @@ Examples:
 
 ETLayer should preserve the source and authority context rather than treating every event as equally trustworthy.
 
+## Evidence relationship model
+
+A trustworthy event explanation needs more than a trace ID.
+
+ETLayer should keep these relationship classes distinct:
+
+~~~text
+trace
+  technical execution relationship
+
+correlation
+  membership in one longer logical conversation
+
+causation
+  why one durable event happened because of another
+
+workflow
+  membership in one durable business/orchestration process
+
+delegation
+  why one actor was allowed to act for another principal
+~~~
+
+These relationships may overlap, but they must not be collapsed into one identifier.
+
+A useful authority chain may look like:
+
+~~~text
+human principal
+  -> agent or service
+  -> client/runtime
+  -> connector/adapter
+  -> operation
+  -> resource
+~~~
+
+Where meaningful, accepted evidence should be able to preserve the immediate actor, delegated or represented principal, credential source, policy decision, authority scope, action, resource, and outcome.
+
+Producer-supplied actor, delegation, workflow, and authority fields are claims until ETLayer can authenticate, validate, or enrich them. The existing invariant remains:
+
+~~~text
+payload claim != trusted provenance
+~~~
+
+The conceptual canonical evidence envelope therefore has independent dimensions for:
+
+- event identity and time;
+- immediate actor and subject;
+- delegation / on-behalf-of relationships;
+- producer, runtime, transport, and trusted provenance;
+- correlation, causation, workflow, trace, and session context;
+- action and resource;
+- policy/decision evidence;
+- outcome and supporting evidence references.
+
+This is a semantic target, not a commitment to one wire format.
+
+## Agent and MCP boundary
+
+MCP is an adapter or transport, not ETLayer's ontology.
+
+An agent control plane may enforce identity, delegated access, policy, runtime security, and tool governance. Such a control plane can be both an ETLayer producer and consumer:
+
+~~~text
+agent control plane
+  -> policy/action/outcome evidence
+  -> ETLayer
+
+ETLayer
+  -> trusted evidence stream
+  -> Operational / SIEM / warehouse / analytics
+~~~
+
+ETLayer should preserve evidence about agent-control decisions without becoming the MCP gateway, agent IAM system, or runtime-security enforcement point itself.
+
 ## Delivery semantics
 
 VS1 assumes at-least-once delivery between internal stages.
