@@ -30,9 +30,10 @@ VS17 Historical Contract Plan                     complete
 VS18 First-class Delivery + Append-only Attempts   complete
 VS19 Governance-as-Code Manifest + Plan             complete
 VS20 Guarded Governance Publication                  complete
+VS21 Contract Lifecycle                              complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS20 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS21 serially.
 
 See:
 
@@ -49,7 +50,8 @@ See:
 - [VS18: First-class Delivery and Append-only Attempts](vertical-slices/vs18-delivery-attempts.md)
 - [VS19: Governance-as-Code Manifest and Deterministic Plan](vertical-slices/vs19-governance-as-code.md)
 - [VS20: Guarded Governance Publication by Manifest Digest](vertical-slices/vs20-governance-publication.md)
-- GitHub issues #43, #48, #50, #52, #54, #56, #69, and #72
+- [VS21: Contract Lifecycle - Published, Deprecated, Retired](vertical-slices/vs21-contract-lifecycle.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, and #75
 
 ## Phase 2 - Product Contract
 
@@ -231,7 +233,11 @@ PR #70 proved the current slice in ~1 minute using the fast acceptance path. Aft
 
 Fast acceptance run #36177195839 proved the VS20 slice on the PR head. After merge, full regression run #36177462836 re-proved VS8 -> VS20 serially on main.
 
-The next sequencing candidate is Contract Lifecycle: give published contract versions explicit Published -> Deprecated -> Retired state without adding draft/review workflow machinery that Git/Governance-as-Code already covers.
+**VS21 - Contract Lifecycle is complete and live-proven.** Published project-scoped contract versions now have a monotonic Published -> Deprecated -> Retired lifecycle. Deprecated remains runtime-compatible and inspectable; Retired deterministically quarantines future events with contract_retired and cannot be resurrected. Lifecycle mutations are project-operator authenticated and control-plane audited.
+
+Fast acceptance run #36180682715 proved the VS21 slice on the PR head. After merge, full regression run #36181006381 re-proved VS8 -> VS21 serially on main.
+
+The next sequencing candidate is Ownership Metadata: make contract ownership and operational contacts first-class, project-scoped governance data so event/contract inspection can answer who owns a contract without introducing a generalized org/RBAC model.
 
 The milestone backlog is:
 
@@ -265,13 +271,13 @@ Quarantine
   -> Delivery / Attempt
   -> Governance-as-Code
   -> guarded publication
+  -> Contract Lifecycle
 ~~~
 
 The current sequencing hypothesis is:
 
 ~~~text
-guarded publication
-  -> Contract Lifecycle
+Contract Lifecycle
   -> Ownership Metadata
   -> Governance Metrics
 ~~~
