@@ -1,6 +1,6 @@
 # ETLayer Roadmap
 
-This roadmap describes the current product sequence after the completion of VS13.
+This roadmap describes the current product sequence after the completion of VS23.
 
 It is intentionally outcome-driven. A roadmap item becomes a numbered vertical slice only when it has a concrete invariant and executable acceptance proof.
 
@@ -284,15 +284,16 @@ Quarantine
   -> Governance-as-Code
   -> guarded publication
   -> Contract Lifecycle
+  -> Ownership Metadata
   -> Governance Metrics
-  -> Environment Promotion
 ~~~
 
 The current sequencing hypothesis is:
 
 ~~~text
-Ownership Metadata
-  -> Governance Metrics
+Governance Metrics
+  -> Environment Promotion
+  -> Post-VS24 architecture/product review
 ~~~
 
 This sequence is deliberately revisable. The invariant/acceptance proof for the next slice remains authoritative over the ordering hypothesis.
