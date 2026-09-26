@@ -42,6 +42,7 @@ See:
 - [RFC-0001: Protocol boundaries and durable causal lineage](rfcs/0001-protocol-boundaries-and-causal-lineage.md)
 - [Post-VS11 Architecture Review](reviews/post-vs11-architecture-review.md)
 - [Post-VS12 Architecture Review](reviews/post-vs12-architecture-review.md)
+- [Post-VS23 Product and Architecture Review](reviews/post-vs23-product-architecture-review.md)
 - [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md)
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
@@ -249,7 +250,11 @@ Fast acceptance run #36189562122 proved the VS22 slice on the PR head. After mer
 
 Fast acceptance run #36237536531 proved the VS23 slice on the PR head. After merge, full regression run #36237645887 re-proved VS8 -> VS23 serially on main.
 
-The next sequencing candidate is Environment Promotion: promote an already-planned and immutable governance manifest from one named environment to another while preserving the exact manifestDigest and requiring target-environment planning before publication.
+The post-VS23 architecture review found that Environment Promotion is not yet a clean next slice. The current manifestDigest is intentionally project-bound and planning-window-bound, while ETLayer has no higher-level Workspace/Environment identity that can authorize a real cross-project promotion domain. Adding an environment label now would create a fake boundary.
+
+Environment Promotion remains an A2-NEXT capability. It should return when Workspace/Environment identity is concrete enough to support it without weakening manifest identity or relying on the global management credential as a product authorization model.
+
+The current next-slice candidates are Service Protection Baseline, Supported Project Read Surface, and Typed Contract/SDK generation. Service Protection Baseline is the current sequencing candidate because it reduces a concrete hosted-service risk without changing ETLayer's semantic core.
 
 The milestone backlog is:
 
@@ -292,8 +297,12 @@ The current sequencing hypothesis is:
 
 ~~~text
 Governance Metrics
+  -> Post-VS23 architecture/product review
+  -> Service Protection Baseline
+  -> Supported Product / DX surfaces
+
+later, after Workspace/Environment identity exists:
   -> Environment Promotion
-  -> Post-VS24 architecture/product review
 ~~~
 
 This sequence is deliberately revisable. The invariant/acceptance proof for the next slice remains authoritative over the ordering hypothesis.
