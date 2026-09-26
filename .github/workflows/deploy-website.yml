@@ -55,7 +55,7 @@ jobs:
       - name: Production acceptance
         shell: bash
         env:
-          SITE_URL: https://etlayer-web.sergii-ponomarov.workers.dev
+          SITE_URL: https://etlayer-web.web33.workers.dev
         run: |
           set -euo pipefail
 
