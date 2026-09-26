@@ -189,7 +189,7 @@ export function normalizeGovernanceMetricsInput(
   };
 }
 
-async function buildCurrentGovernanceInventory(
+export async function buildCurrentGovernanceInventory(
   archive,
   projectId,
   options,
