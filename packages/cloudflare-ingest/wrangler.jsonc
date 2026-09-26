@@ -48,8 +48,8 @@
   "env": {
     "ci": {
       "vars": {
-        "ETLAYER_MAX_REQUEST_BYTES": "1048576",
-        "ETLAYER_MAX_EVENTS_PER_REQUEST": "1000",
+        "ETLAYER_MAX_REQUEST_BYTES": "65536",
+        "ETLAYER_MAX_EVENTS_PER_REQUEST": "5",
         "ETLAYER_INGEST_RATE_LIMIT_PERIOD_SECONDS": "10",
         "POSTHOG_HOST": "https://eu.i.posthog.com",
         "STATSIG_HOST": "https://api.statsig.com"
@@ -59,7 +59,7 @@
           "name": "ETLAYER_INGEST_RATE_LIMITER",
           "namespace_id": "924002",
           "simple": {
-            "limit": 5,
+            "limit": 20,
             "period": 10
           }
         }
