@@ -104,7 +104,7 @@ Provider credentials for dynamic projects are encrypted before R2 persistence wi
 
 ## Vertical slice status
 
-The data-plane foundation and current Product Contract / Trust Governance sequence are complete through VS23.
+The data-plane foundation, Trust Governance sequence, and first hosted-service protection slice are complete through VS24.
 
 ~~~text
 VS1  Preserve + Replay                           complete
@@ -131,6 +131,7 @@ VS20 Guarded Governance Publication             complete
 VS21 Contract Lifecycle                         complete
 VS22 Contract Ownership Metadata                complete
 VS23 Bounded Governance Metrics                 complete
+VS24 Service Protection Baseline                complete
 ~~~
 
 Cloudflare acceptance now has two layers:
@@ -140,7 +141,7 @@ pull request
   -> current slice only
 
 main / scheduled / manual full
-  -> VS8 -> VS23 serial regression
+  -> VS8 -> VS24 serial regression
 ~~~
 
 This keeps PR feedback fast while preserving an accumulated runtime proof on main.
@@ -162,6 +163,7 @@ See:
 - [VS21: Contract Lifecycle](docs/vertical-slices/vs21-contract-lifecycle.md)
 - [VS22: First-class Contract Ownership Metadata](docs/vertical-slices/vs22-contract-ownership.md)
 - [VS23: Bounded Governance Metrics](docs/vertical-slices/vs23-governance-metrics.md)
+- [VS24: Service Protection Baseline](docs/vertical-slices/vs24-service-protection.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
@@ -234,6 +236,6 @@ Publication is bound to the exact planned manifest identity. Historical Decision
 
 ETLayer is still pre-stable.
 
-The core trust/data-plane semantics are live-proven through VS23, including external integration, encrypted credential state, ALLOW / QUARANTINE / BLOCK outcomes, append-only control-plane and delivery evidence, governance planning/publication, contract lifecycle, ownership, and bounded governance metrics.
+The core trust/data-plane semantics are live-proven through VS24, including external integration, encrypted credential state, ALLOW / QUARANTINE / BLOCK outcomes, append-only control-plane and delivery evidence, governance planning/publication, contract lifecycle, ownership, bounded governance metrics, and project-scoped ingest service protection.
 
-The remaining instability is primarily around the next product layer: environment promotion, broader supported APIs, developer experience, hosted-service controls, UI, quotas, operations, and commercial product surfaces.
+The remaining instability is primarily around supported project-level product APIs, developer experience, broader hosted-service controls, UI, quotas, operations, workspace/environment identity, and commercial product surfaces.
