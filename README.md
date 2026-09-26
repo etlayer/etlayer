@@ -104,30 +104,46 @@ Provider credentials for dynamic projects are encrypted before R2 persistence wi
 
 ## Vertical slice status
 
-Phase 1 - Data Plane Foundation is complete through VS11.
+The data-plane foundation and current Product Contract / Trust Governance sequence are complete through VS23.
 
 ~~~text
-VS1  Preserve + Replay                         complete
-VS2  Multi-destination                        complete
-VS3  Contracts + Governance                   complete
-VS4  Privacy                                  complete
-VS5  Subject / Actor / Delegation             complete
-VS6  Trusted Provenance / Authority           complete
-VS7  Decision History / Policy Lineage        complete
-VS8  Project Isolation                        complete
-VS9  Dynamic Management                       complete
-VS10 External Onboarding                      complete
-VS11 Project-scoped Destination Credentials   complete
+VS1  Preserve + Replay                           complete
+VS2  Multi-destination                          complete
+VS3  Contracts + Governance                     complete
+VS4  Privacy                                    complete
+VS5  Subject / Actor / Delegation               complete
+VS6  Trusted Provenance / Authority             complete
+VS7  Decision History / Policy Lineage          complete
+VS8  Project Isolation                          complete
+VS9  Dynamic Management                         complete
+VS10 External Onboarding                        complete
+VS11 Project-scoped Destination Credentials     complete
 
-VS12 External Integration Contract            complete
+VS12 External Integration Contract              complete
 VS13 Versioned Encryption Roots & Safe Rotation complete
-VS14 First-class Quarantine                    complete
-VS15 Append-only Control-plane Audit Log          complete
-VS16 Contract Compatibility Checker               complete
-VS17 Historical Contract Plan                     complete
+VS14 First-class Quarantine                     complete
+VS15 Append-only Control-plane Audit Log        complete
+VS16 Contract Compatibility Checker             complete
+VS17 Historical Contract Plan                   complete
+VS18 Delivery + Append-only Attempts            complete
+VS19 Governance-as-Code Manifest + Plan         complete
+VS20 Guarded Governance Publication             complete
+VS21 Contract Lifecycle                         complete
+VS22 Contract Ownership Metadata                complete
+VS23 Bounded Governance Metrics                 complete
 ~~~
 
-The current live acceptance suite re-proves VS8 -> VS15 serially in an isolated Cloudflare CI environment.
+Cloudflare acceptance now has two layers:
+
+~~~text
+pull request
+  -> current slice only
+
+main / scheduled / manual full
+  -> VS8 -> VS23 serial regression
+~~~
+
+This keeps PR feedback fast while preserving an accumulated runtime proof on main.
 
 See:
 
@@ -140,6 +156,12 @@ See:
 - [VS15: Append-only Control-plane Audit Log](docs/vertical-slices/vs15-control-plane-audit.md)
 - [VS16: Contract Compatibility Checker](docs/vertical-slices/vs16-contract-compatibility.md)
 - [VS17: Contract Plan Against Historical Events](docs/vertical-slices/vs17-contract-plan.md)
+- [VS18: First-class Delivery and Append-only Attempts](docs/vertical-slices/vs18-delivery-attempts.md)
+- [VS19: Governance-as-Code Manifest and Deterministic Plan](docs/vertical-slices/vs19-governance-as-code.md)
+- [VS20: Guarded Governance Publication by Manifest Digest](docs/vertical-slices/vs20-governance-publication.md)
+- [VS21: Contract Lifecycle](docs/vertical-slices/vs21-contract-lifecycle.md)
+- [VS22: First-class Contract Ownership Metadata](docs/vertical-slices/vs22-contract-ownership.md)
+- [VS23: Bounded Governance Metrics](docs/vertical-slices/vs23-governance-metrics.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
@@ -191,8 +213,27 @@ Destination and idempotency roots remain separate security domains. VS13 does no
 
 The full VS8 -> VS13 Cloudflare acceptance suite passed. The shared CI archive still contains historical V1 records, so an old root is not declared retirement-safe merely because current writes use V2.
 
+## Trust governance state
+
+The current governance chain is executable end to end:
+
+~~~text
+contract compatibility
+  -> historical plan
+  -> Governance-as-Code manifest
+  -> stable manifestDigest
+  -> guarded publication
+  -> Published / Deprecated / Retired
+  -> Ownership
+  -> bounded Governance Metrics
+~~~
+
+Publication is bound to the exact planned manifest identity. Historical Decision lineage remains append-only, lifecycle changes affect future validation without silently rewriting old decisions, and ownership is current operational metadata rather than an authorization model.
+
 ## Stability
 
 ETLayer is still pre-stable.
 
-The data-plane foundation is proven through VS11, the external product contract through VS12, versioned encryption-root lifecycle through VS13, explicit ALLOW / QUARANTINE / BLOCK trust outcomes through VS14, and append-only internal control-plane audit evidence through VS15, deterministic contract compatibility checks through VS16, and read-only historical contract impact planning through VS17. ETLayer remains pre-stable while broader hosted-product and operational surfaces are still evolving.
+The core trust/data-plane semantics are live-proven through VS23, including external integration, encrypted credential state, ALLOW / QUARANTINE / BLOCK outcomes, append-only control-plane and delivery evidence, governance planning/publication, contract lifecycle, ownership, and bounded governance metrics.
+
+The remaining instability is primarily around the next product layer: environment promotion, broader supported APIs, developer experience, hosted-service controls, UI, quotas, operations, and commercial product surfaces.
