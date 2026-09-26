@@ -9,8 +9,8 @@ INGEST_QUEUE="etlayer-events-ci"
 DLQ="etlayer-events-ci-dlq"
 ARCHIVE_BUCKET="etlayer-events-archive-ci"
 FIXTURE_BUCKET="etlayer-fixture-state-ci"
-INGEST_URL="https://etlayer-ingest-ci.sergii-ponomarov.workers.dev"
-FIXTURE_URL="https://etlayer-cloudflare-fixture-ci.sergii-ponomarov.workers.dev"
+INGEST_URL="https://etlayer-ingest-ci.web33.workers.dev"
+FIXTURE_URL="https://etlayer-cloudflare-fixture-ci.web33.workers.dev"
 
 say() {
   printf '\n==> %s\n' "$*"
