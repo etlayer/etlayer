@@ -288,3 +288,207 @@ test("secondary ingest credential stamps secondary trusted project", async () =>
     "backend",
   );
 });
+
+test("rate limits only after authentication and keys by trusted project", async () => {
+  const { env, batches } = envWithQueue();
+  const keys = [];
+
+  env.ETLAYER_INGEST_RATE_LIMIT_PERIOD_SECONDS = "10";
+  env.ETLAYER_INGEST_RATE_LIMITER = {
+    async limit({ key }) {
+      keys.push(key);
+      return {
+        success: keys.length === 1,
+      };
+    },
+  };
+
+  const first = await handleExportLogs(
+    requestFor(eventPayload()),
+    env,
+  );
+
+  assert.equal(first.status, 200);
+  assert.deepEqual(keys, [
+    "etlayer-default",
+  ]);
+
+  const second = await handleExportLogs(
+    requestFor(eventPayload()),
+    env,
+  );
+
+  assert.equal(second.status, 429);
+  assert.equal(
+    second.headers.get("retry-after"),
+    "10",
+  );
+  assert.deepEqual(
+    await second.json(),
+    {
+      code: 8,
+      message:
+        "ingest rate limit exceeded",
+    },
+  );
+  assert.equal(batches.length, 1);
+
+  const invalid = await handleExportLogs(
+    requestFor(eventPayload(), {
+      authorization: "Bearer wrong",
+    }),
+    env,
+  );
+
+  assert.equal(invalid.status, 401);
+  assert.equal(keys.length, 2);
+});
+
+test("project-scoped rate limit does not share budget across projects", async () => {
+  const batches = [];
+  const counts = new Map();
+  const env = {
+    ETLAYER_INGEST_KEY: "primary-key",
+    ETLAYER_SECONDARY_BACKEND_INGEST_KEY:
+      "secondary-key",
+    ETLAYER_INGEST_RATE_LIMITER: {
+      async limit({ key }) {
+        const next =
+          (counts.get(key) || 0) + 1;
+        counts.set(key, next);
+
+        return {
+          success:
+            key === "etlayer-default"
+              ? next <= 1
+              : true,
+        };
+      },
+    },
+    EVENTS: {
+      async sendBatch(messages) {
+        batches.push(messages);
+      },
+    },
+  };
+
+  const primary = (token) =>
+    new Request(
+      "https://events.test/v1/logs",
+      {
+        method: "POST",
+        headers: {
+          authorization:
+            "Bearer " + token,
+          "content-type":
+            "application/json",
+        },
+        body: JSON.stringify(
+          eventPayload(),
+        ),
+      },
+    );
+
+  assert.equal(
+    (
+      await handleExportLogs(
+        primary("primary-key"),
+        env,
+      )
+    ).status,
+    200,
+  );
+
+  assert.equal(
+    (
+      await handleExportLogs(
+        primary("primary-key"),
+        env,
+      )
+    ).status,
+    429,
+  );
+
+  assert.equal(
+    (
+      await handleExportLogs(
+        primary("secondary-key"),
+        env,
+      )
+    ).status,
+    200,
+  );
+
+  assert.equal(
+    counts.get("etlayer-default"),
+    2,
+  );
+  assert.equal(
+    counts.get("etlayer-secondary"),
+    1,
+  );
+  assert.equal(batches.length, 2);
+});
+
+test("rejects actual request bodies above the configured byte limit before queueing", async () => {
+  const { env, batches } = envWithQueue();
+  env.ETLAYER_MAX_REQUEST_BYTES = "32";
+
+  const response = await handleExportLogs(
+    requestFor(eventPayload()),
+    env,
+  );
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(
+    await response.json(),
+    {
+      code: 8,
+      message:
+        "request body exceeds ingest limit",
+    },
+  );
+  assert.equal(batches.length, 0);
+});
+
+test("rejects requests above the configured event-count limit before queueing", async () => {
+  const { env, batches } = envWithQueue();
+  env.ETLAYER_MAX_EVENTS_PER_REQUEST = "1";
+
+  const payload = eventPayload();
+  payload.resourceLogs[0]
+    .scopeLogs[0]
+    .logRecords.push({
+      ...structuredClone(
+        payload.resourceLogs[0]
+          .scopeLogs[0]
+          .logRecords[0],
+      ),
+      attributes: [
+        {
+          key: "etlayer.event.id",
+          value: {
+            stringValue:
+              "evt-second",
+          },
+        },
+      ],
+    });
+
+  const response = await handleExportLogs(
+    requestFor(payload),
+    env,
+  );
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(
+    await response.json(),
+    {
+      code: 8,
+      message:
+        "request contains too many events",
+    },
+  );
+  assert.equal(batches.length, 0);
+});
+
