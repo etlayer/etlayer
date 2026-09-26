@@ -6,7 +6,7 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "ETLAYER_OTLP_ENDPOINT": "https://etlayer-ingest.sergii-ponomarov.workers.dev/v1/logs",
+    "ETLAYER_OTLP_ENDPOINT": "https://etlayer-ingest.web33.workers.dev/v1/logs",
     "DEPLOYMENT_ENVIRONMENT_NAME": "acceptance"
   },
   "r2_buckets": [
@@ -24,7 +24,7 @@
   "env": {
     "ci": {
       "vars": {
-        "ETLAYER_OTLP_ENDPOINT": "https://etlayer-ingest-ci.sergii-ponomarov.workers.dev/v1/logs",
+        "ETLAYER_OTLP_ENDPOINT": "https://etlayer-ingest-ci.web33.workers.dev/v1/logs",
         "DEPLOYMENT_ENVIRONMENT_NAME": "ci-acceptance"
       },
       "r2_buckets": [

@@ -325,10 +325,10 @@ Product endpoints returned by the onboarding bundle:
 
 ```text
 OTLP:
-  https://etlayer-ingest-ci.sergii-ponomarov.workers.dev/v1/logs
+  https://etlayer-ingest-ci.web33.workers.dev/v1/logs
 
 Inspect:
-  https://etlayer-ingest-ci.sergii-ponomarov.workers.dev/_ops/inspect
+  https://etlayer-ingest-ci.web33.workers.dev/_ops/inspect
 ```
 
 The automated acceptance proved:

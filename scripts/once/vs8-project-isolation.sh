@@ -9,10 +9,10 @@ WRANGLER_ENV_ARGS=()
 
 if [ -n "$WRANGLER_ENV" ]; then
   WRANGLER_ENV_ARGS=(--env "$WRANGLER_ENV")
-  DEFAULT_INGEST_URL="https://etlayer-ingest-$WRANGLER_ENV.sergii-ponomarov.workers.dev"
+  DEFAULT_INGEST_URL="https://etlayer-ingest-$WRANGLER_ENV.web33.workers.dev"
   DEFAULT_ARCHIVE_BUCKET="etlayer-events-archive-$WRANGLER_ENV"
 else
-  DEFAULT_INGEST_URL="https://etlayer-ingest.sergii-ponomarov.workers.dev"
+  DEFAULT_INGEST_URL="https://etlayer-ingest.web33.workers.dev"
   DEFAULT_ARCHIVE_BUCKET="etlayer-events-archive"
 fi
 

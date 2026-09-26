@@ -6,7 +6,7 @@ APP_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 WORKER_NAME="etlayer-ingest"
 QUEUE_NAME="etlayer-events"
 R2_BUCKET="etlayer-events-archive"
-WORKER_URL="https://etlayer-ingest.sergii-ponomarov.workers.dev"
+WORKER_URL="https://etlayer-ingest.web33.workers.dev"
 
 say() {
   printf '\n==> %s\n' "$*"

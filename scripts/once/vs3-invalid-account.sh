@@ -3,11 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
-FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.sergii-ponomarov.workers.dev}"
+FIXTURE_URL="${ETLAYER_FIXTURE_URL:-https://etlayer-cloudflare-fixture.web33.workers.dev}"
 ARCHIVE_BUCKET="${ETLAYER_ARCHIVE_BUCKET:-etlayer-events-archive}"
 PROJECT_ID="${ETLAYER_PROJECT_ID:-etlayer-default}"
 PROJECT_PREFIX="projects/$PROJECT_ID"
-ETLAYER_URL="${ETLAYER_URL:-https://etlayer-ingest.sergii-ponomarov.workers.dev}"
+ETLAYER_URL="${ETLAYER_URL:-https://etlayer-ingest.web33.workers.dev}"
 RUN_ID="${RUN_ID:-vs3-invalid-account-$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 4)}"
 COOKIE_JAR="/tmp/etlayer-vs3-invalid-account-$$.txt"
 

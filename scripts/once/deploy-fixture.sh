@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ETLAYER_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 FIXTURE_DIR="$ROOT_DIR/examples/cloudflare-fixture"
 STATE_BUCKET="etlayer-fixture-state"
-ETLAYER_URL="https://etlayer-ingest.sergii-ponomarov.workers.dev"
+ETLAYER_URL="https://etlayer-ingest.web33.workers.dev"
 ETLAYER_OTLP_ENDPOINT="$ETLAYER_URL/v1/logs"
 
 say() {
