@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INGEST_DIR="$ROOT_DIR/packages/cloudflare-ingest"
 WRANGLER_ENV="${ETLAYER_WRANGLER_ENV:-ci}"
-INGEST_URL="${ETLAYER_INGEST_URL:-https://etlayer-ingest-ci.sergii-ponomarov.workers.dev}"
+INGEST_URL="${ETLAYER_INGEST_URL:-https://etlayer-ingest-ci.web33.workers.dev}"
 RUN_ID="${RUN_ID:-vs11-$(date -u +%Y%m%d-%H%M%S)-$(openssl rand -hex 4)}"
 PROJECT_A="${VS11_PROJECT_A:-$RUN_ID-a}"
 PROJECT_B="${VS11_PROJECT_B:-$RUN_ID-b}"
