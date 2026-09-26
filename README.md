@@ -104,7 +104,7 @@ Provider credentials for dynamic projects are encrypted before R2 persistence wi
 
 ## Vertical slice status
 
-The data-plane foundation, Trust Governance sequence, and first hosted-service protection slice are complete through VS24.
+The data-plane foundation, Trust Governance sequence, hosted-service protection baseline, and first supported project-level read surface are complete through VS25.
 
 ~~~text
 VS1  Preserve + Replay                           complete
@@ -132,6 +132,7 @@ VS21 Contract Lifecycle                         complete
 VS22 Contract Ownership Metadata                complete
 VS23 Bounded Governance Metrics                 complete
 VS24 Service Protection Baseline                complete
+VS25 Supported Project Read Surface             complete
 ~~~
 
 Cloudflare acceptance now has two layers:
@@ -141,7 +142,7 @@ pull request
   -> current slice only
 
 main / scheduled / manual full
-  -> VS8 -> VS24 serial regression
+  -> VS8 -> VS25 serial regression
 ~~~
 
 This keeps PR feedback fast while preserving an accumulated runtime proof on main.
@@ -164,6 +165,7 @@ See:
 - [VS22: First-class Contract Ownership Metadata](docs/vertical-slices/vs22-contract-ownership.md)
 - [VS23: Bounded Governance Metrics](docs/vertical-slices/vs23-governance-metrics.md)
 - [VS24: Service Protection Baseline](docs/vertical-slices/vs24-service-protection.md)
+- [VS25: Supported Project Read Surface](docs/vertical-slices/vs25-project-read-surface.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
@@ -236,6 +238,6 @@ Publication is bound to the exact planned manifest identity. Historical Decision
 
 ETLayer is still pre-stable.
 
-The core trust/data-plane semantics are live-proven through VS24, including external integration, encrypted credential state, ALLOW / QUARANTINE / BLOCK outcomes, append-only control-plane and delivery evidence, governance planning/publication, contract lifecycle, ownership, bounded governance metrics, and project-scoped ingest service protection.
+The core trust/data-plane semantics are live-proven through VS25, including external integration, encrypted credential state, ALLOW / QUARANTINE / BLOCK outcomes, append-only control-plane and delivery evidence, governance planning/publication, contract lifecycle, ownership, bounded governance metrics, project-scoped ingest service protection, and a supported non-secret project read surface.
 
-The remaining instability is primarily around supported project-level product APIs, developer experience, broader hosted-service controls, UI, quotas, operations, workspace/environment identity, and commercial product surfaces.
+The remaining instability is primarily around developer experience, additional supported product APIs, broader hosted-service controls, UI, quotas, operations, workspace/environment identity, and commercial product surfaces.
