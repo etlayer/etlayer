@@ -1,6 +1,6 @@
 # VS23: Bounded Governance Metrics
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #82.
 
@@ -283,3 +283,61 @@ VS23 does not include:
 - materialized write-side counters.
 
 Those should only be introduced when scale or a concrete hosted-product use case makes bounded evidence aggregation insufficient.
+
+
+---
+
+# Completion evidence
+
+VS23 completed with:
+
+~~~text
+implementation PR              #83
+merged main commit             ec10359a602aab5c61b5ef364db4d126eadc8891
+PR CI                          green
+fast slice live acceptance     green
+slice acceptance run           #36237536531
+post-merge main CI             green
+post-merge CI run              #36237645885
+full VS8 -> VS23 regression    green
+full regression run            #36237645887
+~~~
+
+Fast live proof:
+
+~~~text
+correlationId
+vs23-20260926-110139-50a09213
+
+projectId
+vs23-20260926-110139-50a09213
+
+validEventId
+d1ca0230-2780-46af-973f-c11a4416889e
+
+quarantinedEventId
+cc10fc23-71d1-456e-b072-87c28d340795
+
+manifestDigest
+2629d45a0f90531c80a1c4b53ebaeeded8ab08e89ccda22da6a2d55d7da82726
+~~~
+
+Observed aggregate proof:
+
+~~~text
+selected                   2
+valid                      1
+quarantined                1
+allow                      1
+quarantine                 1
+ownershipCoverageRate      1
+deprecatedContracts        1
+deliverySummaries          0
+deliveryAttempts           0
+deterministicRead          true
+emptyWindowRatesFinite     true
+eventEvidenceMutated       false
+crossProjectIsolation      true
+~~~
+
+The post-merge full regression re-proved the accumulated Cloudflare runtime sequence through VS23 on main.
