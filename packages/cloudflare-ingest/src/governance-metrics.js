@@ -234,10 +234,6 @@ async function buildCurrentGovernanceInventory(
   }
 
   return {
-    asOf:
-      normalizeNow(
-        options.now,
-      ).toISOString(),
     ownership: {
       resources:
         ownerships.length,
@@ -690,27 +686,6 @@ function parseDate(
   ) {
     throw new GovernanceMetricsValidationError(
       `${label} must be a valid ISO timestamp`,
-    );
-  }
-
-  return date;
-}
-
-function normalizeNow(value) {
-  const date =
-    value instanceof Date
-      ? value
-      : new Date(
-          value || Date.now(),
-        );
-
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
-    throw new GovernanceMetricsValidationError(
-      "now is invalid",
     );
   }
 
