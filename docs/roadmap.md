@@ -32,9 +32,10 @@ VS19 Governance-as-Code Manifest + Plan             complete
 VS20 Guarded Governance Publication                  complete
 VS21 Contract Lifecycle                              complete
 VS22 First-class Contract Ownership                   complete
+VS23 Bounded Governance Metrics                        complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS22 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS23 serially.
 
 See:
 
@@ -53,7 +54,8 @@ See:
 - [VS20: Guarded Governance Publication by Manifest Digest](vertical-slices/vs20-governance-publication.md)
 - [VS21: Contract Lifecycle - Published, Deprecated, Retired](vertical-slices/vs21-contract-lifecycle.md)
 - [VS22: First-class Contract Ownership Metadata](vertical-slices/vs22-contract-ownership.md)
-- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, and #78
+- [VS23: Bounded Governance Metrics](vertical-slices/vs23-governance-metrics.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, and #82
 
 ## Phase 2 - Product Contract
 
@@ -243,7 +245,11 @@ Fast acceptance run #36180682715 proved the VS21 slice on the PR head. After mer
 
 Fast acceptance run #36189562122 proved the VS22 slice on the PR head. After merge, a pre-existing VS13 rollout race was exposed by the full regression and fixed in PR #80. Final full regression run #36190765649 then re-proved VS8 -> VS22 serially on main.
 
-The next sequencing candidate is Governance Metrics: aggregate the existing decision, validation, lifecycle, ownership, and delivery evidence into operationally useful counts and rates without introducing a general analytics product.
+**VS23 - Bounded Governance Metrics is complete and live-proven.** ETLayer now exposes a deterministic, project-scoped, read-only aggregate over bounded canonical-event ranges, combining validation, Decision, current Ownership, Delivery summaries, append-only Attempts, and current contract lifecycle inventory without creating a second metrics source of truth.
+
+Fast acceptance run #36237536531 proved the VS23 slice on the PR head. After merge, full regression run #36237645887 re-proved VS8 -> VS23 serially on main.
+
+The next sequencing candidate is Environment Promotion: promote an already-planned and immutable governance manifest from one named environment to another while preserving the exact manifestDigest and requiring target-environment planning before publication.
 
 The milestone backlog is:
 
@@ -278,7 +284,8 @@ Quarantine
   -> Governance-as-Code
   -> guarded publication
   -> Contract Lifecycle
-  -> Ownership Metadata
+  -> Governance Metrics
+  -> Environment Promotion
 ~~~
 
 The current sequencing hypothesis is:
