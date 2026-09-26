@@ -7,6 +7,13 @@ import {
   credentialFingerprint,
   setRegistryDestination,
 } from "../src/registry.js";
+import {
+  writeContractOwnership,
+} from "../src/contract-ownership.js";
+import {
+  ensureContractLifecycle,
+  transitionContractLifecycle,
+} from "../src/contract-lifecycle.js";
 import { validationStateKey } from "../src/validation-state.js";
 import {
   deliveryStateKey,
@@ -99,6 +106,22 @@ function onboardingRequest(
       method: "POST",
       headers,
       body: JSON.stringify(body),
+    },
+  );
+}
+
+function projectReadRequest(
+  projectId,
+  operatorCredential,
+) {
+  return new Request(
+    `https://events.test/api/v1/projects/${projectId}`,
+    {
+      method: "GET",
+      headers: {
+        authorization:
+          "Bearer " + operatorCredential,
+      },
     },
   );
 }
@@ -524,3 +547,219 @@ test("unknown public event stays pending_or_unknown without exposing storage coo
     false,
   );
 });
+
+test("public project read exposes supported non-secret current state", async () => {
+  const archive = fakeArchive();
+  const operatorCredential =
+    "etl_op_project-read";
+
+  await createProject(
+    archive,
+    "project-read",
+    operatorCredential,
+  );
+
+  await setRegistryDestination(
+    archive,
+    {
+      projectId: "project-read",
+      destination: "posthog",
+      enabled: true,
+      now: new Date(
+        "2026-09-26T17:05:00Z",
+      ),
+    },
+  );
+
+  await writeContractOwnership(
+    archive,
+    {
+      projectId: "project-read",
+      eventName:
+        "account.created",
+      team: "accounts-platform",
+      domain: "accounts",
+      contacts: [
+        {
+          kind: "email",
+          value:
+            "accounts@example.com",
+        },
+      ],
+    },
+  );
+
+  await ensureContractLifecycle(
+    archive,
+    {
+      projectId: "project-read",
+      eventName:
+        "account.created",
+      contractVersion: 2,
+      contractId:
+        "account.created@2",
+      manifestDigest:
+        "a".repeat(64),
+      publishedAt:
+        "2026-09-26T17:10:00Z",
+    },
+  );
+
+  await transitionContractLifecycle(
+    archive,
+    {
+      projectId: "project-read",
+      eventName:
+        "account.created",
+      contractVersion: 2,
+      contractId:
+        "account.created@2",
+      manifestDigest:
+        "a".repeat(64),
+      publishedAt:
+        "2026-09-26T17:10:00Z",
+      toStatus: "deprecated",
+    },
+  );
+
+  const response =
+    await handlePublicApiRequest(
+      projectReadRequest(
+        "project-read",
+        operatorCredential,
+      ),
+      {
+        ARCHIVE: archive,
+      },
+    );
+
+  assert.equal(response.status, 200);
+
+  const body = await response.json();
+
+  assert.equal(
+    body.apiVersion,
+    "v1",
+  );
+  assert.deepEqual(body.project, {
+    id: "project-read",
+    status: "active",
+    source: "registry",
+    createdAt:
+      "2026-09-24T01:00:00.000Z",
+    updatedAt:
+      "2026-09-26T17:05:00.000Z",
+  });
+  assert.deepEqual(
+    body.destinations,
+    ["posthog"],
+  );
+  assert.equal(
+    body.governance.ownership
+      .resources,
+    1,
+  );
+  assert.deepEqual(
+    body.governance.ownership
+      .teams,
+    ["accounts-platform"],
+  );
+  assert.equal(
+    body.governance.lifecycle
+      .deprecated,
+    1,
+  );
+
+  const serialized =
+    JSON.stringify(body);
+
+  assert.equal(
+    serialized.includes(
+      "operatorFingerprint",
+    ),
+    false,
+  );
+  assert.equal(
+    serialized.includes(
+      "credentialFingerprint",
+    ),
+    false,
+  );
+  assert.equal(
+    serialized.includes(
+      "accounts@example.com",
+    ),
+    false,
+  );
+  assert.equal(
+    serialized.includes("/_mgmt/"),
+    false,
+  );
+  assert.equal(
+    serialized.includes("/_ops/"),
+    false,
+  );
+
+  assert.equal(
+    body.links.self,
+    "https://events.test/api/v1/projects/project-read",
+  );
+  assert.equal(
+    body.links.onboarding,
+    "https://events.test/api/v1/projects/project-read/onboarding",
+  );
+  assert.equal(
+    body.links.eventStatusTemplate,
+    "https://events.test/api/v1/projects/project-read/events/{eventId}",
+  );
+  assert.equal(
+    body.links.ingest,
+    "https://events.test/v1/logs",
+  );
+});
+
+test("public project read preserves project-scoped auth and stable not-found semantics", async () => {
+  const archive = fakeArchive();
+
+  await createProject(
+    archive,
+    "project-a",
+    "etl_op_project-a",
+  );
+  await createProject(
+    archive,
+    "project-b",
+    "etl_op_project-b",
+  );
+
+  const denied =
+    await handlePublicApiRequest(
+      projectReadRequest(
+        "project-a",
+        "etl_op_project-b",
+      ),
+      { ARCHIVE: archive },
+    );
+
+  assert.equal(denied.status, 401);
+  assert.equal(
+    (await denied.json()).error.code,
+    "invalid_operator_credential",
+  );
+
+  const unknown =
+    await handlePublicApiRequest(
+      projectReadRequest(
+        "missing-project",
+        "etl_op_missing-project",
+      ),
+      { ARCHIVE: archive },
+    );
+
+  assert.equal(unknown.status, 404);
+  assert.equal(
+    (await unknown.json()).error.code,
+    "project_not_found",
+  );
+});
+

@@ -23,6 +23,12 @@ import { buildPublicOnboardingBundle } from "./onboarding.js";
 import { authenticateProjectOperator } from "./operator-auth.js";
 import { validateProjectId } from "./project-config.js";
 import { generateCredential } from "./registry.js";
+import {
+  ProjectReadConfigurationError,
+  ProjectReadNotFoundError,
+  ProjectReadValidationError,
+  buildProjectReadModel,
+} from "./project-read.js";
 
 const ONBOARDING_OPERATION = "onboarding-v1";
 
@@ -33,6 +39,21 @@ export async function handlePublicApiRequest(
   options = {},
 ) {
   try {
+    const projectRead = url.pathname.match(
+      /^\/api\/v1\/projects\/([^/]+)$/,
+    );
+    if (
+      request.method === "GET" &&
+      projectRead
+    ) {
+      return await publicProjectRead(
+        request,
+        env,
+        decodePath(projectRead[1]),
+        options,
+      );
+    }
+
     const onboarding = url.pathname.match(
       /^\/api\/v1\/projects\/([^/]+)\/onboarding$/,
     );
@@ -65,6 +86,97 @@ export async function handlePublicApiRequest(
     );
   } catch (error) {
     return unexpectedError(error);
+  }
+}
+
+async function publicProjectRead(
+  request,
+  env,
+  projectId,
+  options,
+) {
+  const projectError =
+    validatePublicProjectId(projectId);
+
+  if (projectError) {
+    return projectError;
+  }
+
+  const authentication =
+    await authenticateOperator(
+      request,
+      env,
+      projectId,
+      options,
+    );
+
+  if (authentication) {
+    return authentication;
+  }
+
+  try {
+    const build =
+      options.buildProjectReadModel ||
+      buildProjectReadModel;
+    const result = await build(
+      env,
+      {
+        projectId,
+        requestUrl: request.url,
+      },
+      options,
+    );
+
+    return publicJson(
+      {
+        apiVersion: "v1",
+        project: result.project,
+        destinations:
+          result.destinations,
+        governance:
+          result.governance,
+        links: result.links,
+      },
+      200,
+    );
+  } catch (error) {
+    if (
+      error instanceof
+        ProjectReadValidationError
+    ) {
+      return publicError(
+        400,
+        "invalid_request",
+        publicMessage(
+          error,
+          "Invalid project read request",
+        ),
+      );
+    }
+
+    if (
+      error instanceof
+        ProjectReadNotFoundError
+    ) {
+      return publicError(
+        404,
+        "project_not_found",
+        "Project not found",
+      );
+    }
+
+    if (
+      error instanceof
+        ProjectReadConfigurationError
+    ) {
+      return publicError(
+        503,
+        "service_unavailable",
+        "Project read is temporarily unavailable",
+      );
+    }
+
+    throw error;
   }
 }
 
