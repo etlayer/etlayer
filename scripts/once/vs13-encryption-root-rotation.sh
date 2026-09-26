@@ -707,6 +707,47 @@ node -e '
   die "PostHog replay did not safely resolve project A events after rewrap"
 
 say "Phase D: comparing authoritative key usage"
+
+IDEMPOTENCY_A_RECORD_AFTER="$(
+  management_evidence \
+    "registry/idempotency/$PROJECT_A/onboarding-v1/$IDEMPOTENCY_A_FP.json"
+)"
+IDEMPOTENCY_B_RECORD_AFTER="$(
+  management_evidence \
+    "registry/idempotency/$PROJECT_B/onboarding-v1/$IDEMPOTENCY_B_FP.json"
+)"
+
+node -e '
+  const [v1Raw, v2Raw] =
+    process.argv.slice(1);
+  const v1 = JSON.parse(v1Raw);
+  const v2 = JSON.parse(v2Raw);
+  const now = Date.now();
+
+  if (
+    v1.keyVersion !== "v1" ||
+    Date.parse(v1.replayUntil) <= now
+  ) {
+    console.error(
+      "current-run V1 idempotency capsule is not unexpired",
+    );
+    process.exit(1);
+  }
+
+  if (
+    v2.keyVersion !== "v2" ||
+    Date.parse(v2.replayUntil) <= now
+  ) {
+    console.error(
+      "current-run V2 idempotency capsule is not unexpired",
+    );
+    process.exit(1);
+  }
+' \
+  "$IDEMPOTENCY_A_RECORD_AFTER" \
+  "$IDEMPOTENCY_B_RECORD_AFTER" ||
+  die "Current-run idempotency capsules did not remain unexpired"
+
 USAGE_AFTER="$(key_usage)"
 DEST_V1_AFTER="$(
   json_field "$USAGE_AFTER" usage.destination.versions.v1.activePointers
@@ -727,7 +768,6 @@ node -e '
     destV1After,
     destV2Before,
     destV2After,
-    idemV1Before,
     idemV1After,
     idemV2After,
   ] = process.argv.slice(1).map(Number);
@@ -742,13 +782,13 @@ node -e '
     process.exit(1);
   }
 
-  if (idemV1After < idemV1Before) {
-    console.error("unexpired V1 capsule unexpectedly disappeared");
+  if (idemV1After < 1) {
+    console.error("expected current-run unexpired V1 capsule in key usage");
     process.exit(1);
   }
 
   if (idemV2After < 1) {
-    console.error("expected at least one unexpired V2 capsule");
+    console.error("expected current-run unexpired V2 capsule in key usage");
     process.exit(1);
   }
 ' \
@@ -756,7 +796,6 @@ node -e '
   "$DEST_V1_AFTER" \
   "$DEST_V2_BEFORE" \
   "$DEST_V2_AFTER" \
-  "$IDEM_V1_BEFORE" \
   "$IDEM_V1_AFTER" \
   "$IDEM_V2_AFTER" ||
   die "Encryption key usage audit did not reflect the migration"
