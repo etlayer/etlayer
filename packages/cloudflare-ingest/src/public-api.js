@@ -29,6 +29,12 @@ import {
   ProjectReadValidationError,
   buildProjectReadModel,
 } from "./project-read.js";
+import {
+  ContractArtifactConfigurationError,
+  ContractArtifactNotFoundError,
+  ContractArtifactValidationError,
+  buildContractArtifact,
+} from "./contract-artifact.js";
 
 const ONBOARDING_OPERATION = "onboarding-v1";
 
@@ -39,6 +45,30 @@ export async function handlePublicApiRequest(
   options = {},
 ) {
   try {
+    const contractArtifact =
+      url.pathname.match(
+        /^\/api\/v1\/projects\/([^/]+)\/contracts\/([^/]+)\/(\d+)$/,
+      );
+    if (
+      request.method === "GET" &&
+      contractArtifact
+    ) {
+      return await publicContractArtifact(
+        request,
+        env,
+        decodePath(
+          contractArtifact[1],
+        ),
+        decodePath(
+          contractArtifact[2],
+        ),
+        Number(
+          contractArtifact[3],
+        ),
+        options,
+      );
+    }
+
     const projectRead = url.pathname.match(
       /^\/api\/v1\/projects\/([^/]+)$/,
     );
@@ -86,6 +116,112 @@ export async function handlePublicApiRequest(
     );
   } catch (error) {
     return unexpectedError(error);
+  }
+}
+
+async function publicContractArtifact(
+  request,
+  env,
+  projectId,
+  eventName,
+  version,
+  options,
+) {
+  const projectError =
+    validatePublicProjectId(
+      projectId,
+    );
+
+  if (projectError) {
+    return projectError;
+  }
+
+  const authentication =
+    await authenticateOperator(
+      request,
+      env,
+      projectId,
+      options,
+    );
+
+  if (authentication) {
+    return authentication;
+  }
+
+  try {
+    const build =
+      options.buildContractArtifact ||
+      buildContractArtifact;
+
+    const result = await build(
+      env,
+      {
+        projectId,
+        eventName,
+        version,
+        requestUrl:
+          request.url,
+      },
+      options,
+    );
+
+    return publicJson(
+      {
+        apiVersion:
+          result.apiVersion,
+        kind:
+          result.kind,
+        projectId:
+          result.projectId,
+        source:
+          result.source,
+        contract:
+          result.contract,
+        lifecycle:
+          result.lifecycle,
+        links:
+          result.links,
+      },
+      200,
+    );
+  } catch (error) {
+    if (
+      error instanceof
+        ContractArtifactValidationError
+    ) {
+      return publicError(
+        400,
+        "invalid_request",
+        publicMessage(
+          error,
+          "Invalid contract request",
+        ),
+      );
+    }
+
+    if (
+      error instanceof
+        ContractArtifactNotFoundError
+    ) {
+      return publicError(
+        404,
+        "contract_not_found",
+        "Contract not found",
+      );
+    }
+
+    if (
+      error instanceof
+        ContractArtifactConfigurationError
+    ) {
+      return publicError(
+        503,
+        "service_unavailable",
+        "Contract artifact is temporarily unavailable",
+      );
+    }
+
+    throw error;
   }
 }
 
