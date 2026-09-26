@@ -37,7 +37,7 @@ permissions:
 env:
   CI: "1"
   ETLAYER_WRANGLER_ENV: ci
-  ETLAYER_INGEST_URL: https://etlayer-ingest-ci.sergii-ponomarov.workers.dev
+  ETLAYER_INGEST_URL: https://etlayer-ingest-ci.web33.workers.dev
   ETLAYER_ARCHIVE_BUCKET: etlayer-events-archive-ci
 
 jobs:
