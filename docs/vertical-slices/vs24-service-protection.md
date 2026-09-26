@@ -1,6 +1,6 @@
 # VS24: Service Protection Baseline
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #87.
 
@@ -201,3 +201,60 @@ VS24 does not add:
 - alerting.
 
 These should be introduced only when a concrete hosted-product requirement needs them.
+
+
+---
+
+# Completion evidence
+
+VS24 completed with:
+
+~~~text
+implementation PR              #88
+merged main commit             9c58cbffe9dc31d917df6a71be797fb5493fc313
+PR CI                          green
+fast slice live acceptance     green
+slice acceptance run           #36251702324
+post-merge main CI             green
+post-merge CI run              #36251828194
+full VS8 -> VS24 regression    green
+full regression run            #36251828240
+~~~
+
+The first fast live attempt used sequential requests and did not cross the Cloudflare Rate Limiting binding's effective burst threshold.
+
+The acceptance was corrected to drive the same trusted project key with bounded concurrent burst traffic. This tests the actual Cloudflare limiter semantics rather than assuming an exact sequential N+1 boundary.
+
+Fast live proof:
+
+~~~text
+correlationId
+vs24-20260926-152237-9c5743cb
+
+projectA
+vs24-20260926-152237-9c5743cb-a
+
+projectB
+vs24-20260926-152237-9c5743cb-b
+
+rateLimitedEventId
+d8f3f35a-88e3-43cd-86cb-634d6ae829e2
+
+rateLimitedAttempt
+160
+
+retryAfterSeconds
+10
+~~~
+
+Observed service-protection proof:
+
+~~~text
+projectIsolation                         true
+oversizedBodyRejected                    true
+tooManyEventsRejected                    true
+invalidCredentialsConsumedProjectBudget  false
+rejectedEventEvidenceCreated             false
+~~~
+
+The post-merge full regression re-proved the accumulated Cloudflare runtime sequence through VS24 on main.
