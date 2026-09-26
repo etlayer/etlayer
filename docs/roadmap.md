@@ -1,6 +1,6 @@
 # ETLayer Roadmap
 
-This roadmap describes the current product sequence after the completion of VS23.
+This roadmap describes the current product sequence after the completion of VS24.
 
 It is intentionally outcome-driven. A roadmap item becomes a numbered vertical slice only when it has a concrete invariant and executable acceptance proof.
 
@@ -33,9 +33,10 @@ VS20 Guarded Governance Publication                  complete
 VS21 Contract Lifecycle                              complete
 VS22 First-class Contract Ownership                   complete
 VS23 Bounded Governance Metrics                        complete
+VS24 Service Protection Baseline                       complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS23 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS24 serially.
 
 See:
 
@@ -56,7 +57,8 @@ See:
 - [VS21: Contract Lifecycle - Published, Deprecated, Retired](vertical-slices/vs21-contract-lifecycle.md)
 - [VS22: First-class Contract Ownership Metadata](vertical-slices/vs22-contract-ownership.md)
 - [VS23: Bounded Governance Metrics](vertical-slices/vs23-governance-metrics.md)
-- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, and #82
+- [VS24: Service Protection Baseline](vertical-slices/vs24-service-protection.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, #82, and #87
 
 ## Phase 2 - Product Contract
 
@@ -254,7 +256,11 @@ The post-VS23 architecture review found that Environment Promotion is not yet a 
 
 Environment Promotion remains an A2-NEXT capability. It should return when Workspace/Environment identity is concrete enough to support it without weakening manifest identity or relying on the global management credential as a product authorization model.
 
-The current next-slice candidates are Service Protection Baseline, Supported Project Read Surface, and Typed Contract/SDK generation. Service Protection Baseline is the current sequencing candidate because it reduces a concrete hosted-service risk without changing ETLayer's semantic core.
+**VS24 - Service Protection Baseline is complete and live-proven.** Public ingest now has three pre-queue protection boundaries: project-scoped request rate limiting keyed by trusted provenance, a request-byte ceiling, and an event-count ceiling. Protection failures return machine-readable OTLP resource-exhausted semantics and do not create event evidence.
+
+Fast acceptance run #36251702324 proved the VS24 slice on the PR head. After merge, full regression run #36251828240 re-proved VS8 -> VS24 serially on main.
+
+The current next-slice candidates are Supported Project Read Surface and Typed Contract/SDK generation. Supported Project Read Surface is the current sequencing candidate because it creates the first non-event project read boundary that a future UI/CLI can consume without depending on /_mgmt, /_ops, or R2 storage internals.
 
 The milestone backlog is:
 
@@ -299,7 +305,8 @@ The current sequencing hypothesis is:
 Governance Metrics
   -> Post-VS23 architecture/product review
   -> Service Protection Baseline
-  -> Supported Product / DX surfaces
+  -> Supported Project Read Surface
+  -> Typed Contract / SDK generation
 
 later, after Workspace/Environment identity exists:
   -> Environment Promotion
