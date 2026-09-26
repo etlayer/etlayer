@@ -5,6 +5,8 @@ import {
 } from "./provenance.js";
 
 const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
+const DEFAULT_MAX_EVENTS_PER_REQUEST = 1000;
+const DEFAULT_RATE_LIMIT_PERIOD_SECONDS = 60;
 const QUEUE_BATCH_SIZE = 100;
 
 export async function handleExportLogs(request, env, options = {}) {
@@ -33,6 +35,28 @@ export async function handleExportLogs(request, env, options = {}) {
       401,
       16,
       "invalid ingest credential",
+    );
+  }
+
+  const rateLimit =
+    await applyProjectRateLimit(
+      env,
+      authentication.provenance.projectId,
+    );
+
+  if (!rateLimit.success) {
+    return otlpError(
+      429,
+      8,
+      "ingest rate limit exceeded",
+      {
+        "retry-after": String(
+          parsePositiveInteger(
+            env.ETLAYER_INGEST_RATE_LIMIT_PERIOD_SECONDS,
+            DEFAULT_RATE_LIMIT_PERIOD_SECONDS,
+          ),
+        ),
+      },
     );
   }
 
@@ -69,6 +93,23 @@ export async function handleExportLogs(request, env, options = {}) {
       return otlpError(400, 3, error.message);
     }
     throw error;
+  }
+
+  const maxEventsPerRequest =
+    parsePositiveInteger(
+      env.ETLAYER_MAX_EVENTS_PER_REQUEST,
+      DEFAULT_MAX_EVENTS_PER_REQUEST,
+    );
+
+  if (
+    events.length >
+    maxEventsPerRequest
+  ) {
+    return otlpError(
+      413,
+      8,
+      "request contains too many events",
+    );
   }
 
   const applyPrivacy =
@@ -167,11 +208,53 @@ function isJsonContentType(contentType) {
 }
 
 function parseMaxRequestBytes(value) {
-  if (!value) return DEFAULT_MAX_REQUEST_BYTES;
+  return parsePositiveInteger(
+    value,
+    DEFAULT_MAX_REQUEST_BYTES,
+  );
+}
+
+function parsePositiveInteger(
+  value,
+  fallback,
+) {
+  if (!value) return fallback;
+
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0
+
+  return (
+    Number.isSafeInteger(parsed) &&
+    parsed > 0
+  )
     ? parsed
-    : DEFAULT_MAX_REQUEST_BYTES;
+    : fallback;
+}
+
+async function applyProjectRateLimit(
+  env,
+  projectId,
+) {
+  const limiter =
+    env.ETLAYER_INGEST_RATE_LIMITER;
+
+  if (
+    !limiter ||
+    typeof limiter.limit !== "function"
+  ) {
+    return {
+      success: true,
+      enforced: false,
+    };
+  }
+
+  const result = await limiter.limit({
+    key: projectId,
+  });
+
+  return {
+    success: result?.success !== false,
+    enforced: true,
+  };
 }
 
 function readStringAttribute(attributes, key) {
@@ -182,14 +265,24 @@ function readStringAttribute(attributes, key) {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function otlpError(status, code, message) {
-  return new Response(JSON.stringify({ code, message }), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
+function otlpError(
+  status,
+  code,
+  message,
+  headers = {},
+) {
+  return new Response(
+    JSON.stringify({ code, message }),
+    {
+      status,
+      headers: {
+        "content-type":
+          "application/json; charset=utf-8",
+        "cache-control": "no-store",
+        ...headers,
+      },
     },
-  });
+  );
 }
 
 function* chunks(items, size) {
