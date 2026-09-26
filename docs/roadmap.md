@@ -31,9 +31,10 @@ VS18 First-class Delivery + Append-only Attempts   complete
 VS19 Governance-as-Code Manifest + Plan             complete
 VS20 Guarded Governance Publication                  complete
 VS21 Contract Lifecycle                              complete
+VS22 First-class Contract Ownership                   complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS21 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS22 serially.
 
 See:
 
@@ -51,7 +52,8 @@ See:
 - [VS19: Governance-as-Code Manifest and Deterministic Plan](vertical-slices/vs19-governance-as-code.md)
 - [VS20: Guarded Governance Publication by Manifest Digest](vertical-slices/vs20-governance-publication.md)
 - [VS21: Contract Lifecycle - Published, Deprecated, Retired](vertical-slices/vs21-contract-lifecycle.md)
-- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, and #75
+- [VS22: First-class Contract Ownership Metadata](vertical-slices/vs22-contract-ownership.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, and #78
 
 ## Phase 2 - Product Contract
 
@@ -237,7 +239,11 @@ Fast acceptance run #36177195839 proved the VS20 slice on the PR head. After mer
 
 Fast acceptance run #36180682715 proved the VS21 slice on the PR head. After merge, full regression run #36181006381 re-proved VS8 -> VS21 serially on main.
 
-The next sequencing candidate is Ownership Metadata: make contract ownership and operational contacts first-class, project-scoped governance data so event/contract inspection can answer who owns a contract without introducing a generalized org/RBAC model.
+**VS22 - First-class Contract Ownership Metadata is complete and live-proven.** ETLayer now has one current project-scoped ownership resource per event semantic, with deterministic normalization, audited project-operator mutation, internal inspection visibility, authenticated public event-status visibility, and explicit separation from Decision lineage and RBAC.
+
+Fast acceptance run #36189562122 proved the VS22 slice on the PR head. After merge, a pre-existing VS13 rollout race was exposed by the full regression and fixed in PR #80. Final full regression run #36190765649 then re-proved VS8 -> VS22 serially on main.
+
+The next sequencing candidate is Governance Metrics: aggregate the existing decision, validation, lifecycle, ownership, and delivery evidence into operationally useful counts and rates without introducing a general analytics product.
 
 The milestone backlog is:
 
@@ -272,13 +278,13 @@ Quarantine
   -> Governance-as-Code
   -> guarded publication
   -> Contract Lifecycle
+  -> Ownership Metadata
 ~~~
 
 The current sequencing hypothesis is:
 
 ~~~text
-Contract Lifecycle
-  -> Ownership Metadata
+Ownership Metadata
   -> Governance Metrics
 ~~~
 

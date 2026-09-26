@@ -1,6 +1,6 @@
 # VS22: First-class Contract Ownership Metadata
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #78.
 
@@ -254,3 +254,61 @@ VS22 does not include:
 - governance metrics.
 
 These can build on the first-class Ownership resource when a concrete product requirement appears.
+
+
+---
+
+# Completion evidence
+
+VS22 completed with:
+
+~~~text
+implementation PR              #79
+merged main commit             cdf84192b874da04519d390dec7300607404b476
+PR CI                          green
+fast slice live acceptance     green
+slice acceptance run           #36189562122
+post-merge main CI             green
+post-merge CI run              #36189751620
+VS13 rollout-stability fix      #80
+stability fix main commit       ea61f058d7fbd0defe4d0d91da31ca8f2da0dd14
+full VS8 -> VS22 regression    green
+full regression run            #36190765649
+~~~
+
+Fast live proof:
+
+~~~text
+correlationId
+vs22-20260925-210523-3e3a0489
+
+projectId
+vs22-20260925-210523-3e3a0489
+
+eventId
+dcea1b75-699b-45f4-aa68-bef58f1cbaa0
+
+decisionId
+1dc8e6e6-e0e8-4155-9bc0-d42eb58439fd
+
+ownershipOperationId
+ff35fcc3-3ba0-41ab-9f5d-3e8328012832
+~~~
+
+Observed ownership proof:
+
+~~~text
+initialTeam                         accounts-platform
+updatedTeam                         customer-platform
+ownershipVisibleInternally          true
+ownershipVisiblePublicly            true
+idempotentNormalizedPut             true
+historicalDecisionLineageMutated    false
+crossProjectIsolation               true
+~~~
+
+The first post-merge full regression exposed a pre-existing VS13 rollout race: one request could still hit an older Cloudflare Worker revision after a single successful convergence probe.
+
+PR #80 hardened the VS13 acceptance by requiring stable consecutive observations before V2 writes.
+
+The final post-fix full regression run #36190765649 re-proved the accumulated VS8 -> VS22 runtime sequence on main.
