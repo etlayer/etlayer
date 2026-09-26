@@ -473,31 +473,186 @@ STATUS="$(
   die "Invalid credentials consumed Project B rate budget: HTTP $STATUS"
 
 say "Driving Project A until project-scoped rate limit is observed"
-RATE_LIMITED_EVENT_ID=""
-RATE_LIMITED_ATTEMPT=""
+node --input-type=module - \
+  "$INGEST_URL/v1/logs" \
+  "$PRODUCER_A" \
+  "$RUN_ID" > "$TMP_PREFIX.rate-result" <<'NODE'
+const [
+  endpoint,
+  credential,
+  correlationId,
+] = process.argv.slice(2);
 
-for attempt in $(seq 1 120); do
-  EVENT_ID="$(uuid)"
-  make_payload     "$TMP_PREFIX.rate.payload"     "$EVENT_ID"     1     0
+const stringAttribute = (key, value) => ({
+  key,
+  value: { stringValue: value },
+});
 
-  STATUS="$(
-    ingest_file       "$PRODUCER_A"       "$TMP_PREFIX.rate.payload"       "$TMP_PREFIX.rate.body"       "$TMP_PREFIX.rate.headers"
-  )"
+const intAttribute = (key, value) => ({
+  key,
+  value: { intValue: String(value) },
+});
 
-  if [ "$STATUS" = "429" ]; then
-    RATE_LIMITED_EVENT_ID="$EVENT_ID"
-    RATE_LIMITED_ATTEMPT="$attempt"
-    break
-  fi
+function payload(eventId) {
+  const now =
+    (BigInt(Date.now()) * 1_000_000n).toString();
 
-  [ "$STATUS" = "200" ] ||
-    die "Unexpected Project A rate-test response: HTTP $STATUS"
+  return {
+    resourceLogs: [{
+      resource: {
+        attributes: [
+          stringAttribute(
+            "service.name",
+            "etlayer-vs24-rate-burst",
+          ),
+        ],
+      },
+      scopeLogs: [{
+        scope: {
+          name: "etlayer.vs24",
+          version: "1",
+        },
+        logRecords: [{
+          eventName: "account.created",
+          timeUnixNano: now,
+          observedTimeUnixNano: now,
+          attributes: [
+            stringAttribute(
+              "etlayer.event.id",
+              eventId,
+            ),
+            intAttribute(
+              "etlayer.schema.version",
+              1,
+            ),
+            stringAttribute(
+              "actor.anonymous.id",
+              "anon_vs24",
+            ),
+            stringAttribute(
+              "account.id",
+              "account_" + eventId,
+            ),
+            stringAttribute(
+              "correlation.id",
+              correlationId,
+            ),
+            stringAttribute(
+              "causation.id",
+              "vs24-rate-root",
+            ),
+            stringAttribute(
+              "etlayer.producer.kind",
+              "backend",
+            ),
+            stringAttribute(
+              "etlayer.authority.kind",
+              "business_state",
+            ),
+          ],
+        }],
+      }],
+    }],
+  };
+}
 
-  sleep 0.05
-done
+let attempted = 0;
 
-[ -n "$RATE_LIMITED_EVENT_ID" ] ||
-  die "Project A rate limit was not observed within 120 attempts"
+for (let wave = 0; wave < 8; wave += 1) {
+  const requests = [];
+
+  for (let index = 0; index < 40; index += 1) {
+    const eventId = crypto.randomUUID();
+    attempted += 1;
+
+    requests.push(
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          authorization:
+            "Bearer " + credential,
+          "content-type":
+            "application/json",
+        },
+        body: JSON.stringify(
+          payload(eventId),
+        ),
+      }).then(async (response) => ({
+        eventId,
+        status: response.status,
+        retryAfter:
+          response.headers.get(
+            "retry-after",
+          ),
+        body: await response.text(),
+        attempt: attempted,
+      })),
+    );
+  }
+
+  const responses =
+    await Promise.all(requests);
+  const limited =
+    responses.find(
+      (response) =>
+        response.status === 429,
+    );
+
+  if (limited) {
+    process.stdout.write(
+      JSON.stringify(limited),
+    );
+    process.exit(0);
+  }
+
+  const unexpected =
+    responses.find(
+      (response) =>
+        response.status !== 200,
+    );
+
+  if (unexpected) {
+    console.error(
+      JSON.stringify(
+        unexpected,
+        null,
+        2,
+      ),
+    );
+    process.exit(2);
+  }
+
+  await new Promise(
+    (resolve) =>
+      setTimeout(resolve, 150),
+  );
+}
+
+console.error(
+  "rate limit was not observed after " +
+    attempted +
+    " burst requests",
+);
+process.exit(3);
+NODE
+
+RATE_LIMITED_EVENT_ID="$(
+  json_field \
+    "$TMP_PREFIX.rate-result" \
+    eventId
+)" || die "Rate-limited event id missing."
+
+RATE_LIMITED_ATTEMPT="$(
+  json_field \
+    "$TMP_PREFIX.rate-result" \
+    attempt
+)" || die "Rate-limited attempt missing."
+
+RETRY_AFTER="$(
+  json_field \
+    "$TMP_PREFIX.rate-result" \
+    retryAfter
+)" || die "Rate-limit Retry-After missing."
 
 node -e '
   const value = JSON.parse(
@@ -506,34 +661,25 @@ node -e '
       "utf8",
     ),
   );
+  const body = JSON.parse(
+    value.body,
+  );
 
-  if (
-    value.code !== 8 ||
-    value.message !==
-      "ingest rate limit exceeded"
-  ) {
+  const ok =
+    value.status === 429 &&
+    value.retryAfter === "10" &&
+    body.code === 8 &&
+    body.message ===
+      "ingest rate limit exceeded";
+
+  if (!ok) {
     console.error(
       JSON.stringify(value, null, 2),
     );
     process.exit(1);
   }
-' "$TMP_PREFIX.rate.body" ||
-  die "Rate-limit response body is incorrect."
-
-RETRY_AFTER="$(
-  awk '
-    BEGIN { IGNORECASE = 1 }
-    /^retry-after:/ {
-      sub(/^[^:]+:[[:space:]]*/, "");
-      gsub(/\r/, "");
-      print;
-      exit;
-    }
-  ' "$TMP_PREFIX.rate.headers"
-)"
-
-[ "$RETRY_AFTER" = "10" ] ||
-  die "Rate-limit Retry-After is incorrect: $RETRY_AFTER"
+' "$TMP_PREFIX.rate-result" ||
+  die "Rate-limit response is incorrect."
 
 say "Proving Project B remains isolated from Project A exhaustion"
 ISOLATED_B="$(uuid)"
