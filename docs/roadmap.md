@@ -1,6 +1,6 @@
 # ETLayer Roadmap
 
-This roadmap describes the current product sequence after the completion of VS24.
+This roadmap describes the current product sequence after the completion of VS25.
 
 It is intentionally outcome-driven. A roadmap item becomes a numbered vertical slice only when it has a concrete invariant and executable acceptance proof.
 
@@ -34,9 +34,10 @@ VS21 Contract Lifecycle                              complete
 VS22 First-class Contract Ownership                   complete
 VS23 Bounded Governance Metrics                        complete
 VS24 Service Protection Baseline                       complete
+VS25 Supported Project Read Surface                    complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS24 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS25 serially.
 
 See:
 
@@ -58,7 +59,8 @@ See:
 - [VS22: First-class Contract Ownership Metadata](vertical-slices/vs22-contract-ownership.md)
 - [VS23: Bounded Governance Metrics](vertical-slices/vs23-governance-metrics.md)
 - [VS24: Service Protection Baseline](vertical-slices/vs24-service-protection.md)
-- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, #82, and #87
+- [VS25: Supported Project Read Surface](vertical-slices/vs25-project-read-surface.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, #82, #87, and #90
 
 ## Phase 2 - Product Contract
 
@@ -260,7 +262,11 @@ Environment Promotion remains an A2-NEXT capability. It should return when Works
 
 Fast acceptance run #36251702324 proved the VS24 slice on the PR head. After merge, full regression run #36251828240 re-proved VS8 -> VS24 serially on main.
 
-The current next-slice candidates are Supported Project Read Surface and Typed Contract/SDK generation. Supported Project Read Surface is the current sequencing candidate because it creates the first non-event project read boundary that a future UI/CLI can consume without depending on /_mgmt, /_ops, or R2 storage internals.
+**VS25 - Supported Project Read Surface is complete and live-proven.** ETLayer now exposes an authenticated, stable, explicitly field-selected project summary through the supported public API, including current destinations, current Ownership/Lifecycle governance summary, and only public/OTLP links. Future UI/CLI consumers no longer need /_mgmt, /_ops, or R2 key knowledge for a project overview.
+
+Fast acceptance run #36258009074 proved the VS25 slice on the PR head. A pre-existing VS13 shared-CI idempotency-count assumption was then fixed in PR #92, and final full regression run #36258974177 re-proved VS8 -> VS25 serially on main.
+
+The current sequencing candidate is Typed Contract / SDK generation: expose one deterministic machine-readable contract artifact and generate a thin typed client/validator as a consumer of supported ETLayer contracts, without introducing a second contract language.
 
 The milestone backlog is:
 

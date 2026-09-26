@@ -1,6 +1,6 @@
 # VS25: Supported Project Read Surface
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #90.
 
@@ -261,3 +261,67 @@ VS25 does not include:
 - UI.
 
 Those can build on this supported project-level read boundary when the product requires them.
+
+
+---
+
+# Completion evidence
+
+VS25 completed with:
+
+~~~text
+implementation PR              #91
+merged main commit             ae417371f449f0b935332a41a4dd560fda012f9d
+PR CI                          green
+fast slice live acceptance     green
+slice acceptance run           #36258009074
+post-merge main CI             green
+post-merge CI run              #36258138669
+VS13 idempotency usage fix     #92
+stability fix main commit      f210c505443f7fc71679d279fbc40e0a4aba4bb2
+final main CI                  green
+final CI run                   #36258974238
+full VS8 -> VS25 regression    green
+full regression run            #36258974177
+~~~
+
+Fast live proof:
+
+~~~text
+correlationId
+vs25-20260926-170936-4631496e
+
+projectId
+vs25-20260926-170936-4631496e
+
+manifestDigest
+70695be7bbe4865616a69ac7d9391d28341677619a58a9e277b67aad92456575
+
+destinations
+["posthog"]
+
+ownershipResources
+1
+
+ownershipTeam
+accounts-platform
+
+deprecatedContracts
+1
+~~~
+
+Observed project-read proof:
+
+~~~text
+publicLinksOnly          true
+secretFieldsExposed      false
+deterministicRead        true
+crossProjectIsolation    true
+unknownProjectStable404  true
+~~~
+
+The first post-merge full regression exposed a pre-existing VS13 acceptance assumption: it compared a global count of unexpired V1 idempotency capsules in the shared CI archive, so unrelated historical capsule expiry could make the count decrease during the slice.
+
+PR #92 corrected the proof to re-read the exact current-run V1/V2 capsules and verify their own key versions and replay expiry, while preserving the destination-pointer migration assertions.
+
+Final full regression run #36258974177 then re-proved VS8 -> VS25 serially on main.
