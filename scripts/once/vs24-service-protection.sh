@@ -53,8 +53,34 @@ request_json() {
   local token="$3"
   local body="$4"
   local output="$5"
+  local status=""
+  local curl_exit=0
 
-  curl --silent --show-error     -o "$output"     -w '%{http_code}'     -X "$method" "$INGEST_URL$path"     -H "authorization: Bearer $token"     -H "content-type: application/json"     --data "$body"
+  for attempt in $(seq 1 8); do
+    set +e
+    status="$(
+      curl --silent --show-error \
+        -o "$output" \
+        -w '%{http_code}' \
+        -X "$method" "$INGEST_URL$path" \
+        -H "authorization: Bearer $token" \
+        -H "content-type: application/json" \
+        --data "$body"
+    )"
+    curl_exit=$?
+    set -e
+
+    if [ "$curl_exit" -eq 0 ]; then
+      printf '%s' "$status"
+      return 0
+    fi
+
+    if [ "$attempt" -lt 8 ]; then
+      sleep 1
+    fi
+  done
+
+  return "$curl_exit"
 }
 
 request_json_after_deploy() {
@@ -283,8 +309,36 @@ ingest_file() {
   local payload_file="$2"
   local output="$3"
   local headers="$4"
+  local status=""
+  local curl_exit=0
 
-  curl --silent --show-error     -D "$headers"     -o "$output"     -w '%{http_code}'     -X POST     "$INGEST_URL/v1/logs"     -H "authorization: Bearer $token"     -H "content-type: application/json"     --data-binary "@$payload_file"
+  for attempt in $(seq 1 8); do
+    set +e
+    status="$(
+      curl --silent --show-error \
+        -D "$headers" \
+        -o "$output" \
+        -w '%{http_code}' \
+        -X POST \
+        "$INGEST_URL/v1/logs" \
+        -H "authorization: Bearer $token" \
+        -H "content-type: application/json" \
+        --data-binary "@$payload_file"
+    )"
+    curl_exit=$?
+    set -e
+
+    if [ "$curl_exit" -eq 0 ]; then
+      printf '%s' "$status"
+      return 0
+    fi
+
+    if [ "$attempt" -lt 8 ]; then
+      sleep 1
+    fi
+  done
+
+  return "$curl_exit"
 }
 
 inspect_event() {
@@ -312,7 +366,7 @@ wait_complete() {
   local event_id="$3"
   local output="$4"
 
-  for attempt in $(seq 1 45); do
+  for attempt in $(seq 1 90); do
     local status
     status="$(
       inspect_event         "$project_id"         "$operator"         "$event_id"         "$output" || true
