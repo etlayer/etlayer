@@ -1,6 +1,6 @@
 # VS27: Supported Contract Catalog / Discovery
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #101.
 
@@ -131,3 +131,59 @@ unknown project -> 404 project_not_found
 - UI;
 - MCP;
 - Workspace/Environment identity.
+
+
+---
+
+# Completion evidence
+
+VS27 completed with:
+
+~~~text
+tracking issue                       #101
+implementation PR                    #102
+merged implementation commit         225351d11882bc901eb25b3b70b17852c7557405
+PR CI                                green
+fast slice live acceptance           green
+fast live acceptance run             #36289712682
+post-merge main CI                   green
+post-merge main CI run               #36289764920
+full VS8 -> VS27 regression          green
+full regression run                  #36289764895
+~~~
+
+Fast live proof:
+
+~~~text
+correlationId
+vs27-20260927-025127-39a992b5
+
+builtinV1Discoverable                true
+projectV2Discoverable                true
+projectV2Lifecycle                   deprecated
+deterministicOrdering                true
+byteStableRead                       true
+exactArtifactLinksResolve            true
+secretFieldsExposed                  false
+crossProjectIsolation                true
+~~~
+
+Final accumulated proof:
+
+~~~text
+correlationId
+vs27-20260927-031421-344f85a5
+
+builtinV1Discoverable                true
+projectV2Discoverable                true
+projectV2Lifecycle                   deprecated
+deterministicOrdering                true
+byteStableRead                       true
+exactArtifactLinksResolve            true
+secretFieldsExposed                  false
+crossProjectIsolation                true
+
+Full live regression passed: VS8 -> VS27
+~~~
+
+The catalog remains a derived read model over built-in contracts and authoritative project publication/lifecycle state. No second persisted catalog or internal product API was introduced.
