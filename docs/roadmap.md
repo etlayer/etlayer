@@ -280,7 +280,11 @@ Fast acceptance run #36261574813 proved the VS26 slice. After merge, transport/h
 
 Fast acceptance run #36289712682 proved the slice on the PR head. Implementation PR #102 merged as `225351d11882bc901eb25b3b70b17852c7557405`; post-merge main CI run #36289764920 was green, and full Live Acceptance run #36289764895 re-proved VS8 -> VS27 serially on main.
 
-The post-VS27 architecture review selects **Project Contract Pull + TypeScript Generation** as the current sequencing candidate. With project read, catalog, exact artifacts, and single-contract generation now supported, the remaining DX friction is manual traversal and per-contract generation. The candidate remains unnumbered until its issue formalizes the exact external-client workflow and acceptance.
+**VS28 - Project Contract Pull + TypeScript Generation is complete and live-proven.** ETLayer now traverses the supported VS27 contract catalog and VS26 exact contract artifacts through public APIs only, producing a deterministic collision-safe project TypeScript tree with all-or-nothing publication and credential-forwarding guards.
+
+Fast acceptance run #36331033963 proved the slice on PR #105. Implementation merged as `73a7c3a620cab643dd54c28724b7c4fda911611a`; post-merge main CI run #36331112753 was green, and full Live Acceptance run #36331112735 re-proved VS8 -> VS28 serially on main.
+
+The post-VS28 architecture review selects **Installable Contract Tooling Package Boundary** as the current sequencing candidate. The project-wide workflow is now proven; the remaining immediate DX friction is that the command still assumes an ETLayer source checkout. The candidate remains unnumbered until its issue formalizes package/binary semantics and clean-consumer acceptance.
 
 The milestone backlog is:
 
@@ -331,6 +335,8 @@ Governance Metrics
   -> Supported Contract Catalog / Discovery
   -> Post-VS27 architecture/product review
   -> Project Contract Pull + TypeScript Generation
+  -> Post-VS28 architecture/product review
+  -> Installable Contract Tooling Package Boundary
 
 later, after Workspace/Environment identity exists:
   -> Environment Promotion
