@@ -36,6 +36,7 @@ VS23 Bounded Governance Metrics                        complete
 VS24 Service Protection Baseline                       complete
 VS25 Supported Project Read Surface                    complete
 VS26 Typed Contract Artifact + TypeScript Generation    complete
+VS27 Supported Contract Catalog / Discovery             implementation in progress
 ~~~
 
 The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS26 serially.
@@ -63,7 +64,8 @@ See:
 - [VS24: Service Protection Baseline](vertical-slices/vs24-service-protection.md)
 - [VS25: Supported Project Read Surface](vertical-slices/vs25-project-read-surface.md)
 - [VS26: Typed Contract Artifact and TypeScript Generation](vertical-slices/vs26-typed-contract-artifact.md)
-- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, #82, #87, and #90
+- [VS27: Supported Contract Catalog / Discovery](vertical-slices/vs27-contract-catalog.md)
+- GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, #82, #87, #90, #94, and #101
 
 ## Phase 2 - Product Contract
 
@@ -273,7 +275,7 @@ Fast acceptance run #36258009074 proved the VS25 slice on the PR head. A pre-exi
 
 Fast acceptance run #36261574813 proved the VS26 slice. After merge, transport/hostname and shared-CI acceptance hardening landed in PRs #96, #98, and #99. Final main CI run #36287575273 was green, and Live Acceptance run #36287575348 attempt 2 re-proved VS8 -> VS26 serially on main.
 
-The post-VS26 architecture review selects **Supported Contract Catalog / Discovery** as the current sequencing candidate. The gap is now discovery: a supported UI/CLI/MCP/SDK consumer can fetch an exact known contract, but cannot yet enumerate the project's effective contract space without prior event/version knowledge. The candidate remains unnumbered until its issue captures the exact invariant, acceptance proof, and smallest useful scope.
+**VS27 - Supported Contract Catalog / Discovery is selected and implementation is in progress.** Issue #101 now captures the concrete discovery risk, target invariant, smallest useful public surface, and executable acceptance. The slice adds one deterministic effective contract catalog over built-in plus project-published contract state, with exact VS26 artifact links and no second persisted catalog.
 
 The milestone backlog is:
 
