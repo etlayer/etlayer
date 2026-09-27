@@ -1,6 +1,6 @@
 # VS26: Typed Contract Artifact and TypeScript Generation
 
-**Status: implementation in progress.**
+**Status: complete and live-proven.**
 
 Tracks GitHub issue #94.
 
@@ -242,3 +242,46 @@ VS26 does not include:
 - environment-promotion artifact identity.
 
 Those should build on the supported contract artifact only when a concrete developer workflow requires them.
+
+
+---
+
+# Completion evidence
+
+VS26 completed with:
+
+~~~text
+implementation PR                    #95
+merged implementation commit         9967ef25951863b4a13808d8e60ff5006f22c0ea
+fast slice live acceptance           green
+fast live acceptance run             #36261574813
+VS24 transport hardening             #96
+workers.dev hostname cutover         #98
+VS24 credential propagation fix      #99
+final proof main commit              e69f39865cf5babb2b0f2b2273e4316ae83de00f
+final main CI                        green
+final main CI run                    #36287575273
+full VS8 -> VS26 regression          green
+full regression run                  #36287575348 attempt 2
+~~~
+
+Final live proof:
+
+~~~text
+correlationId
+vs26-20260927-023618-e9f2bb14
+
+projectContractSource                 project
+projectContractStatus                 deprecated
+builtinContractSource                 builtin
+generatedTypeScriptDeterministic      true
+generatedValidatorExecuted            true
+generatedImplementationImports        false
+secretFieldsExposed                   false
+crossProjectIsolation                 true
+unknownContractStable404              true
+~~~
+
+The first full-regression attempt after the VS24 propagation fix encountered a one-off Cloudflare Worker error 1101 during the already-proven VS13 bootstrap path. Cloudflare reported no persistent Worker issue, and an identical rerun on the same main SHA passed VS13 and the full VS8 -> VS26 suite without any runtime change.
+
+The final proof therefore distinguishes the permanent VS24 acceptance race fixed in PR #99 from the non-reproducible Cloudflare execution transient.

@@ -1,6 +1,6 @@
 # ETLayer Roadmap
 
-This roadmap describes the current product sequence after the completion of VS25.
+This roadmap describes the current product sequence after the completion of VS26.
 
 It is intentionally outcome-driven. A roadmap item becomes a numbered vertical slice only when it has a concrete invariant and executable acceptance proof.
 
@@ -35,9 +35,10 @@ VS22 First-class Contract Ownership                   complete
 VS23 Bounded Governance Metrics                        complete
 VS24 Service Protection Baseline                       complete
 VS25 Supported Project Read Surface                    complete
+VS26 Typed Contract Artifact + TypeScript Generation    complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS25 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS26 serially.
 
 See:
 
@@ -45,6 +46,7 @@ See:
 - [Post-VS11 Architecture Review](reviews/post-vs11-architecture-review.md)
 - [Post-VS12 Architecture Review](reviews/post-vs12-architecture-review.md)
 - [Post-VS23 Product and Architecture Review](reviews/post-vs23-product-architecture-review.md)
+- [Post-VS26 Product and Architecture Review](reviews/post-vs26-product-architecture-review.md)
 - [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md)
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
@@ -60,6 +62,7 @@ See:
 - [VS23: Bounded Governance Metrics](vertical-slices/vs23-governance-metrics.md)
 - [VS24: Service Protection Baseline](vertical-slices/vs24-service-protection.md)
 - [VS25: Supported Project Read Surface](vertical-slices/vs25-project-read-surface.md)
+- [VS26: Typed Contract Artifact and TypeScript Generation](vertical-slices/vs26-typed-contract-artifact.md)
 - GitHub issues #43, #48, #50, #52, #54, #56, #69, #72, #75, #78, #82, #87, and #90
 
 ## Phase 2 - Product Contract
@@ -266,7 +269,11 @@ Fast acceptance run #36251702324 proved the VS24 slice on the PR head. After mer
 
 Fast acceptance run #36258009074 proved the VS25 slice on the PR head. A pre-existing VS13 shared-CI idempotency-count assumption was then fixed in PR #92, and final full regression run #36258974177 re-proved VS8 -> VS25 serially on main.
 
-The current sequencing candidate is Typed Contract / SDK generation: expose one deterministic machine-readable contract artifact and generate a thin typed client/validator as a consumer of supported ETLayer contracts, without introducing a second contract language.
+**VS26 - Typed Contract Artifact and TypeScript Generation is complete and live-proven.** ETLayer now exposes exact project/built-in contracts through a supported deterministic public artifact and can generate standalone TypeScript types plus a runtime validator directly from the existing contract language.
+
+Fast acceptance run #36261574813 proved the VS26 slice. After merge, transport/hostname and shared-CI acceptance hardening landed in PRs #96, #98, and #99. Final main CI run #36287575273 was green, and Live Acceptance run #36287575348 attempt 2 re-proved VS8 -> VS26 serially on main.
+
+The post-VS26 architecture review selects **Supported Contract Catalog / Discovery** as the current sequencing candidate. The gap is now discovery: a supported UI/CLI/MCP/SDK consumer can fetch an exact known contract, but cannot yet enumerate the project's effective contract space without prior event/version knowledge. The candidate remains unnumbered until its issue captures the exact invariant, acceptance proof, and smallest useful scope.
 
 The milestone backlog is:
 
@@ -312,7 +319,9 @@ Governance Metrics
   -> Post-VS23 architecture/product review
   -> Service Protection Baseline
   -> Supported Project Read Surface
-  -> Typed Contract / SDK generation
+  -> Typed Contract Artifact + TypeScript Generation
+  -> Post-VS26 architecture/product review
+  -> Supported Contract Catalog / Discovery
 
 later, after Workspace/Environment identity exists:
   -> Environment Promotion
