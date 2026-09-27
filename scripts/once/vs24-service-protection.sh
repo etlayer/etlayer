@@ -460,7 +460,7 @@ say "Deploying current VS24 Worker"
 
 say "Creating isolated projects"
 create_project   "$PROJECT_A"   "$TMP_PREFIX.project-a"   yes
-create_project   "$PROJECT_B"   "$TMP_PREFIX.project-b"   no
+create_project   "$PROJECT_B"   "$TMP_PREFIX.project-b"   yes
 
 OPERATOR_A="$(
   json_field     "$TMP_PREFIX.project-a"     operatorCredential
