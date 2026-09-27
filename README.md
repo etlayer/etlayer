@@ -104,7 +104,7 @@ Provider credentials for dynamic projects are encrypted before R2 persistence wi
 
 ## Vertical slice status
 
-The data-plane foundation, Trust Governance sequence, hosted-service protection baseline, supported project-level read surface, typed contract artifact/code generation, and supported contract discovery are complete through VS27.
+The data-plane foundation, Trust Governance sequence, hosted-service protection baseline, supported project-level read surface, typed contract artifact/code generation, supported contract discovery, and deterministic project-wide contract generation are complete through VS28.
 
 ~~~text
 VS1  Preserve + Replay                           complete
@@ -135,6 +135,7 @@ VS24 Service Protection Baseline                complete
 VS25 Supported Project Read Surface             complete
 VS26 Typed Contract Artifact + TypeScript Generation complete
 VS27 Supported Contract Catalog / Discovery       complete
+VS28 Project Contract Pull + TypeScript Generation    complete
 ~~~
 
 Cloudflare acceptance now has two layers:
@@ -144,7 +145,7 @@ pull request
   -> current slice only
 
 main / scheduled / manual full
-  -> VS8 -> VS27 serial regression
+  -> VS8 -> VS28 serial regression
 ~~~
 
 This keeps PR feedback fast while preserving an accumulated runtime proof on main.
@@ -170,8 +171,10 @@ See:
 - [VS25: Supported Project Read Surface](docs/vertical-slices/vs25-project-read-surface.md)
 - [VS26: Typed Contract Artifact and TypeScript Generation](docs/vertical-slices/vs26-typed-contract-artifact.md)
 - [VS27: Supported Contract Catalog / Discovery](docs/vertical-slices/vs27-contract-catalog.md)
+- [VS28: Project Contract Pull + TypeScript Generation](docs/vertical-slices/vs28-project-contract-generation.md)
 - [Post-VS26 Product and Architecture Review](docs/reviews/post-vs26-product-architecture-review.md)
 - [Post-VS27 Product and Architecture Review](docs/reviews/post-vs27-product-architecture-review.md)
+- [Post-VS28 Product and Architecture Review](docs/reviews/post-vs28-product-architecture-review.md)
 - [Acceptance helpers](scripts/once/README.md)
 
 ## Design principles
@@ -244,6 +247,6 @@ Publication is bound to the exact planned manifest identity. Historical Decision
 
 ETLayer is still pre-stable.
 
-The core trust/data-plane semantics are live-proven through VS27, including external integration, encrypted credential state, ALLOW / QUARANTINE / BLOCK outcomes, append-only control-plane and delivery evidence, governance planning/publication, contract lifecycle, ownership, bounded governance metrics, project-scoped ingest service protection, a supported non-secret project read surface, deterministic contract artifacts with standalone TypeScript generation, and a supported deterministic project contract catalog.
+The core trust/data-plane semantics are live-proven through VS28, including external integration, encrypted credential state, ALLOW / QUARANTINE / BLOCK outcomes, append-only control-plane and delivery evidence, governance planning/publication, contract lifecycle, ownership, bounded governance metrics, project-scoped ingest service protection, a supported non-secret project read surface, deterministic contract artifacts with standalone TypeScript generation, a supported deterministic project contract catalog, and deterministic project-wide TypeScript pull/generation through public APIs only.
 
 The remaining instability is primarily around developer experience, additional supported product APIs, broader hosted-service controls, UI, quotas, operations, workspace/environment identity, and commercial product surfaces.
