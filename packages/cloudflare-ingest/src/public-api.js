@@ -35,6 +35,11 @@ import {
   ContractArtifactValidationError,
   buildContractArtifact,
 } from "./contract-artifact.js";
+import {
+  ContractCatalogConfigurationError,
+  ContractCatalogValidationError,
+  buildContractCatalog,
+} from "./contract-catalog.js";
 
 const ONBOARDING_OPERATION = "onboarding-v1";
 
@@ -64,6 +69,24 @@ export async function handlePublicApiRequest(
         ),
         Number(
           contractArtifact[3],
+        ),
+        options,
+      );
+    }
+
+    const contractCatalog =
+      url.pathname.match(
+        /^\/api\/v1\/projects\/([^/]+)\/contracts$/,
+      );
+    if (
+      request.method === "GET" &&
+      contractCatalog
+    ) {
+      return await publicContractCatalog(
+        request,
+        env,
+        decodePath(
+          contractCatalog[1],
         ),
         options,
       );
@@ -218,6 +241,93 @@ async function publicContractArtifact(
         503,
         "service_unavailable",
         "Contract artifact is temporarily unavailable",
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function publicContractCatalog(
+  request,
+  env,
+  projectId,
+  options,
+) {
+  const projectError =
+    validatePublicProjectId(
+      projectId,
+    );
+
+  if (projectError) {
+    return projectError;
+  }
+
+  const authentication =
+    await authenticateOperator(
+      request,
+      env,
+      projectId,
+      options,
+    );
+
+  if (authentication) {
+    return authentication;
+  }
+
+  try {
+    const build =
+      options.buildContractCatalog ||
+      buildContractCatalog;
+
+    const result = await build(
+      env,
+      {
+        projectId,
+        requestUrl:
+          request.url,
+      },
+      options,
+    );
+
+    return publicJson(
+      {
+        apiVersion:
+          result.apiVersion,
+        kind:
+          result.kind,
+        projectId:
+          result.projectId,
+        contracts:
+          result.contracts,
+        links:
+          result.links,
+      },
+      200,
+    );
+  } catch (error) {
+    if (
+      error instanceof
+        ContractCatalogValidationError
+    ) {
+      return publicError(
+        400,
+        "invalid_request",
+        publicMessage(
+          error,
+          "Invalid contract catalog request",
+        ),
+      );
+    }
+
+    if (
+      error instanceof
+        ContractCatalogConfigurationError
+    ) {
+      return publicError(
+        503,
+        "service_unavailable",
+        "Contract catalog is temporarily unavailable",
       );
     }
 
