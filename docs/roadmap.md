@@ -1,6 +1,6 @@
 # ETLayer Roadmap
 
-This roadmap describes the current product sequence after the completion of VS26.
+This roadmap describes the current product sequence after the completion of VS27.
 
 It is intentionally outcome-driven. A roadmap item becomes a numbered vertical slice only when it has a concrete invariant and executable acceptance proof.
 
@@ -36,10 +36,10 @@ VS23 Bounded Governance Metrics                        complete
 VS24 Service Protection Baseline                       complete
 VS25 Supported Project Read Surface                    complete
 VS26 Typed Contract Artifact + TypeScript Generation    complete
-VS27 Supported Contract Catalog / Discovery             implementation in progress
+VS27 Supported Contract Catalog / Discovery             complete
 ~~~
 
-The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS26 serially.
+The Cloudflare acceptance model now has two layers: fast PR acceptance runs only the current slice, while main/scheduled/manual full regression re-proves VS8 -> VS27 serially.
 
 See:
 
@@ -48,6 +48,7 @@ See:
 - [Post-VS12 Architecture Review](reviews/post-vs12-architecture-review.md)
 - [Post-VS23 Product and Architecture Review](reviews/post-vs23-product-architecture-review.md)
 - [Post-VS26 Product and Architecture Review](reviews/post-vs26-product-architecture-review.md)
+- [Post-VS27 Product and Architecture Review](reviews/post-vs27-product-architecture-review.md)
 - [Technical Capability Gap Analysis](reviews/technical-gap-analysis.md)
 - [VS12: External Integration Contract](vertical-slices/vs12-external-integration-contract.md)
 - [VS13: Versioned Encryption Roots & Safe Rotation](vertical-slices/vs13-encryption-root-rotation.md)
@@ -275,7 +276,11 @@ Fast acceptance run #36258009074 proved the VS25 slice on the PR head. A pre-exi
 
 Fast acceptance run #36261574813 proved the VS26 slice. After merge, transport/hostname and shared-CI acceptance hardening landed in PRs #96, #98, and #99. Final main CI run #36287575273 was green, and Live Acceptance run #36287575348 attempt 2 re-proved VS8 -> VS26 serially on main.
 
-**VS27 - Supported Contract Catalog / Discovery is selected and implementation is in progress.** Issue #101 now captures the concrete discovery risk, target invariant, smallest useful public surface, and executable acceptance. The slice adds one deterministic effective contract catalog over built-in plus project-published contract state, with exact VS26 artifact links and no second persisted catalog.
+**VS27 - Supported Contract Catalog / Discovery is complete and live-proven.** ETLayer now exposes a deterministic project-operator authenticated effective contract catalog over built-in plus project-published state, with current lifecycle status and exact VS26 artifact links, without a second persisted catalog.
+
+Fast acceptance run #36289712682 proved the slice on the PR head. Implementation PR #102 merged as `225351d11882bc901eb25b3b70b17852c7557405`; post-merge main CI run #36289764920 was green, and full Live Acceptance run #36289764895 re-proved VS8 -> VS27 serially on main.
+
+The post-VS27 architecture review selects **Project Contract Pull + TypeScript Generation** as the current sequencing candidate. With project read, catalog, exact artifacts, and single-contract generation now supported, the remaining DX friction is manual traversal and per-contract generation. The candidate remains unnumbered until its issue formalizes the exact external-client workflow and acceptance.
 
 The milestone backlog is:
 
@@ -324,6 +329,8 @@ Governance Metrics
   -> Typed Contract Artifact + TypeScript Generation
   -> Post-VS26 architecture/product review
   -> Supported Contract Catalog / Discovery
+  -> Post-VS27 architecture/product review
+  -> Project Contract Pull + TypeScript Generation
 
 later, after Workspace/Environment identity exists:
   -> Environment Promotion
