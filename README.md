@@ -134,6 +134,7 @@ VS23 Bounded Governance Metrics                 complete
 VS24 Service Protection Baseline                complete
 VS25 Supported Project Read Surface             complete
 VS26 Typed Contract Artifact + TypeScript Generation complete
+VS27 Supported Contract Catalog / Discovery       implementation in progress
 ~~~
 
 Cloudflare acceptance now has two layers:
@@ -168,6 +169,7 @@ See:
 - [VS24: Service Protection Baseline](docs/vertical-slices/vs24-service-protection.md)
 - [VS25: Supported Project Read Surface](docs/vertical-slices/vs25-project-read-surface.md)
 - [VS26: Typed Contract Artifact and TypeScript Generation](docs/vertical-slices/vs26-typed-contract-artifact.md)
+- [VS27: Supported Contract Catalog / Discovery](docs/vertical-slices/vs27-contract-catalog.md)
 - [Post-VS26 Product and Architecture Review](docs/reviews/post-vs26-product-architecture-review.md)
 - [Acceptance helpers](scripts/once/README.md)
 
