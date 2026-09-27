@@ -3,11 +3,6 @@ import {
 } from "node:fs";
 import { resolve } from "node:path";
 
-const target = resolve(
-  "examples/external-consumer/run.mjs",
-);
-const source = readFileSync(target, "utf8");
-
 const forbidden = [
   "/_mgmt/",
   "/_ops/",
@@ -20,36 +15,78 @@ const forbidden = [
   "R2",
 ];
 
-const violations = forbidden.filter((value) =>
-  source.includes(value),
-);
+const targets = [
+  {
+    path:
+      "examples/external-consumer/run.mjs",
+    forbidRepositoryImports: true,
+  },
+  {
+    path:
+      "scripts/generate-project-contract-typescript.mjs",
+    forbidRepositoryImports: false,
+  },
+  {
+    path:
+      "packages/contract-tools/src/project-contract-generator.js",
+    forbidRepositoryImports: false,
+  },
+];
 
-if (violations.length > 0) {
-  console.error(
-    "External consumer fixture crossed the public boundary:",
-    violations.join(", "),
-  );
-  process.exit(1);
-}
+for (const target of targets) {
+  const source =
+    readFileSync(
+      resolve(target.path),
+      "utf8",
+    );
+  const violations =
+    forbidden.filter(
+      (value) =>
+        source.includes(value),
+    );
 
-const relativeImports = [
-  ...source.matchAll(
-    /from\s+["']([^"']+)["']/g,
-  ),
-]
-  .map((match) => match[1])
-  .filter(
-    (specifier) =>
-      specifier.startsWith(".") ||
-      specifier.startsWith("/"),
-  );
+  if (
+    violations.length > 0
+  ) {
+    console.error(
+      "External consumer boundary crossed by " +
+        target.path +
+        ": " +
+        violations.join(", "),
+    );
+    process.exit(1);
+  }
 
-if (relativeImports.length > 0) {
-  console.error(
-    "External consumer fixture must not import repository code:",
-    relativeImports.join(", "),
-  );
-  process.exit(1);
+  if (
+    !target.forbidRepositoryImports
+  ) {
+    continue;
+  }
+
+  const relativeImports = [
+    ...source.matchAll(
+      /from\s+["']([^"']+)["']/g,
+    ),
+  ]
+    .map(
+      (match) =>
+        match[1],
+    )
+    .filter(
+      (specifier) =>
+        specifier.startsWith(".") ||
+        specifier.startsWith("/"),
+    );
+
+  if (
+    relativeImports.length > 0
+  ) {
+    console.error(
+      "External consumer fixture must not import repository code:",
+      relativeImports.join(", "),
+    );
+    process.exit(1);
+  }
 }
 
 console.log(
