@@ -1,6 +1,6 @@
 # VS28: Project Contract Pull + TypeScript Generation
 
-**Status: implementation in progress.**
+**Status: complete and live-proven on 2026-09-27.**
 
 Tracks issue #104.
 
@@ -180,3 +180,63 @@ VS26 made exact contracts readable and generatable.
 VS27 made the effective project contract set discoverable.
 
 The remaining DX friction is manual traversal and per-contract generation. Removing that friction now proves the complete protocol-neutral public workflow before ETLayer commits to package distribution, SDKs, or MCP adapters.
+
+
+## Final acceptance evidence
+
+VS28 is complete.
+
+Implementation PR:
+
+~~~text
+#105
+head                    80df7ecce09bca6e6f35f65f43286fe214bafef5
+PR CI                   #36331032078 success
+Fast Live Acceptance    #36331033963 success
+~~~
+
+The fast live proof generated seven effective project contract modules and proved:
+
+~~~text
+builtinV1Generated              = true
+projectV2Generated              = true
+projectV2Lifecycle              = deprecated
+byteStableGeneration            = true
+generatedValidatorExecutes      = true
+invalidAuthNoPartialOutput      = true
+credentialLeak                  = false
+externalBoundary                = true
+~~~
+
+PR #105 merged to main as:
+
+~~~text
+73a7c3a620cab643dd54c28724b7c4fda911611a
+~~~
+
+Post-merge main proof:
+
+~~~text
+CI                      #36331112753 success
+Full Live Acceptance    #36331112735 success
+suite                   VS8 -> VS28
+~~~
+
+Final VS28 full-regression proof:
+
+~~~text
+projectId:
+  vs28-20260927-161300-b792856f
+
+manifestDigest:
+  cc6c9abdeea099a30d6cfa755a859518c61462f7daa14e94b2318f99c8bbcfb4
+
+projectContractCount:
+  7
+~~~
+
+The full run proved the repository command from an environment containing only the consumer inputs required for generation, preserved existing output on invalid authentication, executed a generated validator, and ended with:
+
+~~~text
+Full live regression passed: VS8 -> VS28
+~~~
