@@ -3,11 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test packages/cloudflare-ingest/test/*.test.js examples/cloudflare-fixture/test/*.test.js && node scripts/check-external-consumer-boundary.mjs",
+    "test": "node --test packages/cloudflare-ingest/test/*.test.js packages/contract-tools/test/*.test.js examples/cloudflare-fixture/test/*.test.js && node scripts/check-external-consumer-boundary.mjs",
     "smoke:posthog": "node scripts/posthog-smoke.mjs",
     "contract:check": "node scripts/check-contract-compatibility.mjs",
     "governance:check": "node scripts/check-governance-manifest.mjs",
-    "contract:generate": "node scripts/generate-contract-typescript.mjs"
+    "contract:generate": "node scripts/generate-contract-typescript.mjs",
+    "contract:generate:project": "node scripts/generate-project-contract-typescript.mjs"
   },
   "devDependencies": {
     "wrangler": "4.135.0"

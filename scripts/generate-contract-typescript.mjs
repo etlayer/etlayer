@@ -5,7 +5,7 @@ import process from "node:process";
 
 import {
   generateTypeScriptContractModule,
-} from "../packages/cloudflare-ingest/src/typescript-contract-generator.js";
+} from "../packages/contract-tools/src/typescript-contract-generator.js";
 
 async function main() {
   const args = parseArgs(

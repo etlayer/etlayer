@@ -2,6 +2,10 @@ import {
   findContract,
 } from "../contracts/index.js";
 import {
+  ContractValidationError,
+  normalizeContract as normalizeSharedContract,
+} from "../../contract-tools/src/contract-normalization.js";
+import {
   readPublishedContract,
 } from "./governance-publication.js";
 
@@ -115,111 +119,22 @@ function artifactResponse({
 export function normalizeContract(
   contract,
 ) {
-  if (
-    !contract ||
-    typeof contract !== "object" ||
-    Array.isArray(contract)
-  ) {
-    throw new ContractArtifactValidationError(
-      "contract must be an object",
+  try {
+    return normalizeSharedContract(
+      contract,
     );
-  }
-
-  const eventName =
-    normalizeEventName(
-      contract.eventName,
-    );
-  const version =
-    normalizeVersion(
-      contract.version,
-    );
-
-  const required =
-    contract.required;
-
-  if (
-    !required ||
-    typeof required !== "object" ||
-    Array.isArray(required)
-  ) {
-    throw new ContractArtifactValidationError(
-      "contract required must be an object",
-    );
-  }
-
-  if (
-    !Array.isArray(
-      contract.forbidden,
-    )
-  ) {
-    throw new ContractArtifactValidationError(
-      "contract forbidden must be an array",
-    );
-  }
-
-  const normalizedRequired = {};
-
-  for (
-    const attribute of
-    Object.keys(required).sort()
-  ) {
-    const constraint =
-      required[attribute];
-
+  } catch (error) {
     if (
-      !constraint ||
-      typeof constraint !== "object" ||
-      Array.isArray(constraint)
+      error instanceof
+      ContractValidationError
     ) {
       throw new ContractArtifactValidationError(
-        `invalid constraint: ${attribute}`,
+        error.message,
       );
     }
 
-    const normalized = {};
-
-    if (
-      typeof constraint.type ===
-        "string" &&
-      constraint.type.length > 0
-    ) {
-      normalized.type =
-        constraint.type;
-    }
-
-    if (
-      Object.hasOwn(
-        constraint,
-        "const",
-      )
-    ) {
-      normalized.const =
-        constraint.const;
-    }
-
-    normalizedRequired[
-      attribute
-    ] = normalized;
+    throw error;
   }
-
-  const forbidden = [
-    ...new Set(
-      contract.forbidden,
-    ),
-  ].sort();
-
-  return {
-    id:
-      typeof contract.id === "string" &&
-      contract.id.length > 0
-        ? contract.id
-        : `${eventName}@${version}`,
-    eventName,
-    version,
-    required:
-      normalizedRequired,
-    forbidden,
-  };
 }
 
 function buildLinks(

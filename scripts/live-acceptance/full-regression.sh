@@ -35,5 +35,6 @@ run_slice vs24 scripts/once/vs24-service-protection.sh
 run_slice vs25 scripts/once/vs25-project-read-surface.sh
 run_slice vs26 scripts/once/vs26-typed-contract-artifact.sh
 run_slice vs27 scripts/once/vs27-contract-catalog.sh
+run_slice vs28 scripts/once/vs28-project-contract-generation.sh
 
-printf '\nFull live regression passed: VS8 -> VS27\n'
+printf '\nFull live regression passed: VS8 -> VS28\n'
